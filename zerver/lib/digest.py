@@ -101,9 +101,11 @@ def enqueue_emails(cutoff: datetime.datetime) -> None:
     if not settings.SEND_DIGEST_EMAILS:
         return
 
-    weekday = timezone_now().weekday()
+    # weekday = timezone_now().weekday()
     for realm in Realm.objects.filter(
-        deactivated=False, digest_emails_enabled=True, digest_weekday=weekday
+        deactivated=False,
+        digest_emails_enabled=True,  # send every day
+        # deactivated=False, digest_emails_enabled=True, digest_weekday=weekday
     ):
         if should_process_digest(realm.string_id):
             _enqueue_emails_for_realm(realm, cutoff)
@@ -162,7 +164,8 @@ def _enqueue_emails_for_realm(realm: Realm, cutoff: datetime.datetime) -> None:
 
 def get_recent_topics(
     stream_ids: List[int],
-    cutoff_date: datetime.datetime,
+    earliest_date: datetime.datetime,
+    latest_date: datetime.datetime,
 ) -> List[DigestTopic]:
     # Gather information about topic conversations, then
     # classify by:
@@ -173,7 +176,8 @@ def get_recent_topics(
         Message.objects.filter(
             recipient__type=Recipient.STREAM,
             recipient__type_id__in=stream_ids,
-            date_sent__gt=cutoff_date,
+            date_sent__lte=latest_date,
+            date_sent__gt=earliest_date,
         )
         .order_by(
             "id",  # we will sample the first few messages
@@ -285,6 +289,7 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
 
     # Convert from epoch seconds to a datetime object.
     cutoff_date = datetime.datetime.fromtimestamp(int(cutoff), tz=datetime.timezone.utc)
+    yesterday = timezone_now() - datetime.timedelta(hours = 24)
 
     result: Dict[int, Dict[str, Any]] = {}
 
@@ -304,7 +309,8 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
     # Get all the recent topics for all the users.  This does the heavy
     # lifting of making an expensive query to the Message table.  Then
     # for each user, we filter to just the streams they care about.
-    recent_topics = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date)
+    veryrecent_topics = get_recent_topics(sorted(list(all_stream_ids)), yesterday, timezone_now())
+    recent_topics = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, timezone_now())  #yesterday)
 
     stream_map = get_slim_stream_map(all_stream_ids)
 
@@ -313,6 +319,7 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
     for user in users:
         stream_ids = user_stream_map[user.id]
 
+        veryhot_topics = get_hot_topics(veryrecent_topics, stream_ids)
         hot_topics = get_hot_topics(recent_topics, stream_ids)
 
         context = common_context(user)
@@ -322,6 +329,9 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
         context.update(unsubscribe_link=unsubscribe_link)
 
         # Get context data for hot conversations.
+        context["veryhot_conversations"] = [
+            veryhot_topic.teaser_data(user, stream_map) for veryhot_topic in veryhot_topics
+        ]
         context["hot_conversations"] = [
             hot_topic.teaser_data(user, stream_map) for hot_topic in hot_topics
         ]
@@ -365,7 +375,7 @@ def bulk_handle_digest_email(user_ids: List[int], cutoff: float) -> None:
                 "zerver/emails/digest",
                 user.realm,
                 to_user_ids=[user.id],
-                from_name="Zulip Digest",
+                from_name="forecast.chat digest", # was: Zulip Digest
                 from_address=FromAddress.no_reply_placeholder,
                 context=context,
             )

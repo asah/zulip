@@ -423,6 +423,15 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
         options["include_quotes"] = is_forwarded(subject_header)
 
     body = construct_zulip_body(message, stream.realm, **options)
+
+    # forecast.chat hack to redirect misc@ message to various other forums aka streams
+    if re.search(r'^(zulipinbox.)?development-internal', to):
+        if re.search('crypto|bitcoin', body):
+            return process_stream_message('zulipinbox+discussion-crypto.010159f6013837128ddf58e7cfb89e72.show-sender@forecast.chat', message);
+    if re.search(r'^discussion-misc', to):
+        if re.search('crypto|bitcoin', body):
+            return process_stream_message('zulipinbox+discussion-crypto.010159f6013837128ddf58e7cfb89e72.show-sender@forecast.chat', message);
+
     send_zulip(get_system_bot(settings.EMAIL_GATEWAY_BOT, stream.realm_id), stream, subject, body)
     logger.info(
         "Successfully processed email to %s (%s)",

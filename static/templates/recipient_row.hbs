@@ -1,5 +1,5 @@
 {{#if is_stream}}
-<div class="message_header message_header_stream right_part">
+<div class="message_header message_header_stream right_part" {{#unless show_message_header }}style="display:none" {{/unless}}>
     <div class="message-header-wrapper">
         <div class="message-header-contents">
             {{! stream link }}
@@ -79,14 +79,16 @@
 <div class="message_header message_header_private_message dark_background">
     <div class="message-header-wrapper">
         <div class="message-header-contents">
+	<!--
             <a class="message_label_clickable narrows_by_recipient stream_label"
               href="{{pm_with_url}}"
               title="{{#tr}}Narrow to your private messages with {display_reply_to}{{/tr}}">
                 {{#tr}}You and {display_reply_to}{{/tr}}
             </a>
-
+-->
             <span class="recipient_row_date {{#if group_date_divider_html}}{{else}}hide-date{{/if}}">{{{date}}}</span>
         </div>
     </div>
 </div>
 {{/if}}
+

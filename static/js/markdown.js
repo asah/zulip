@@ -453,6 +453,9 @@ export function initialize(helper_config) {
     // Disable __strong__ (keeping **strong**)
     marked.InlineLexer.rules.zulip.strong = /^\*\*([\S\s]+?)\*\*(?!\*)/;
 
+    // Disable ___weak___ (keeping *~*weak*~*)
+    marked.InlineLexer.rules.zulip.weak = /^\*~\*([\S\s]+?)\*~\*(?!\*)/;
+
     // Make sure <del> syntax matches the backend processor
     marked.InlineLexer.rules.zulip.del = /^(?!<~)~~([^~]+)~~(?!~)/;
 

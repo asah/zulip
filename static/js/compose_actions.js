@@ -213,6 +213,20 @@ export function update_placeholder_text() {
     };
 
     $("#compose-textarea").attr("placeholder", compose_ui.compute_placeholder_text(opts));
+    if (opts.topic.startsWith("inquiry:") && !$("#compose-textarea").val().startsWith(common.forecast_template)) {
+	if (!message_lists.current.empty() && // just in case...
+	    message_lists.current.first().content.match(/(<p>)?Q: /)) {
+	    //console.log(message_lists.current.first().content);
+	    var answers_list = Array.from(message_lists.current.first().content.matchAll(/<li>(A[0-9]:.*?)<\/li>/g), m => "* [NN%] "+m[1]);
+	    var answers = answers_list.join("\n").replaceAll("NN%", (100.0/answers_list.length).toFixed(0) + "%")
+	    answers += "\n\nmy thinking: ";
+	    //console.log(answers);
+	    $("#compose-textarea").val(common.forecast_template + answers + $("#compose-textarea").val());
+	    $("#compose-textarea").css("min-height", "10em");
+//	} else {
+//	    console.log(message_lists.current.first());
+	}
+    }
 }
 
 export function start(msg_type, opts) {

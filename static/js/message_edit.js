@@ -8,6 +8,7 @@ import render_topic_edit_form from "../templates/topic_edit_form.hbs";
 
 import * as blueslip from "./blueslip";
 import * as channel from "./channel";
+import {prefix_with_inquiry} from "./common";
 import * as compose from "./compose";
 import * as compose_actions from "./compose_actions";
 import * as compose_ui from "./compose_ui";
@@ -58,6 +59,7 @@ export const editability_types = {
     // you are an admin.
     TOPIC_ONLY: 3,
     FULL: 4,
+    MSG_ONLY: 5,
 };
 
 export function is_topic_editable(message, edit_limit_seconds_buffer = 0) {
@@ -65,10 +67,15 @@ export function is_topic_editable(message, edit_limit_seconds_buffer = 0) {
         // If message editing is disabled, so is topic editing.
         return false;
     }
-    // Organization admins and message senders can edit message topics indefinitely.
-    if (page_params.is_admin) {
+    // Organization admins and moderators - zulipcraze/forecast.chat
+    if (page_params.is_admin || page_params.is_moderator) {
         return true;
     }
+    return false; 		// zulipcraze/forecast.chat
+}
+
+// zulipcraze/forecast.chat
+export function is_msg_editable(message, edit_limit_seconds_buffer = 0) {
     if (message.sent_by_me) {
         return true;
     }
@@ -82,7 +89,8 @@ export function is_topic_editable(message, edit_limit_seconds_buffer = 0) {
     if (page_params.is_moderator) {
         return true;
     }
-
+    return false;
+/* zulipcraze/forecast.chat
     // If you're using community topic editing, there's a deadline.
     return (
         page_params.realm_community_topic_editing_limit_seconds +
@@ -90,6 +98,7 @@ export function is_topic_editable(message, edit_limit_seconds_buffer = 0) {
             (message.timestamp - Date.now() / 1000) >
         0
     );
+*/
 }
 
 function is_widget_message(message) {
@@ -104,6 +113,9 @@ export function get_editability(message, edit_limit_seconds_buffer = 0) {
         return editability_types.NO;
     }
     if (!is_topic_editable(message, edit_limit_seconds_buffer)) {
+	if (is_msg_editable(message, edit_limit_seconds_buffer)) {
+            return editability_types.MSG_ONLY;
+	}
         return editability_types.NO;
     }
 
@@ -367,6 +379,7 @@ function edit_message(row, raw_content) {
     const is_stream_editable =
         message.is_stream && settings_data.user_can_move_messages_between_streams();
     const is_editable =
+        editability === editability_types.MSG_ONLY ||
         editability === editability_types.TOPIC_ONLY ||
         editability === editability_types.FULL ||
         is_stream_editable;
@@ -393,7 +406,8 @@ function edit_message(row, raw_content) {
             is_stream: message.type === "stream",
             message_id: message.id,
             is_editable,
-            is_content_editable: editability === editability_types.FULL,
+            is_content_editable: (editability === editability_types.FULL ||
+				  editability === editability_types.MSG_ONLY),
             is_widget_message: is_widget_message(message),
             has_been_editable: editability !== editability_types.NO,
             topic: message.topic,
@@ -452,6 +466,9 @@ function edit_message(row, raw_content) {
             // Hint why you can edit the topic but not the message content
             message_edit_countdown_timer.text($t({defaultMessage: "Topic editing only"}));
             create_copy_to_clipboard_handler(row, copy_message[0], message.id);
+            break;
+        case editability_types.MSG_ONLY:
+            message_edit_topic.attr("readonly", "readonly");
             break;
         case editability_types.FULL: {
             copy_message.remove();
@@ -572,6 +589,10 @@ function edit_message(row, raw_content) {
         const is_stream_edited = is_stream_editable ? new_stream_id !== original_stream_id : false;
         message_edit_topic_propagate.toggle(is_topic_edited || is_stream_edited);
         message_edit_breadcrumb_messages.toggle(is_stream_edited);
+	const contents = message_edit_content.val();
+	if (new_topic.startsWith("inquiry:") && !contents.match(/(<p>)?Q: /)) {
+	    prefix_with_inquiry(message_edit_content);
+	}
 
         if (is_stream_edited) {
             /* Reinitialize the typeahead component with content for the new stream. */

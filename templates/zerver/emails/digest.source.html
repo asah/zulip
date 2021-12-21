@@ -1,7 +1,35 @@
 {% extends "zerver/emails/email_base_messages.html" %}
 
 {% block content %}
+    {% if veryhot_conversations %}
+	New in the past day...<p/>
+        {% for convo in veryhot_conversations %}
+        <div class='messages'>
+            {% for recipient_block in convo.first_few_messages %}
+                <div class='hot_convo_recipient_block'>
+                    <div class='hot_convo_recipient_header'>{{ recipient_block.header.html|safe }}</div>
+                    <div class='hot_convo_message_content'>
+                        {% for sender_block in recipient_block.senders %}
+                            {% for message_block in sender_block.content %}
+                            <div class='hot_convo_message_content_block'>
+                                {{ message_block.html|replace('<div>', '<div style="margin-top:-10px">')|safe }}
+                            </div>
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% if convo.count > 0 %}<p class="moremessages"><a href="{{ realm_uri }}"> + {{ convo.count }} more message{{ convo.count|pluralize }} by {{ convo.participants|display_list(4) }}.</a></p>{% endif %}
+            {% endfor %}
+        </div>
+        {% endfor %}
+    {% endif %}
+
     {% if hot_conversations %}
+        {% if veryhot_conversations %}
+	<hr/>
+	Older messages...<p/>
+        {% endif %}
+
         {% for convo in hot_conversations %}
         <div class='messages'>
             {% for recipient_block in convo.first_few_messages %}
@@ -11,13 +39,13 @@
                         {% for sender_block in recipient_block.senders %}
                             {% for message_block in sender_block.content %}
                             <div class='hot_convo_message_content_block'>
-                                {{ message_block.html|safe }}
+                                {{ message_block.html|replace('<div>', '<div style="margin-top:-10px">')|safe }}
                             </div>
                             {% endfor %}
                         {% endfor %}
                     </div>
                 </div>
-                {% if convo.count > 0 %}<p>+ {{ convo.count }} more message{{ convo.count|pluralize }} by {{ convo.participants|display_list(4) }}.</p>{% endif %}
+                {% if convo.count > 0 %}<p class="moremessages"><a href="{{ realm_uri }}"> + {{ convo.count }} more message{{ convo.count|pluralize }} by {{ convo.participants|display_list(4) }}.</a></p>{% endif %}
             {% endfor %}
         </div>
         {% endfor %}
@@ -31,7 +59,7 @@
 
     <br />
 
-    <p><a href="{{ realm_uri }}">{% trans %}Click here to log in to Zulip and catch up.{% endtrans %}</a></p>
+    <p><a href="{{ realm_uri }}">{% trans %}Catch by visting Forecast.chat!{% endtrans %}</a></p>
 {% endblock %}
 
 {% block manage_preferences %}

@@ -30,6 +30,10 @@ const markdown_help_rows = [
         usage_html: "(or <kbd>Ctrl</kbd>+<kbd>B</kbd>)",
     },
     {
+        markdown: "*~*light*~*",
+        usage_html: "(or <kbd>Ctrl</kbd>+<kbd>L</kbd>)",
+    },
+    {
         markdown: "~~strikethrough~~",
     },
     {

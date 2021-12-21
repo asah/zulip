@@ -5,6 +5,7 @@ import render_compose from "../templates/compose.hbs";
 
 import * as blueslip from "./blueslip";
 import * as channel from "./channel";
+import {prefix_with_inquiry} from "./common";
 import * as common from "./common";
 import * as compose_actions from "./compose_actions";
 import * as compose_error from "./compose_error";
@@ -409,6 +410,15 @@ export function initialize() {
     $(
         "#stream_message_recipient_stream,#stream_message_recipient_topic,#private_message_recipient",
     ).on("change", update_fade);
+    $(
+        "#stream_message_recipient_topic",
+    ).on("keyup", (event) => {
+        const new_topic = $(event.target).val();
+	const contents = $("#compose-textarea").val();
+	if (new_topic.startsWith("inquiry:") && !contents.startsWith("Q:")) {
+	    prefix_with_inquiry($("#compose-textarea"));
+	}
+    });
     $("#compose-textarea").on("keydown", (event) => {
         compose_ui.handle_keydown(event, $("#compose-textarea").expectOne());
     });

@@ -2217,6 +2217,7 @@ class Markdown(markdown.Markdown):
         EMPHASIS_RE = r"(\*)(?!\s+)([^\*^\n]+)(?<!\s)\*"
         STRONG_RE = r"(\*\*)([^\n]+?)\2"
         STRONG_EM_RE = r"(\*\*\*)(?!\s+)([^\*^\n]+)(?<!\s)\*\*\*"
+        WEAK_RE = r"(\*~\*)([^\n]+?)\2"
         TEX_RE = r"\B(?<!\$)\$\$(?P<body>[^\n_$](\\\$|[^$\n])*)\$\$(?!\$)\B"
         TIMESTAMP_RE = r"<time:(?P<time>[^>]*?)>"
 
@@ -2245,8 +2246,9 @@ class Markdown(markdown.Markdown):
             "entity",
             40,
         )
-        reg.register(markdown.inlinepatterns.SimpleTagPattern(STRONG_RE, "strong"), "strong", 35)
-        reg.register(markdown.inlinepatterns.SimpleTagPattern(EMPHASIS_RE, "em"), "emphasis", 30)
+        reg.register(markdown.inlinepatterns.SimpleTagPattern(WEAK_RE, "small"), "weak", 60)
+        reg.register(markdown.inlinepatterns.SimpleTagPattern(STRONG_RE, "strong"), "strong", 60)
+        reg.register(markdown.inlinepatterns.SimpleTagPattern(EMPHASIS_RE, "em"), "emphasis", 60)
         reg.register(markdown.inlinepatterns.SimpleTagPattern(DEL_RE, "del"), "del", 25)
         reg.register(
             markdown.inlinepatterns.SimpleTextInlineProcessor(

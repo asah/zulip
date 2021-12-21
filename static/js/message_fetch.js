@@ -23,10 +23,10 @@ const consts = {
     backfill_idle_time: 10 * 1000,
     error_retry_time: 5000,
     backfill_batch_size: 1000,
-    narrow_before: 50,
+    narrow_before: 300,	// expand to hopefully find the topic message for inquiries
     narrow_after: 50,
-    num_before_home_anchor: 200,
-    num_after_home_anchor: 200,
+    num_before_home_anchor: 300, // expand to hopefully find the topic message for inquiries
+    num_after_home_anchor: 100,
     recent_topics_initial_fetch_size: 400,
     backward_batch_size: 100,
     forward_batch_size: 100,

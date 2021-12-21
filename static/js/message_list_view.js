@@ -146,6 +146,8 @@ function set_topic_edit_properties(group, message) {
     group.realm_allow_message_editing = page_params.realm_allow_message_editing;
     group.always_visible_topic_edit = false;
     group.on_hover_topic_edit = false;
+    /* forecast.chat */
+    group.show_message_header = false;
     // if a user who can edit a topic, can resolve it as well
     group.user_can_resolve_topic = message_edit.is_topic_editable(message);
 
@@ -154,6 +156,7 @@ function set_topic_edit_properties(group, message) {
     if (message.topic === compose.empty_topic_placeholder()) {
         group.always_visible_topic_edit = true;
     } else if (message_edit.is_topic_editable(message)) {
+	group.show_message_header = true;
         group.on_hover_topic_edit = true;
     }
 }

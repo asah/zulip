@@ -37,7 +37,7 @@ html {
 }
 
 body {
-    font-size: 14px;
+    font-size: 18px;
     line-height: calc(20 / 14);
     font-family: "Source Sans 3", sans-serif;
 }
@@ -71,6 +71,11 @@ a {
         cursor: pointer;
         color: hsl(200, 100%, 40%);
     }
+}
+
+small {
+    font-weight: 400;
+    font-size: 80%;
 }
 
 code,
@@ -1043,6 +1048,7 @@ td.pointer {
     font-weight: normal;
     height: 17px;
     line-height: 17px;
+    /* Forecast.chat: consider deleting border-color and background-color */
     border-color: hsla(0, 0%, 0%, 0) hsla(0, 0%, 0%, 0) hsla(0, 0%, 0%, 0)
         hsl(0, 0%, 88%);
     background-color: hsl(0, 0%, 88%);
@@ -1278,9 +1284,10 @@ td.pointer {
     }
 
     .messagebox-content {
-        box-shadow: inset 0 0 0 2px hsl(215, 47%, 50%),
+/*        box-shadow: inset 0 0 0 2px hsl(215, 47%, 50%),
             -1px -1px 0 0 hsl(215, 47%, 50%), 1px 1px 0 0 hsl(215, 47%, 50%),
             -1px 1px 0 0 hsl(215, 47%, 50%), 1px -1px 0 0 hsl(215, 47%, 50%);
+*/
     }
 }
 
@@ -1299,6 +1306,48 @@ td.pointer {
     font-weight: 700;
     vertical-align: top;
     line-height: 12px;
+}
+
+.sender_prediction {
+    display: inline-block;
+    vertical-align: top;
+    line-height: 12px;
+    margin-left: 5px;
+}
+
+.prediction_box1 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#f00;
+}
+
+.prediction_box2 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#ffb347;
+}
+
+.prediction_box3 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#ffff31;
+}
+
+.prediction_box4 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#7FFF00;
+}
+
+.prediction_box5 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#00FF00;
 }
 
 .sender_name-in-status {

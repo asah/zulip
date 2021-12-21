@@ -39,7 +39,7 @@ export function update_favicon(new_message_count, pm_count) {
         }
 
         if (new_message_count === 0 && pm_count === 0) {
-            $("#favicon").attr("href", "/static/images/favicon.svg?v=4");
+            $("#favicon").attr("href", "/static/images/favicon.svg?v=5");
             return;
         }
 
