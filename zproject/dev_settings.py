@@ -188,3 +188,4 @@ SCIM_CONFIG = {
         "name_formatted_included": True,
     }
 }
+

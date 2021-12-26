@@ -1,6 +1,14 @@
 {% extends "zerver/emails/email_base_messages.html" %}
 
 {% block content %}
+    {% if top_reacted_msgs %}
+	Most reacted...<p/>
+        {% for msg in top_reacted_msgs %}
+                            <div class='hot_convo_message_content_block'>
+                                {{ msg.subject }}
+                            </div>
+        {% endfor %}
+    {% endif %}
     {% if veryhot_conversations %}
 	New in the past day...<p/>
         {% for convo in veryhot_conversations %}
