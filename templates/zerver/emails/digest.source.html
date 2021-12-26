@@ -2,11 +2,17 @@
 
 {% block content %}
     {% if top_reacted_msgs %}
-	Most reacted...<p/>
+	Top 3 messages with the most reactions...<p/>
         {% for msg in top_reacted_msgs %}
-                            <div class='hot_convo_message_content_block'>
-                                {{ msg.subject }}
-                            </div>
+        <div class='hot_convo_message_content_block'>
+          <!-- {{ msg.msg.weighted_num_reactions }}-{{ msg.msg.num_reactions }} -->
+	  <span style="font-size:14px">
+	    {{ msg.stream_name }} | 
+	    <a href="{{ msg.near_message_url }}">{{ msg.msg.subject }}</a>
+	  </span>
+          {{ msg.msg.rendered_content|safe }}
+	  <hr/>
+        </div>
         {% endfor %}
     {% endif %}
     {% if veryhot_conversations %}
