@@ -68,15 +68,7 @@ def render_stats(
     )
 
     page_params["translation_data"] = get_language_translation_data(request_language)
-
-    return render(
-        request,
-        "analytics/stats.html",
-        context=dict(
-            target_name=target_name, page_params=page_params, analytics_ready=analytics_ready
-        ),
-    )
-
+    is_admin = request.user.is_realm_admin or request.user.is_realm_owner
 
 @zulip_login_required
 def stats(request: HttpRequest) -> HttpResponse:
@@ -291,6 +283,8 @@ def get_chart_data(
         subgroup_to_label = {stats[0]: {None: "read"}}
         labels_sort_function = None
         include_empty_subgroups = True
+    elif chart_name == "most_active_users":
+        pass
     else:
         raise JsonableError(_("Unknown chart name: {}").format(chart_name))
 
@@ -319,6 +313,7 @@ def get_chart_data(
         # table.
         assert server is not None
         assert aggregate_table is RemoteInstallationCount or aggregate_table is RemoteRealmCount
+        assert chart_name != "most_active_users"
         aggregate_table_remote = cast(
             Union[Type[RemoteInstallationCount], Type[RemoteRealmCount]], aggregate_table
         )  # https://stackoverflow.com/questions/68540528/mypy-assertions-on-the-types-of-types
@@ -362,6 +357,25 @@ def get_chart_data(
                 _("No analytics data available. Please contact your server administrator.")
             )
 
+    if chart_name == "most_active_users":
+        #data = [{'email':val[0], 'cnt':val[1]} for val in Message.objects.filter(
+        data = [val[0] for val in Message.objects.filter(
+            date_sent__lte=end,
+            date_sent__gt=start,
+        ).exclude(
+            sender__email__contains="zulip.com"
+        ).values(
+            "sender"
+        ).annotate(
+            cnt=Count("id")
+        ).order_by(
+            "-cnt"
+        ).values_list(
+            #"sender__email", "cnt"
+            "sender__email"
+        )]
+        return json_success(data={'data': data})
+        
     assert len({stat.frequency for stat in stats}) == 1
     end_times = time_range(start, end, stats[0].frequency, min_length)
     data: Dict[str, Any] = {
