@@ -233,7 +233,12 @@ export function resize_sidebars() {
             $("#invite-user-link").show();
         }
     }
-
+    if (message_viewport.is_narrow()) {
+	$("#left-userlist-toggle-button").show();
+    } else {
+        $("#left-userlist-toggle-button").hide();
+    }
+    
     const h = narrow_window ? left_userlist_get_new_heights() : get_new_heights();
 
     $("#buddy_list_wrapper").css("max-height", h.buddy_list_wrapper_max_height);

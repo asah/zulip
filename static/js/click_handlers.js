@@ -487,7 +487,7 @@ export function initialize() {
 
     // SIDEBARS
 
-    $("#userlist-toggle-button").on("click", (e) => {
+    $("#userlist-toggle-button,#left-userlist-toggle-button").on("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
 
