@@ -5,12 +5,12 @@
 	Top 3 messages with the most reactions...<p/>
         {% for msg in top_reacted_msgs %}
         <div class='hot_convo_message_content_block'>
-          <!-- {{ msg.msg.weighted_num_reactions }}-{{ msg.msg.num_reactions }} -->
+          <!-- {{ msg.weighted_num_reactions }}-{{ msg.num_reactions }} -->
 	  <span style="font-size:14px">
 	    {{ msg.stream_name }} | 
-	    <a href="{{ msg.near_message_url }}">{{ msg.msg.subject }}</a>
+	    <a href="{{ msg.near_message_url }}">{{ msg.subject }}</a>
 	  </span>
-          {{ msg.msg.rendered_content|safe }}
+          {{ msg.rendered_content|safe }}
 	  <hr/>
         </div>
         {% endfor %}
@@ -73,7 +73,7 @@
 
     <br />
 
-    <p><a href="{{ realm_uri }}">{% trans %}Catch by visiting Forecast.chat!{% endtrans %}</a></p>
+    <p><a href="{{ realm_uri }}">{% trans %}Catch up by visiting Forecast.chat!{% endtrans %}</a></p>
 {% endblock %}
 
 {% block manage_preferences %}

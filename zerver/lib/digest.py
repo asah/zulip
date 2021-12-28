@@ -370,6 +370,12 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
         top_reacted_msgs = most_reacted_msgs[:3]
         
         context = common_context(user)
+
+        # Start building email template data.
+        unsubscribe_link = one_click_unsubscribe_link(user, "digest")
+        context.update(unsubscribe_link=unsubscribe_link)
+
+        # Get context data for hot conversations.
         context["top_reacted_msgs"] = [
             { 'near_message_url': near_message_url(
                 realm, {
@@ -379,16 +385,13 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
                     'stream_id': msg.recipient.type_id,
                     'display_recipient': get_display_recipient(msg.recipient)
                 }),
-              'msg': msg,
-              'stream_name': get_display_recipient(msg.recipient)
+              'stream_name': get_display_recipient(msg.recipient),
+              'subject': msg.subject,
+              'rendered_content': msg.rendered_content,
+              'num_reactions': msg.num_reactions,
+              'weighted_num_reactions': msg.weighted_num_reactions,
              } for msg in top_reacted_msgs
         ]
-
-        # Start building email template data.
-        unsubscribe_link = one_click_unsubscribe_link(user, "digest")
-        context.update(unsubscribe_link=unsubscribe_link)
-
-        # Get context data for hot conversations.
         context["veryhot_conversations"] = [
             veryhot_topic.teaser_data(user, stream_map) for veryhot_topic in veryhot_topics
         ]
