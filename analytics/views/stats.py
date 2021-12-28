@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 
 from django.conf import settings
+from django.db.models import Count
 from django.db.models.query import QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseNotFound
 from django.shortcuts import render
@@ -31,10 +32,10 @@ from zerver.decorator import (
 from zerver.lib.exceptions import JsonableError
 from zerver.lib.i18n import get_and_set_request_language, get_language_translation_data
 from zerver.lib.request import REQ, has_request_variables
-from zerver.lib.response import json_success
+from zerver.lib.response import json_success, json_response
 from zerver.lib.timestamp import convert_to_UTC
 from zerver.lib.validator import to_non_negative_int
-from zerver.models import Client, Realm, UserProfile, get_realm
+from zerver.models import Client, Message, Realm, UserProfile, get_realm
 
 if settings.ZILENCER_ENABLED:
     from zilencer.models import RemoteInstallationCount, RemoteRealmCount, RemoteZulipServer
@@ -68,7 +69,13 @@ def render_stats(
     )
 
     page_params["translation_data"] = get_language_translation_data(request_language)
-    is_admin = request.user.is_realm_admin or request.user.is_realm_owner
+    return render(
+        request,
+        "analytics/stats.html",
+        context=dict(
+            target_name=target_name, page_params=page_params, analytics_ready=analytics_ready
+        ),
+    )
 
 @zulip_login_required
 def stats(request: HttpRequest) -> HttpResponse:
@@ -284,7 +291,10 @@ def get_chart_data(
         labels_sort_function = None
         include_empty_subgroups = True
     elif chart_name == "most_active_users":
-        pass
+        stats = [COUNT_STATS["messages_read::hour"]]
+        tables = (aggregate_table, Message)
+        labels_sort_function = None
+        include_empty_subgroups = True
     else:
         raise JsonableError(_("Unknown chart name: {}").format(chart_name))
 
@@ -342,7 +352,7 @@ def get_chart_data(
                 stat.last_successful_fill() or datetime.min.replace(tzinfo=timezone.utc)
                 for stat in stats
             )
-
+        MAX_TIME_FOR_FULL_ANALYTICS_GENERATION = timedelta(days=1000, minutes=30)
         if start > end and (timezone_now() - start > MAX_TIME_FOR_FULL_ANALYTICS_GENERATION):
             logging.warning(
                 "User from realm %s attempted to access /stats, but the computed "
@@ -358,6 +368,8 @@ def get_chart_data(
             )
 
     if chart_name == "most_active_users":
+        if not request.user.is_realm_admin and not request.user.is_realm_owner:
+            return json_response(res_type="error", msg="sorry, admins only", status=401)
         #data = [{'email':val[0], 'cnt':val[1]} for val in Message.objects.filter(
         data = [val[0] for val in Message.objects.filter(
             date_sent__lte=end,
@@ -374,7 +386,7 @@ def get_chart_data(
             #"sender__email", "cnt"
             "sender__email"
         )]
-        return json_success(data={'data': data})
+        return json_success(data={'data': data, 'datastr':','.join(data)})
         
     assert len({stat.frequency for stat in stats}) == 1
     end_times = time_range(start, end, stats[0].frequency, min_length)
