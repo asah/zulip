@@ -10,7 +10,7 @@
 	    {{ msg.stream_name }} | 
 	    <a href="{{ msg.near_message_url }}">{{ msg.subject }}</a>
 	  </span>
-          {{ msg.rendered_content|safe }}
+          {{ msg.rendered_content_truncated|safe }}
 	  <hr/>
         </div>
         {% endfor %}

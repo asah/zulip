@@ -9,6 +9,7 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Sum, OuterRef, Subquery, Case, When
 from django.utils.timezone import now as timezone_now
+from django.utils.text import Truncator
 
 from confirmation.models import one_click_unsubscribe_link
 from zerver.context_processors import common_context
@@ -388,6 +389,7 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
               'stream_name': get_display_recipient(msg.recipient),
               'subject': msg.subject,
               'rendered_content': msg.rendered_content,
+              'rendered_content_truncated': Truncator(msg.rendered_content).chars(200, html=True),
               'num_reactions': msg.num_reactions,
               'weighted_num_reactions': msg.weighted_num_reactions,
              } for msg in top_reacted_msgs
