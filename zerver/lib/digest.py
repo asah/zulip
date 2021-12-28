@@ -181,6 +181,8 @@ def get_most_reacted_messages(
             recipient__type=Recipient.STREAM,
             date_sent__lte=latest_date,
             date_sent__gt=earliest_date,
+            sender__is_bot=False,
+            sender__is_active=True,
         ).annotate(
             num_reactions=Count('reaction')
         ).annotate(
@@ -328,7 +330,6 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
         assert user.realm_id == realm.id
 
     # Convert from epoch seconds to a datetime object.
-    cutoff = 7
     cutoff_date = datetime.datetime.fromtimestamp(int(cutoff), tz=datetime.timezone.utc)
     yesterday = timezone_now() - datetime.timedelta(hours = 24)
 
