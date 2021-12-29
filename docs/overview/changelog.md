@@ -391,10 +391,10 @@ log][commit-log] for an up-to-date list of raw changes.
 - Added support for subscribing all members of a user group to a stream.
 - Added support for sms: and tel: links.
 - Community topic editing time limit increased to 3 days for members.
-- New integrations: Freshping, JotForm, Uptime Robot, and a JSON
+- New integrations: Freshping, Jotform, UptimeRobot, and a JSON
   formatter (which is particularly useful when developing a new
   integration).
-- Updated integrations: ClubHouse, NewRelic, Bitbucket, Zabbix.
+- Updated integrations: Clubhouse, NewRelic, Bitbucket, Zabbix.
 - Improved formatting of GitHub and GitLab integrations.
 - Improved the user experience for multi-user invitations.
 - Improved several rendered-message styling details.
@@ -1280,7 +1280,7 @@ details.
 - Added /digest endpoint for viewing the current digest email on the web.
 - Added alert for when a user sends a message when scrolled too far up.
 - Added internationalization for outgoing emails.
-- Added a ReviewBoard integration, and improved numerous existing integrations.
+- Added a Review Board integration, and improved numerous existing integrations.
 - Added support for multi-line messages for the /me feature.
 - Added Markdown rendering of text when displaying custom profile fields.
 - Added "silent mentions" syntax (`@_**Tim Abbott**`), which show
@@ -2081,7 +2081,7 @@ running a version from before 1.7 should upgrade directly to 1.7.1.
 - Added support for (optionally) using PGRoonga to support full-text
   search in all languages (not just English).
 - Added AppFollow, GitLab, Google Calendar, GoSquared, HelloSign,
-  Heroku, Librato, MailChimp, Mention, Papertrail, Sentry, Solano
+  Heroku, Librato, Mailchimp, Mention, Papertrail, Sentry, Solano
   Labs, Stripe and Zapier integrations.
 - Added a webhook integration for GitHub, replacing the deprecated
   github-services hook.
@@ -2331,7 +2331,7 @@ running a version from before 1.7 should upgrade directly to 1.7.1.
 - Added documentation on using Hubot to integrate with useful services
   not yet integrated with Zulip directly (e.g. Google Hangouts).
 - Added new management command to test sending email from Zulip.
-- Added Codeship, Pingdom, Taiga, Teamcity, and Yo integrations.
+- Added Codeship, Pingdom, Taiga, TeamCity, and Yo integrations.
 - Added Nagios plugins to the main distribution.
 - Added ability for realm administrators to manage custom emoji.
 - Added guide to writing new integrations.
