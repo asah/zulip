@@ -1204,10 +1204,22 @@ def get_messages_backend(
         stream_id = topic = None
         for op in narrow:
             if op['operator'] == 'stream' and op['negated'] == False:
-                stream_id = int(op['operand'])
+                print(f"found op={op['operand']}")
+                if type(op['operand']) is int:
+                    stream_id = op['operand']
+                else:
+                    if re.search(r'^[0-9]+$', op['operand']):
+                        stream_id = int(op['operand'])
+                    else:
+                        try:
+                            stream = get_stream_by_narrow_operand_access_unchecked(op['operand'], realm)
+                            stream_id = stream.id
+                        except:
+                            print(f"get_messages_backend: couldn't parse stream op '{op['operand']}'")
+                            stream_id = None
             if op['operator'] == 'topic' and op['negated'] == False:
                 topic = op['operand']
-        print(f"stream_id={stream_id}, topic={topic}")
+        print(f"get_messages_backend: stream_id={stream_id}, topic={topic}")
         # locate the promo msg and change its order to be second in the display
         if stream_id is not None and topic is not None:
             poll_promo_msgid = get_poll_promo_msg_id(stream_id, topic)
