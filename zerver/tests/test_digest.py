@@ -70,7 +70,7 @@ class TestDigestEmailMessages(ZulipTestCase):
         with queries_captured() as queries:
             bulk_handle_digest_email([othello.id], cutoff)
 
-        self.assert_length(queries, 9)
+        self.assert_length(queries, 11)
 
         self.assertEqual(mock_send_future_email.call_count, 1)
         kwargs = mock_send_future_email.call_args[1]
@@ -123,7 +123,7 @@ class TestDigestEmailMessages(ZulipTestCase):
         with queries_captured() as queries:
             bulk_handle_digest_email([polonius.id], cutoff)
 
-        self.assert_length(queries, 9)
+        self.assert_length(queries, 11)
 
         self.assertEqual(mock_send_future_email.call_count, 1)
         kwargs = mock_send_future_email.call_args[1]
@@ -181,7 +181,7 @@ class TestDigestEmailMessages(ZulipTestCase):
                 with cache_tries_captured() as cache_tries:
                     bulk_handle_digest_email(digest_user_ids, cutoff)
 
-            self.assert_length(queries, 12)
+            self.assert_length(queries, 17)
             self.assert_length(cache_tries, 0)
 
         self.assert_length(digest_users, mock_send_future_email.call_count)
@@ -464,7 +464,7 @@ class TestDigestContentInBrowser(ZulipTestCase):
     def test_get_digest_content_in_browser(self) -> None:
         self.login("hamlet")
         result = self.client_get("/digest/")
-        self.assert_in_success_response(["Click here to log in to Zulip and catch up."], result)
+        self.assert_in_success_response(["Catch up by visiting"], result)
 
 
 class TestDigestTopics(ZulipTestCase):
