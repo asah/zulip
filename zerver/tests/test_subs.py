@@ -11,6 +11,7 @@ from django.http import HttpResponse
 from django.utils.timezone import now as timezone_now
 
 from zerver.lib.actions import (
+    STREAM_ASSIGNMENT_COLORS,
     bulk_add_subscriptions,
     bulk_get_subscriber_user_ids,
     bulk_remove_subscriptions,
@@ -38,6 +39,7 @@ from zerver.lib.actions import (
     get_default_streams_for_realm,
     get_topic_messages,
     lookup_default_stream_groups,
+    pick_colors,
     round_to_2_significant_digits,
     validate_user_access_to_subscribers_helper,
 )
@@ -96,6 +98,57 @@ class TestMiscStuff(ZulipTestCase):
         s = self.subscribed_stream_name_list(cordelia)
         self.assertIn("* Verona", s)
         self.assertNotIn("* Denmark", s)
+
+    def test_pick_colors(self) -> None:
+        used_colors: Set[str] = set()
+        color_map: Dict[int, str] = {}
+        recipient_ids = list(range(30))
+        user_color_map = pick_colors(used_colors, color_map, recipient_ids)
+        self.assertEqual(
+            user_color_map,
+            {
+                0: "#76ce90",
+                1: "#fae589",
+                2: "#a6c7e5",
+                3: "#e79ab5",
+                4: "#bfd56f",
+                5: "#f4ae55",
+                6: "#b0a5fd",
+                7: "#addfe5",
+                8: "#f5ce6e",
+                9: "#c2726a",
+                10: "#94c849",
+                11: "#bd86e5",
+                12: "#ee7e4a",
+                13: "#a6dcbf",
+                14: "#95a5fd",
+                15: "#53a063",
+                16: "#9987e1",
+                17: "#e4523d",
+                18: "#c2c2c2",
+                19: "#4f8de4",
+                20: "#c6a8ad",
+                21: "#e7cc4d",
+                22: "#c8bebf",
+                23: "#a47462",
+                # start repeating
+                24: "#76ce90",
+                25: "#fae589",
+                26: "#a6c7e5",
+                27: "#e79ab5",
+                28: "#bfd56f",
+                29: "#f4ae55",
+            },
+        )
+
+        color_map = {98: "color98", 99: "color99"}
+        used_colors = set(STREAM_ASSIGNMENT_COLORS) - {"#c6a8ad", "#9987e1"}
+        recipient_ids = [99, 98, 1, 2, 3, 4]
+        user_color_map = pick_colors(used_colors, color_map, recipient_ids)
+        self.assertEqual(
+            user_color_map,
+            {98: "color98", 99: "color99", 1: "#9987e1", 2: "#c6a8ad", 3: "#a6c7e5", 4: "#e79ab5"},
+        )
 
     def test_empty_results(self) -> None:
         # These are essentially just tests to ensure line
@@ -3655,7 +3708,7 @@ class SubscriptionAPITest(ZulipTestCase):
                     streams_to_sub,
                     dict(principals=orjson.dumps([user1.id, user2.id]).decode()),
                 )
-        self.assert_length(queries, 35)
+        self.assert_length(queries, 36)
 
         for ev in [x for x in events if x["event"]["type"] not in ("message", "stream")]:
             if ev["event"]["op"] == "add":
@@ -3680,7 +3733,7 @@ class SubscriptionAPITest(ZulipTestCase):
                     streams_to_sub,
                     dict(principals=orjson.dumps([self.test_user.id]).decode()),
                 )
-        self.assert_length(queries, 11)
+        self.assert_length(queries, 12)
 
         add_event, add_peer_event = events
         self.assertEqual(add_event["event"]["type"], "subscription")
@@ -3923,6 +3976,8 @@ class SubscriptionAPITest(ZulipTestCase):
         user5 = self.example_user("AARON")
         guest = self.example_user("polonius")
 
+        realm = user1.realm
+
         stream1 = self.make_stream("stream1")
         stream2 = self.make_stream("stream2")
         stream3 = self.make_stream("stream3")
@@ -3947,6 +4002,7 @@ class SubscriptionAPITest(ZulipTestCase):
             with queries_captured() as query_count:
                 with cache_tries_captured() as cache_count:
                     bulk_remove_subscriptions(
+                        realm,
                         [user1, user2],
                         [stream1, stream2, stream3, private],
                         acting_user=None,
@@ -4014,6 +4070,7 @@ class SubscriptionAPITest(ZulipTestCase):
 
         with self.tornado_redirected_to_list(events, expected_num_events=0):
             bulk_remove_subscriptions(
+                realm,
                 users=[mit_user],
                 streams=streams,
                 acting_user=None,
@@ -4062,7 +4119,7 @@ class SubscriptionAPITest(ZulipTestCase):
 
         # The only known O(N) behavior here is that we call
         # principal_to_user_profile for each of our users.
-        self.assert_length(queries, 18)
+        self.assert_length(queries, 19)
         self.assert_length(cache_tries, 4)
 
     def test_subscriptions_add_for_principal(self) -> None:
@@ -4523,7 +4580,7 @@ class SubscriptionAPITest(ZulipTestCase):
                 [new_streams[0]],
                 dict(principals=orjson.dumps([user1.id, user2.id]).decode()),
             )
-        self.assert_length(queries, 35)
+        self.assert_length(queries, 36)
 
         # Test creating private stream.
         with queries_captured() as queries:
@@ -4533,7 +4590,7 @@ class SubscriptionAPITest(ZulipTestCase):
                 dict(principals=orjson.dumps([user1.id, user2.id]).decode()),
                 invite_only=True,
             )
-        self.assert_length(queries, 34)
+        self.assert_length(queries, 35)
 
         # Test creating a public stream with announce when realm has a notification stream.
         notifications_stream = get_stream(self.streams[0], self.test_realm)
@@ -4548,7 +4605,7 @@ class SubscriptionAPITest(ZulipTestCase):
                     principals=orjson.dumps([user1.id, user2.id]).decode(),
                 ),
             )
-        self.assert_length(queries, 43)
+        self.assert_length(queries, 44)
 
 
 class GetStreamsTest(ZulipTestCase):
