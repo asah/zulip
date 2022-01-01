@@ -1180,7 +1180,7 @@ def get_messages_backend(
     @cache_with_key(lambda stream_id, topic:
                     re.sub(r'[^a-zA-Z0-9]', '_', f"poll-msg-for-{stream_id}-{topic}"),
                     timeout=10) # 3600 * 24 * 7
-    def get_poll_promo_msg_id(stream_id: str, topic: str) -> Optional[int]:
+    def get_poll_promo_msg_id(stream_id: int, topic: str) -> Optional[int]:
         print(f"checking poll_msg for stream_id={stream_id}, topic={topic}")
         poll_msg = get_poll_msg(stream_id, topic)
         if poll_msg is None:
@@ -1204,7 +1204,7 @@ def get_messages_backend(
         stream_id = topic = None
         for op in narrow:
             if op['operator'] == 'stream' and op['negated'] == False:
-                stream_id = op['operand']
+                stream_id = int(op['operand'])
             if op['operator'] == 'topic' and op['negated'] == False:
                 topic = op['operand']
         print(f"stream_id={stream_id}, topic={topic}")
