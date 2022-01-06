@@ -610,6 +610,8 @@ a.compose_control_button.hide {
 
 .dropdown-menu {
     ul {
+	max-height: 150px; // unlimited list + scroll
+	overflow-y: auto; // unlimited list + scroll
         list-style: none;
         margin: 0;
         background: hsl(0, 0%, 100%);
