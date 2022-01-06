@@ -384,7 +384,7 @@ def get_chart_data(
             "-cnt"
         ).values_list(
             #"sender__email", "cnt"
-            "sender__email"
+            "sender__delivery_email"
         )]
         return json_success(data={'data': data, 'datastr':','.join(data)})
         
