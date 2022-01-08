@@ -241,6 +241,20 @@ class PushBouncerNotificationTest(BouncerTestCase):
 
         del self.API_KEYS[self.server_uuid]
 
+        self.API_KEYS["invalid_uuid"] = "invalid"
+        result = self.uuid_post(
+            "invalid_uuid",
+            endpoint,
+            dict(user_id=user_id, token_kind=token_kind, token=token),
+            subdomain="zulip",
+        )
+        self.assert_json_error(
+            result,
+            "Zulip server auth failure: invalid_uuid is not registered -- did you run `manage.py register_server`?",
+            status_code=401,
+        )
+        del self.API_KEYS["invalid_uuid"]
+
         credentials_uuid = str(uuid.uuid4())
         credentials = "{}:{}".format(credentials_uuid, "invalid")
         api_auth = "Basic " + base64.b64encode(credentials.encode()).decode()
@@ -302,7 +316,10 @@ class PushBouncerNotificationTest(BouncerTestCase):
         payload = {
             "user_id": hamlet.id,
             "gcm_payload": {"event": "remove", "zulip_message_ids": many_ids},
-            "apns_payload": {"event": "remove", "zulip_message_ids": many_ids},
+            "apns_payload": {
+                "badge": 0,
+                "custom": {"zulip": {"event": "remove", "zulip_message_ids": many_ids}},
+            },
             "gcm_options": {},
         }
         with mock.patch(
@@ -335,7 +352,15 @@ class PushBouncerNotificationTest(BouncerTestCase):
         apple_push.assert_called_once_with(
             hamlet.id,
             [apple_token],
-            {"event": "remove", "zulip_message_ids": ",".join(str(i) for i in range(50, 250))},
+            {
+                "badge": 0,
+                "custom": {
+                    "zulip": {
+                        "event": "remove",
+                        "zulip_message_ids": ",".join(str(i) for i in range(50, 250)),
+                    }
+                },
+            },
             remote=server,
         )
         android_push.assert_called_once_with(
@@ -2467,6 +2492,14 @@ class PushBouncerSignupTest(ZulipTestCase):
             hostname="example.com",
             contact_email="server-admin@example.com",
         )
+        result = self.client_post("/api/v1/remotes/server/register", request)
+        self.assert_json_error(result, "Invalid UUID")
+
+        # This looks mostly like a proper UUID, but isn't actually a valid UUIDv4,
+        # which makes it slip past a basic validation via initializing uuid.UUID with it.
+        # Thus we should test this scenario separately.
+        zulip_org_id = "18cedb98-5222-5f34-50a9-fc418e1ba972"
+        request["zulip_org_id"] = zulip_org_id
         result = self.client_post("/api/v1/remotes/server/register", request)
         self.assert_json_error(result, "Invalid UUID")
 

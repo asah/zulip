@@ -40,6 +40,7 @@ from zilencer.models import (
     RemoteRealmAuditLog,
     RemoteRealmCount,
     RemoteZulipServer,
+    RemoteZulipServerAuditLog,
 )
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,13 @@ def validate_entity(entity: Union[UserProfile, RemoteZulipServer]) -> RemoteZuli
 
 def validate_uuid(uuid: str) -> None:
     try:
-        UUID(uuid, version=4)
+        uuid_object = UUID(uuid, version=4)
+        # The UUID initialization under some circumstances will modify the uuid
+        # string to create a valid UUIDv4, instead of raising a ValueError.
+        # The submitted uuid needing to be modified means it's invalid, so
+        # we need to check for that condition.
+        if str(uuid_object) != uuid:
+            raise ValidationError(err_("Invalid UUID"))
     except ValueError:
         raise ValidationError(err_("Invalid UUID"))
 
@@ -102,20 +109,30 @@ def register_remote_server(
     except ValidationError as e:
         raise JsonableError(e.message)
 
-    remote_server, created = RemoteZulipServer.objects.get_or_create(
-        uuid=zulip_org_id,
-        defaults={"hostname": hostname, "contact_email": contact_email, "api_key": zulip_org_key},
-    )
-
-    if not created:
-        if remote_server.api_key != zulip_org_key:
-            raise InvalidZulipServerKeyError(zulip_org_id)
+    with transaction.atomic():
+        remote_server, created = RemoteZulipServer.objects.get_or_create(
+            uuid=zulip_org_id,
+            defaults={
+                "hostname": hostname,
+                "contact_email": contact_email,
+                "api_key": zulip_org_key,
+            },
+        )
+        if created:
+            RemoteZulipServerAuditLog.objects.create(
+                event_type=RemoteZulipServerAuditLog.REMOTE_SERVER_CREATED,
+                server=remote_server,
+                event_time=remote_server.last_updated,
+            )
         else:
-            remote_server.hostname = hostname
-            remote_server.contact_email = contact_email
-            if new_org_key is not None:
-                remote_server.api_key = new_org_key
-            remote_server.save()
+            if remote_server.api_key != zulip_org_key:
+                raise InvalidZulipServerKeyError(zulip_org_id)
+            else:
+                remote_server.hostname = hostname
+                remote_server.contact_email = contact_email
+                if new_org_key is not None:
+                    remote_server.api_key = new_org_key
+                remote_server.save()
 
     return json_success({"created": created})
 
@@ -233,7 +250,10 @@ def remote_server_notify_push(
         user_id, android_devices, gcm_payload, gcm_options, remote=server
     )
 
-    apns_payload = truncate_payload(apns_payload)
+    if isinstance(apns_payload.get("custom"), dict) and isinstance(
+        apns_payload["custom"].get("zulip"), dict
+    ):
+        apns_payload["custom"]["zulip"] = truncate_payload(apns_payload["custom"]["zulip"])
     send_apple_push_notification(user_id, apple_devices, apns_payload, remote=server)
 
     return json_success(

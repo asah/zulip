@@ -623,7 +623,7 @@ def list_supervisor_processes(*args: str) -> List[str]:
         universal_newlines=True,
         stdout=subprocess.PIPE,
     )
-    # `supercisorctl status` returns 3 if any are stopped, which is
+    # `supervisorctl status` returns 3 if any are stopped, which is
     # fine here; and exit code 4 is for no such process, which is
     # handled below.
     if worker_status.returncode not in (0, 3, 4):
@@ -651,6 +651,23 @@ def deport(netloc: str) -> str:
     r = SplitResult("", netloc, "", "", "")
     assert r.hostname is not None
     return "[" + r.hostname + "]" if ":" in r.hostname else r.hostname
+
+
+def start_arg_parser(action: str, add_help: bool = False) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(add_help=add_help)
+    parser.add_argument("--fill-cache", action="store_true", help="Fill the memcached caches")
+    if action == "restart":
+        parser.add_argument(
+            "--less-graceful",
+            action="store_true",
+            help="Restart with more concern for expediency than minimizing availability interruption",
+        )
+        parser.add_argument(
+            "--skip-tornado",
+            action="store_true",
+            help="Do not restart Tornado processes",
+        )
+    return parser
 
 
 if __name__ == "__main__":

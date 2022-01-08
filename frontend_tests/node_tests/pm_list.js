@@ -2,7 +2,7 @@
 
 const {strict: assert} = require("assert");
 
-const {mock_esm, with_field, zrequire} = require("../zjsunit/namespace");
+const {mock_esm, with_field_rewire, zrequire} = require("../zjsunit/namespace");
 const {run_test} = require("../zjsunit/test");
 const $ = require("../zjsunit/zjquery");
 
@@ -53,10 +53,10 @@ people.add_active_user(bot_test);
 people.initialize_current_user(me.user_id);
 
 function test(label, f) {
-    run_test(label, ({override}) => {
+    run_test(label, ({override, override_rewire}) => {
         pm_conversations.clear_for_testing();
         pm_list.clear_for_testing();
-        f({override});
+        f({override, override_rewire});
     });
 }
 
@@ -220,10 +220,10 @@ test("is_all_privates", ({override}) => {
     assert.equal(pm_list.is_all_privates(), true);
 });
 
-test("expand", ({override}) => {
+test("expand", ({override, override_rewire}) => {
     override(narrow_state, "filter", private_filter);
     override(narrow_state, "active", () => true);
-    override(pm_list, "_build_private_messages_list", () => "PM_LIST_CONTENTS");
+    override_rewire(pm_list, "_build_private_messages_list", () => "PM_LIST_CONTENTS");
     let html_updated;
     override(vdom, "update", () => {
         html_updated = true;
@@ -236,13 +236,13 @@ test("expand", ({override}) => {
     assert.ok($(".top_left_private_messages").hasClass("active-filter"));
 });
 
-test("update_private_messages", ({override}) => {
+test("update_private_messages", ({override, override_rewire}) => {
     let html_updated;
     let container_found;
 
     override(narrow_state, "filter", private_filter);
     override(narrow_state, "active", () => true);
-    override(pm_list, "_build_private_messages_list", () => "PM_LIST_CONTENTS");
+    override_rewire(pm_list, "_build_private_messages_list", () => "PM_LIST_CONTENTS");
 
     $("#private-container").find = (sel) => {
         assert.equal(sel, "ul");
@@ -268,7 +268,7 @@ test("ensure coverage", ({override}) => {
     // where functions early exit.
     override(narrow_state, "active", () => false);
 
-    with_field(
+    with_field_rewire(
         pm_list,
         "rebuild_recent",
         () => {

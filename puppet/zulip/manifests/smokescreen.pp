@@ -2,15 +2,14 @@ class zulip::smokescreen {
   include zulip::supervisor
   include zulip::golang
 
-  $version = 'dc403015f563eadc556a61870c6ad327688abe88'
-  $dir = "/srv/zulip-smokescreen-src-${version}/"
+  $version = $zulip::common::versions['smokescreen-src']['version']
+  $dir = "/srv/zulip-smokescreen-src-${version}"
   $bin = "/usr/local/bin/smokescreen-${version}-go-${zulip::golang::version}"
 
   zulip::external_dep { 'smokescreen-src':
     version        => $version,
     url            => "https://github.com/stripe/smokescreen/archive/${version}.tar.gz",
-    sha256         => 'ad4b181d14adcd9425045152b903a343dbbcfcad3c1e7625d2c65d1d50e1959d',
-    tarball_prefix => "smokescreen-${version}/",
+    tarball_prefix => "smokescreen-${version}",
   }
 
   exec { 'compile smokescreen':
@@ -19,8 +18,13 @@ class zulip::smokescreen {
     # GOCACHE is required; nothing is written to GOPATH, but it is required to be set
     environment => ['GOCACHE=/tmp/gocache', 'GOPATH=/root/go'],
     creates     => $bin,
-    require     => [File[$zulip::golang::bin], File[$dir]],
+    require     => [
+      Zulip::External_Dep['golang'],
+      Zulip::External_Dep['smokescreen-src'],
+    ],
   }
+  # This resource exists purely so it doesn't get tidied; it is
+  # created by the 'compile smokescreen' step.
   file { $bin:
     ensure  => file,
     require => Exec['compile smokescreen'],
@@ -34,7 +38,7 @@ class zulip::smokescreen {
       path    => '/usr/local/bin',
       recurse => 1,
       matches => 'smokescreen-*',
-      require => File[$bin],
+      require => Exec['compile smokescreen'],
     }
   }
 
@@ -43,7 +47,7 @@ class zulip::smokescreen {
     ensure  => file,
     require => [
       Package[supervisor],
-      File[$bin],
+      Exec['compile smokescreen'],
     ],
     owner   => 'root',
     group   => 'root',

@@ -100,7 +100,7 @@ from zerver.lib.hotspots import get_next_hotspots
 from zerver.lib.i18n import get_language_name
 from zerver.lib.markdown import MessageRenderingResult, topic_links
 from zerver.lib.markdown import version as markdown_version
-from zerver.lib.mention import MentionData, silent_mention_syntax_for_user
+from zerver.lib.mention import MentionBackend, MentionData, silent_mention_syntax_for_user
 from zerver.lib.message import (
     MessageDict,
     SendMessageRequest,
@@ -239,6 +239,7 @@ from zerver.models import (
     get_bot_services,
     get_client,
     get_default_stream_groups,
+    get_fake_email_domain,
     get_huddle_recipient,
     get_huddle_user_ids,
     get_old_unclaimed_attachments,
@@ -503,7 +504,12 @@ def process_new_human_user(
     add_new_user_history(user_profile, streams)
 
     # mit_beta_users don't have a referred_by field
-    if not mit_beta_user and prereg_user is not None and prereg_user.referred_by is not None:
+    if (
+        not mit_beta_user
+        and prereg_user is not None
+        and prereg_user.referred_by is not None
+        and prereg_user.referred_by.is_active
+    ):
         # This is a cross-realm private message.
         with override_language(prereg_user.referred_by.default_language):
             internal_send_private_message(
@@ -1209,31 +1215,43 @@ def do_delete_user(user_profile: UserProfile) -> None:
     )
     user_id = user_profile.id
     realm = user_profile.realm
+    date_joined = user_profile.date_joined
     personal_recipient = user_profile.recipient
 
-    user_profile.delete()
-    # Recipient objects don't get deleted through CASCADE, so we need to handle
-    # the user's personal recipient manually. This will also delete all Messages pointing
-    # to this recipient (all private messages sent to the user).
-    assert personal_recipient is not None
-    personal_recipient.delete()
-    replacement_user = create_user(
-        force_id=user_id,
-        email=f"deleteduser{user_id}@{realm.uri}",
-        password=None,
-        realm=realm,
-        full_name=f"Deleted User {user_id}",
-        is_mirror_dummy=True,
-    )
-    subs_to_recreate = [
-        Subscription(
-            user_profile=replacement_user,
-            recipient=recipient,
-            is_user_active=replacement_user.is_active,
+    with transaction.atomic():
+        user_profile.delete()
+        # Recipient objects don't get deleted through CASCADE, so we need to handle
+        # the user's personal recipient manually. This will also delete all Messages pointing
+        # to this recipient (all private messages sent to the user).
+        assert personal_recipient is not None
+        personal_recipient.delete()
+        replacement_user = create_user(
+            force_id=user_id,
+            email=f"deleteduser{user_id}@{get_fake_email_domain(realm)}",
+            password=None,
+            realm=realm,
+            full_name=f"Deleted User {user_id}",
+            active=False,
+            is_mirror_dummy=True,
+            force_date_joined=date_joined,
         )
-        for recipient in Recipient.objects.filter(id__in=subscribed_huddle_recipient_ids)
-    ]
-    Subscription.objects.bulk_create(subs_to_recreate)
+        subs_to_recreate = [
+            Subscription(
+                user_profile=replacement_user,
+                recipient=recipient,
+                is_user_active=replacement_user.is_active,
+            )
+            for recipient in Recipient.objects.filter(id__in=subscribed_huddle_recipient_ids)
+        ]
+        Subscription.objects.bulk_create(subs_to_recreate)
+
+        RealmAuditLog.objects.create(
+            realm=replacement_user.realm,
+            modified_user=replacement_user,
+            acting_user=None,
+            event_type=RealmAuditLog.USER_DELETED,
+            event_time=timezone_now(),
+        )
 
 
 def change_user_is_active(user_profile: UserProfile, value: bool) -> None:
@@ -1534,6 +1552,7 @@ class RecipientInfoResult(TypedDict):
     long_term_idle_user_ids: Set[int]
     default_bot_user_ids: Set[int]
     service_bot_tuples: List[Tuple[int, int]]
+    all_bot_user_ids: Set[int]
 
 
 def get_recipient_info(
@@ -1715,7 +1734,7 @@ def get_recipient_info(
         lambda r: r["long_term_idle"],
     )
 
-    # These two bot data structures need to filter from the full set
+    # These three bot data structures need to filter from the full set
     # of users who either are receiving the message or might have been
     # mentioned in it, and so can't use get_ids_for.
     #
@@ -1731,6 +1750,11 @@ def get_recipient_info(
 
     service_bot_tuples = [(row["id"], row["bot_type"]) for row in rows if is_service_bot(row)]
 
+    # We also need the user IDs of all bots, to avoid trying to send push/email
+    # notifications to them. This set will be directly sent to the event queue code
+    # where we determine notifiability of the message for users.
+    all_bot_user_ids = {row["id"] for row in rows if row["is_bot"]}
+
     info: RecipientInfoResult = dict(
         active_user_ids=active_user_ids,
         online_push_user_ids=online_push_user_ids,
@@ -1744,6 +1768,7 @@ def get_recipient_info(
         long_term_idle_user_ids=long_term_idle_user_ids,
         default_bot_user_ids=default_bot_user_ids,
         service_bot_tuples=service_bot_tuples,
+        all_bot_user_ids=all_bot_user_ids,
     )
     return info
 
@@ -1850,6 +1875,7 @@ def build_message_send_dict(
     realm: Optional[Realm] = None,
     widget_content_dict: Optional[Dict[str, Any]] = None,
     email_gateway: bool = False,
+    mention_backend: Optional[MentionBackend] = None,
 ) -> SendMessageRequest:
     """Returns a dictionary that can be passed into do_send_messages.  In
     production, this is always called by check_message, but some
@@ -1858,8 +1884,11 @@ def build_message_send_dict(
     if realm is None:
         realm = message.sender.realm
 
+    if mention_backend is None:
+        mention_backend = MentionBackend(realm.id)
+
     mention_data = MentionData(
-        realm_id=realm.id,
+        mention_backend=mention_backend,
         content=message.content,
     )
 
@@ -1948,6 +1977,7 @@ def build_message_send_dict(
         long_term_idle_user_ids=info["long_term_idle_user_ids"],
         default_bot_user_ids=info["default_bot_user_ids"],
         service_bot_tuples=info["service_bot_tuples"],
+        all_bot_user_ids=info["all_bot_user_ids"],
         wildcard_mention_user_ids=wildcard_mention_user_ids,
         links_for_embed=links_for_embed,
         widget_content=widget_content_dict,
@@ -2104,6 +2134,7 @@ def do_send_messages(
                     stream_email_user_ids=send_request.stream_email_user_ids,
                     wildcard_mention_user_ids=send_request.wildcard_mention_user_ids,
                     muted_sender_user_ids=send_request.muted_sender_user_ids,
+                    all_bot_user_ids=send_request.all_bot_user_ids,
                 ),
             )
             for user_id in send_request.active_user_ids
@@ -2129,6 +2160,7 @@ def do_send_messages(
             stream_email_user_ids=list(send_request.stream_email_user_ids),
             wildcard_mention_user_ids=list(send_request.wildcard_mention_user_ids),
             muted_sender_user_ids=list(send_request.muted_sender_user_ids),
+            all_bot_user_ids=list(send_request.all_bot_user_ids),
         )
 
         if send_request.message.is_stream_message():
@@ -3060,8 +3092,9 @@ def check_update_message(
             content = "(deleted)"
         content = normalize_body(content)
 
+        mention_backend = MentionBackend(user_profile.realm_id)
         mention_data = MentionData(
-            realm_id=user_profile.realm.id,
+            mention_backend=mention_backend,
             content=content,
         )
         user_info = get_user_info_for_message_updates(message.id)
@@ -3296,6 +3329,7 @@ def check_message(
     email_gateway: bool = False,
     *,
     skip_stream_access_check: bool = False,
+    mention_backend: Optional[MentionBackend] = None,
 ) -> SendMessageRequest:
     """See
     https://zulip.readthedocs.io/en/latest/subsystems/sending-messages.html
@@ -3421,6 +3455,7 @@ def check_message(
         realm=realm,
         widget_content_dict=widget_content_dict,
         email_gateway=email_gateway,
+        mention_backend=mention_backend,
     )
 
     if stream is not None and message_send_dict.rendering_result.mentions_wildcard:
@@ -3437,6 +3472,7 @@ def _internal_prep_message(
     addressee: Addressee,
     content: str,
     email_gateway: bool = False,
+    mention_backend: Optional[MentionBackend] = None,
 ) -> Optional[SendMessageRequest]:
     """
     Create a message object and checks it, but doesn't send it or save it to the database.
@@ -3466,6 +3502,7 @@ def _internal_prep_message(
             content,
             realm=realm,
             email_gateway=email_gateway,
+            mention_backend=mention_backend,
         )
     except JsonableError as e:
         logging.exception(
@@ -3521,7 +3558,11 @@ def internal_prep_stream_message_by_name(
 
 
 def internal_prep_private_message(
-    realm: Realm, sender: UserProfile, recipient_user: UserProfile, content: str
+    realm: Realm,
+    sender: UserProfile,
+    recipient_user: UserProfile,
+    content: str,
+    mention_backend: Optional[MentionBackend] = None,
 ) -> Optional[SendMessageRequest]:
     """
     See _internal_prep_message for details of how this works.
@@ -3533,6 +3574,7 @@ def internal_prep_private_message(
         sender=sender,
         addressee=addressee,
         content=content,
+        mention_backend=mention_backend,
     )
 
 
@@ -5074,10 +5116,58 @@ def do_rename_stream(stream: Stream, new_name: str, user_profile: UserProfile) -
     return {"email_address": new_email}
 
 
-def do_change_stream_description(stream: Stream, new_description: str) -> None:
-    stream.description = new_description
-    stream.rendered_description = render_stream_description(new_description)
-    stream.save(update_fields=["description", "rendered_description"])
+def send_change_stream_description_notification(
+    stream: Stream, *, old_description: str, new_description: str, acting_user: UserProfile
+) -> None:
+    sender = get_system_bot(settings.NOTIFICATION_BOT, acting_user.realm_id)
+    user_mention = silent_mention_syntax_for_user(acting_user)
+
+    with override_language(stream.realm.default_language):
+        notification_string = _(
+            "{user} changed the description for this stream.\n"
+            "Old description:\n"
+            "``` quote\n"
+            "{old_description}\n"
+            "```\n"
+            "New description:\n"
+            "``` quote\n"
+            "{new_description}\n"
+            "```"
+        )
+        notification_string = notification_string.format(
+            user=user_mention,
+            old_description=old_description,
+            new_description=new_description,
+        )
+
+        internal_send_stream_message(
+            sender, stream, Realm.STREAM_EVENTS_NOTIFICATION_TOPIC, notification_string
+        )
+
+
+def do_change_stream_description(
+    stream: Stream, new_description: str, *, acting_user: UserProfile
+) -> None:
+    old_description = stream.description
+
+    with transaction.atomic():
+        stream.description = new_description
+        stream.rendered_description = render_stream_description(new_description)
+        stream.save(update_fields=["description", "rendered_description"])
+        RealmAuditLog.objects.create(
+            realm=stream.realm,
+            acting_user=acting_user,
+            modified_stream=stream,
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            event_time=timezone_now(),
+            extra_data=orjson.dumps(
+                {
+                    RealmAuditLog.OLD_VALUE: old_description,
+                    RealmAuditLog.NEW_VALUE: new_description,
+                    "property": "description",
+                }
+            ).decode(),
+        )
 
     event = dict(
         type="stream",
@@ -5089,6 +5179,13 @@ def do_change_stream_description(stream: Stream, new_description: str) -> None:
         rendered_description=stream.rendered_description,
     )
     send_event(stream.realm, event, can_access_stream_user_ids(stream))
+
+    send_change_stream_description_notification(
+        stream,
+        old_description=old_description,
+        new_description=new_description,
+        acting_user=acting_user,
+    )
 
 
 def send_change_stream_message_retention_days_notification(
@@ -6430,6 +6527,7 @@ def do_update_message(
         event["muted_sender_user_ids"] = list(info["muted_sender_user_ids"])
         event["prior_mention_user_ids"] = list(prior_mention_user_ids)
         event["presence_idle_user_ids"] = filter_presence_idle_user_ids(info["active_user_ids"])
+        event["all_bot_user_ids"] = list(info["all_bot_user_ids"])
         if rendering_result.mentions_wildcard:
             event["wildcard_mention_user_ids"] = list(info["wildcard_mention_user_ids"])
         else:

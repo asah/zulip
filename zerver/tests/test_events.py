@@ -171,7 +171,7 @@ from zerver.lib.events import (
     fetch_initial_state_data,
     post_process_state,
 )
-from zerver.lib.mention import MentionData
+from zerver.lib.mention import MentionBackend, MentionData
 from zerver.lib.message import render_markdown
 from zerver.lib.test_classes import ZulipTestCase
 from zerver.lib.test_helpers import (
@@ -437,8 +437,9 @@ class NormalActionsTest(BaseAction):
         content = "new content"
         rendering_result = render_markdown(pm, content)
         prior_mention_user_ids: Set[int] = set()
+        mention_backend = MentionBackend(self.user_profile.realm_id)
         mention_data = MentionData(
-            realm_id=self.user_profile.realm_id,
+            mention_backend=mention_backend,
             content=content,
         )
 
@@ -496,8 +497,9 @@ class NormalActionsTest(BaseAction):
         content = "new content"
         rendering_result = render_markdown(message, content)
         prior_mention_user_ids: Set[int] = set()
+        mention_backend = MentionBackend(self.user_profile.realm_id)
         mention_data = MentionData(
-            realm_id=self.user_profile.realm_id,
+            mention_backend=mention_backend,
             content=content,
         )
 
@@ -2530,9 +2532,12 @@ class SubscribeActionTest(BaseAction):
         )
         check_subscription_add("events[0]", events[0])
 
-        action = lambda: do_change_stream_description(stream, "new description")
-        events = self.verify_action(action, include_subscribers=include_subscribers)
+        action = lambda: do_change_stream_description(
+            stream, "new description", acting_user=self.example_user("hamlet")
+        )
+        events = self.verify_action(action, include_subscribers=include_subscribers, num_events=2)
         check_stream_update("events[0]", events[0])
+        check_message("events[1]", events[1])
 
         # Update stream privacy - make stream web public
         action = lambda: do_change_stream_permission(

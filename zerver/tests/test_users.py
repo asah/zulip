@@ -1586,6 +1586,7 @@ class RecipientInfoTest(ZulipTestCase):
             long_term_idle_user_ids=set(),
             default_bot_user_ids=set(),
             service_bot_tuples=[],
+            all_bot_user_ids=set(),
         )
 
         self.assertEqual(info, expected_info)
@@ -1767,6 +1768,7 @@ class RecipientInfoTest(ZulipTestCase):
             possibly_mentioned_user_ids={service_bot.id, normal_bot.id},
         )
         self.assertEqual(info["default_bot_user_ids"], {normal_bot.id})
+        self.assertEqual(info["all_bot_user_ids"], {normal_bot.id, service_bot.id})
 
     def test_get_recipient_info_invalid_recipient_type(self) -> None:
         hamlet = self.example_user("hamlet")
@@ -2037,6 +2039,7 @@ class DeleteUserTest(ZulipTestCase):
         hamlet = self.example_user("hamlet")
         hamlet_personal_recipient = hamlet.recipient
         hamlet_user_id = hamlet.id
+        hamlet_date_joined = hamlet.date_joined
 
         self.send_personal_message(cordelia, hamlet)
         self.send_personal_message(hamlet, cordelia)
@@ -2066,9 +2069,11 @@ class DeleteUserTest(ZulipTestCase):
         replacement_dummy_user = UserProfile.objects.get(id=hamlet_user_id, realm=realm)
 
         self.assertEqual(
-            replacement_dummy_user.delivery_email, f"deleteduser{hamlet_user_id}@{realm.uri}"
+            replacement_dummy_user.delivery_email, f"deleteduser{hamlet_user_id}@zulip.testserver"
         )
         self.assertEqual(replacement_dummy_user.is_mirror_dummy, True)
+        self.assertEqual(replacement_dummy_user.is_active, False)
+        self.assertEqual(replacement_dummy_user.date_joined, hamlet_date_joined)
 
         self.assertEqual(Message.objects.filter(id__in=personal_message_ids_to_hamlet).count(), 0)
         # Huddle messages from hamlet should have been deleted, but messages of other participants should

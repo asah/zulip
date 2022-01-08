@@ -66,6 +66,7 @@ from zerver.lib.test_classes import ZulipTestCase
 from zerver.lib.test_helpers import (
     cache_tries_captured,
     get_subscription,
+    most_recent_message,
     most_recent_usermessage,
     queries_captured,
     reset_emails_in_zulip_realm,
@@ -878,7 +879,7 @@ class StreamAdminTest(ZulipTestCase):
         self.subscribe(self.example_user("cordelia"), "private_stream")
 
         events: List[Mapping[str, Any]] = []
-        with self.tornado_redirected_to_list(events, expected_num_events=1):
+        with self.tornado_redirected_to_list(events, expected_num_events=2):
             stream_id = get_stream("private_stream", user_profile.realm).id
             result = self.client_patch(
                 f"/json/streams/{stream_id}",
@@ -889,7 +890,7 @@ class StreamAdminTest(ZulipTestCase):
         cordelia = self.example_user("cordelia")
         prospero = self.example_user("prospero")
 
-        notified_user_ids = set(events[-1]["users"])
+        notified_user_ids = set(events[0]["users"])
         self.assertIn(user_profile.id, notified_user_ids)
         self.assertIn(cordelia.id, notified_user_ids)
         self.assertNotIn(prospero.id, notified_user_ids)
@@ -1157,7 +1158,7 @@ class StreamAdminTest(ZulipTestCase):
         self.subscribe(user_profile, "stream_name1")
 
         events: List[Mapping[str, Any]] = []
-        with self.tornado_redirected_to_list(events, expected_num_events=1):
+        with self.tornado_redirected_to_list(events, expected_num_events=2):
             stream_id = get_stream("stream_name1", realm).id
             result = self.client_patch(
                 f"/json/streams/{stream_id}",
@@ -1185,7 +1186,6 @@ class StreamAdminTest(ZulipTestCase):
         self.assertIn(user_profile.id, notified_user_ids)
         self.assertIn(self.example_user("prospero").id, notified_user_ids)
         self.assertNotIn(self.example_user("polonius").id, notified_user_ids)
-
         self.assertEqual("Test description", stream.description)
 
         result = self.client_patch(f"/json/streams/{stream_id}", {"description": "a" * 1025})
@@ -1201,6 +1201,34 @@ class StreamAdminTest(ZulipTestCase):
         self.assert_json_success(result)
         stream = get_stream("stream_name1", realm)
         self.assertEqual(stream.description, "a multi line description")
+
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        expected_notification = (
+            f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n"
+            "Old description:\n"
+            "``` quote\n"
+            "Test description\n"
+            "```\n"
+            "New description:\n"
+            "``` quote\n"
+            "a multi line description\n"
+            "```"
+        )
+        self.assertEqual(messages[-1].content, expected_notification)
+
+        realm_audit_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert realm_audit_log is not None
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: "Test description",
+                RealmAuditLog.NEW_VALUE: "a multi line description",
+                "property": "description",
+            }
+        ).decode()
+        self.assertEqual(realm_audit_log.extra_data, expected_extra_data)
 
         # Verify that we don't render inline URL previews in this code path.
         with self.settings(INLINE_URL_EMBED_PREVIEW=True):
@@ -1227,15 +1255,42 @@ class StreamAdminTest(ZulipTestCase):
             acting_user=None,
         )
 
-        with self.tornado_redirected_to_list(events, expected_num_events=1):
-            stream_id = get_stream("stream_name1", realm).id
-            result = self.client_patch(
-                f"/json/streams/{stream_id}",
-                {"description": "Test description"},
-            )
+        stream_id = get_stream("stream_name1", realm).id
+        result = self.client_patch(
+            f"/json/streams/{stream_id}",
+            {"description": "Test description"},
+        )
         self.assert_json_success(result)
         stream = get_stream("stream_name1", realm)
         self.assertEqual(stream.description, "Test description")
+
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        expected_notification = (
+            f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n"
+            "Old description:\n"
+            "``` quote\n"
+            "See https://zulip.com/team\n"
+            "```\n"
+            "New description:\n"
+            "``` quote\n"
+            "Test description\n"
+            "```"
+        )
+        self.assertEqual(messages[-1].content, expected_notification)
+
+        realm_audit_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert realm_audit_log is not None
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: "See https://zulip.com/team",
+                RealmAuditLog.NEW_VALUE: "Test description",
+                "property": "description",
+            }
+        ).decode()
+        self.assertEqual(realm_audit_log.extra_data, expected_extra_data)
 
     def test_change_stream_description_requires_admin(self) -> None:
         user_profile = self.example_user("hamlet")
@@ -4889,9 +4944,12 @@ class GetSubscribersTest(ZulipTestCase):
         self.user_profile = self.example_user("hamlet")
         self.login_user(self.user_profile)
 
-    def assert_user_got_subscription_notification(self, expected_msg: str, realm: Realm) -> None:
+    def assert_user_got_subscription_notification(
+        self, user: UserProfile, expected_msg: str
+    ) -> None:
         # verify that the user was sent a message informing them about the subscription
-        msg = self.get_last_message()
+        realm = user.realm
+        msg = most_recent_message(user)
         self.assertEqual(msg.recipient.type, msg.recipient.PERSONAL)
         self.assertEqual(msg.sender_id, self.notification_bot(realm).id)
 
@@ -4945,21 +5003,32 @@ class GetSubscribersTest(ZulipTestCase):
         (We also use this test to verify subscription notifications to
         folks who get subscribed to streams.)
         """
+        hamlet = self.example_user("hamlet")
+        cordelia = self.example_user("cordelia")
+        othello = self.example_user("othello")
+        polonius = self.example_user("polonius")
+
         streams = [f"stream_{i}" for i in range(10)]
         for stream_name in streams:
             self.make_stream(stream_name)
 
         users_to_subscribe = [
             self.user_profile.id,
-            self.example_user("othello").id,
-            self.example_user("cordelia").id,
+            othello.id,
+            cordelia.id,
+            polonius.id,
         ]
-        self.common_subscribe_to_streams(
-            self.user_profile, streams, dict(principals=orjson.dumps(users_to_subscribe).decode())
-        )
 
-        msg = """
-            @**King Hamlet** subscribed you to the following streams:
+        with queries_captured() as queries:
+            self.common_subscribe_to_streams(
+                self.user_profile,
+                streams,
+                dict(principals=orjson.dumps(users_to_subscribe).decode()),
+            )
+        self.assert_length(queries, 46)
+
+        msg = f"""
+            @**King Hamlet|{hamlet.id}** subscribed you to the following streams:
 
             * #**stream_0**
             * #**stream_1**
@@ -4973,7 +5042,8 @@ class GetSubscribersTest(ZulipTestCase):
             * #**stream_9**
             """
 
-        self.assert_user_got_subscription_notification(msg, self.user_profile.realm)
+        for user in [cordelia, othello, polonius]:
+            self.assert_user_got_subscription_notification(user, msg)
 
         # Subscribe ourself first.
         self.common_subscribe_to_streams(
@@ -4992,10 +5062,11 @@ class GetSubscribersTest(ZulipTestCase):
             invite_only=True,
         )
 
-        msg = """
-            @**King Hamlet** subscribed you to the stream #**stream_invite_only_1**.
+        msg = f"""
+            @**King Hamlet|{hamlet.id}** subscribed you to the stream #**stream_invite_only_1**.
             """
-        self.assert_user_got_subscription_notification(msg, self.user_profile.realm)
+        for user in [cordelia, othello, polonius]:
+            self.assert_user_got_subscription_notification(user, msg)
 
         with queries_captured() as queries:
             subscribed_streams, _ = gather_subscriptions(

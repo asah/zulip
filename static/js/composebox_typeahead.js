@@ -7,7 +7,6 @@ import pygments_data from "../generated/pygments_data.json";
 import * as emoji from "../shared/js/emoji";
 import * as typeahead from "../shared/js/typeahead";
 
-import * as channel from "./channel";
 import * as compose from "./compose";
 import * as compose_pm_pill from "./compose_pm_pill";
 import * as compose_state from "./compose_state";
@@ -75,8 +74,7 @@ export function topics_seen_for(stream_name) {
 
     // Fetch topic history from the server, in case we will need it soon.
     stream_topic_history_util.get_server_history(stream_id, () => {});
-    const topic_names = stream_topic_history.get_recent_topic_names(stream_id);
-    return topic_names;
+    return stream_topic_history.get_recent_topic_names(stream_id);
 }
 
 function get_language_matcher(query) {
@@ -146,7 +144,7 @@ export function should_enter_send(e) {
         this_enter_sends = !has_modifier_key;
     } else {
         // If enter_sends is not enabled, just hitting
-        // Snter should add a newline, but with a
+        // Enter should add a newline, but with a
         // non-Shift modifier key held down, we should
         // send.  With Shift, we shouldn't, because
         // Shift+Enter to get a newline is a common
@@ -171,23 +169,24 @@ export function handle_enter(textarea, e) {
     //
     // We do this using caret and range from jquery-caret.
     const has_non_shift_modifier_key = e.ctrlKey || e.metaKey || e.altKey;
-    if (has_non_shift_modifier_key) {
-        // To properly emulate browser "Enter", if the
-        // user had selected something in the textarea,
-        // we need those characters to be cleared.
-        const range = textarea.range();
-        if (range.length > 0) {
-            textarea.range(range.start, range.end).range("");
-        }
-
-        // Now add the newline, remembering to resize the
-        // textarea if needed.
-        textarea.caret("\n");
-        compose_ui.autosize_textarea(textarea);
-        e.preventDefault();
+    if (!has_non_shift_modifier_key) {
+        // Use the native browser behavior.
         return;
     }
-    // Fall through to native browser behavior, otherwise.
+
+    // To properly emulate browser "Enter", if the
+    // user had selected something in the textarea,
+    // we need those characters to be cleared.
+    const range = textarea.range();
+    if (range.length > 0) {
+        textarea.range(range.start, range.end).range("");
+    }
+
+    // Now add the newline, remembering to resize the
+    // textarea if needed.
+    textarea.caret("\n");
+    compose_ui.autosize_textarea(textarea);
+    e.preventDefault();
 }
 
 // nextFocus is set on a keydown event to indicate where we should focus on keyup.
@@ -768,6 +767,10 @@ export function content_highlighter(item) {
     }
 }
 
+function is_numeric_key(key) {
+    return ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"].includes(key);
+}
+
 export function show_flatpickr(element, callback, default_timestamp, options = {}) {
     const flatpickr_input = $("<input id='#timestamp_flatpickr'>");
 
@@ -788,6 +791,12 @@ export function show_flatpickr(element, callback, default_timestamp, options = {
         formatDate: (date) => formatISO(date),
         disableMobile: true,
         onKeyDown: (selectedDates, dateStr, instance, event) => {
+            if (is_numeric_key(event.key)) {
+                // Don't attempt to get_keydown_hotkey for numeric inputs
+                // as it would return undefined.
+                return;
+            }
+
             const hotkey = get_keydown_hotkey(event);
 
             if (["tab", "shift_tab"].includes(hotkey.name)) {
@@ -815,10 +824,20 @@ export function show_flatpickr(element, callback, default_timestamp, options = {
     const container = $($(instance.innerContainer).parent());
 
     container.on("keydown", (e) => {
+        if (is_numeric_key(e.key)) {
+            // Let users type numeric values
+            return true;
+        }
+
         const hotkey = get_keydown_hotkey(e);
 
         if (!hotkey) {
             return false;
+        }
+
+        if (hotkey.name === "backspace" || hotkey.name === "delete") {
+            // Let backspace or delete be handled normally
+            return true;
         }
 
         if (hotkey.name === "enter") {
@@ -1156,22 +1175,6 @@ export function initialize() {
     // These handlers are at the "form" level so that they are called after typeahead
     $("form#send_message_form").on("keydown", handle_keydown);
     $("form#send_message_form").on("keyup", handle_keyup);
-
-    $(".enter_sends").on("click", () => {
-        user_settings.enter_sends = !user_settings.enter_sends;
-        $(`.enter_sends_${!user_settings.enter_sends}`).hide();
-        $(`.enter_sends_${user_settings.enter_sends}`).show();
-
-        // Refocus in the content box so you can continue typing or
-        // press Enter to send.
-        $("#compose-textarea").trigger("focus");
-
-        return channel.patch({
-            url: "/json/settings",
-            idempotent: true,
-            data: {enter_sends: user_settings.enter_sends},
-        });
-    });
 
     // limit number of items so the list doesn't fall off the screen
     $("#stream_message_recipient_stream").typeahead({
