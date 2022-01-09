@@ -1389,10 +1389,8 @@ pyparsing==3.0.6 \
     --hash=sha256:04ff808a5b90911829c55c4e26f75fa5ca8a2f5f36aa3a51f68e27033341d3e4 \
     --hash=sha256:d9bdec0013ef1eb5a84ab39a3b3868911598afa494f5faa038647101504e2b81
     # via packaging
-pyre-check==0.9.9 \
-    --hash=sha256:3c99943fde9eaac9c3beed329a6c34f9db87de3f611cc5cf5997fcfd51d160d8 \
-    --hash=sha256:809717c2134b814f05128e3c6c06dd88cd8cdb5a6e4304d10ccf9813bc7bbf0a \
-    --hash=sha256:a8245ed9a5a4fa21ee3e576aa4e8194d033cc13d0f5ccd84492fbfc68089f848
+pyre-check==0.9.3 \
+    --hash=sha256:d5c03de101610d534eaf3d7b654702d91b95505209886feed211a30ded789daa
     # via -r requirements/dev.in
 pyre-extensions==0.0.27 \
     --hash=sha256:5ad4822ceaed43171a36391a95b70b928c222ca0776f4e689f6921081ecfb324 \
