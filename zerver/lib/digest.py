@@ -7,7 +7,8 @@ from typing import Any, Dict, List, Set, Tuple
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Count, Sum, OuterRef, Subquery, Case, When
+from django.db.models import F, Count, Sum, OuterRef, Subquery, Case, When
+from django.db.models.functions import Length, Ln
 from django.utils.timezone import now as timezone_now
 from django.utils.text import Truncator
 
@@ -184,9 +185,11 @@ def get_most_reacted_messages(
             sender__is_bot=False,
             sender__is_active=True,
         ).annotate(
+            lnlen = Ln(Length('content') + 1)
+        ).annotate(
             num_reactions=Count('reaction')
         ).annotate(
-            weighted_num_reactions=Subquery(
+            weighted_reactions=Subquery(
                 Reaction.objects.filter(
                     message=OuterRef('pk')
                 ).annotate(
@@ -194,12 +197,14 @@ def get_most_reacted_messages(
                 ).values(
                     'message__pk'
                 ).annotate(
-                    sum_score=Sum('score')
-                ).values('sum_score')[:1]
+                    weighted_reactions=Sum('score')
+                ).values('weighted_reactions')[:1]
             )
+        ).annotate(
+            score=F('weighted_reactions') * F('lnlen')
         )
         .filter(num_reactions__gt=0)
-        .order_by("-weighted_num_reactions")
+        .order_by("-score")
     )        
     #print(messages.query)
     return messages
