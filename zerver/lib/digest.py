@@ -397,7 +397,9 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
               'rendered_content': msg.rendered_content,
               'rendered_content_truncated': Truncator(msg.rendered_content).chars(200, html=True),
               'num_reactions': msg.num_reactions,
-              'weighted_num_reactions': msg.weighted_num_reactions,
+              'weighted_reactions': msg.weighted_reactions,
+              'lnlen': msg.lnlen,
+              'score': msg.score,
              } for msg in top_reacted_msgs
         ]
         context["veryhot_conversations"] = [
