@@ -148,7 +148,8 @@ export function update_unread_counts(new_unread_count, new_pm_count) {
     pm_count = new_pm_count;
 
     // Indicate the message count in the favicon
-    favicon.update_favicon(unread_count, pm_count);
+//    favicon.update_favicon(unread_count, pm_count);
+    favicon.update_favicon(0,0);
 
     // Notify the current desktop app's UI about the new unread count.
     if (window.electron_bridge !== undefined) {
