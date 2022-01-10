@@ -1,5 +1,14 @@
 <div class="message_top_line">
     {{#unless status_message}}
+    {{#if include_sender}}
+        {{#each msg/message_reactions}} {{! TODO: iterating is cheesy, but it works and fast enough }}
+            {{#if this.is_emoji_thumbs_up }}
+            <div class="message_reactions side_thumbs_up">
+            {{> message_reaction}}
+            </div>
+            {{/if}}
+        {{/each}}
+    {{/if}}
     <span class="message_sender sender_info_hover no-select">
         {{#if include_sender}}
         <span title="{{t 'View user profile' }} (u)">
