@@ -1484,7 +1484,7 @@ div.focused_table {
 
 .message_content {
     line-height: 1.214;
-    min-height: 17px;
+    min-height: 50px;
     margin-left: 46px;
     display: block;
     position: relative;
