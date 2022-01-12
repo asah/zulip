@@ -365,7 +365,6 @@ dataclasses==0.8 ; python_version < "3.7" \
     #   dataclasses-json
     #   libcst
     #   pyre-check
-    #   testslide
     #   werkzeug
 dataclasses-json==0.5.6 \
     --hash=sha256:1d7f3a284a49d350ddbabde0e7d0c5ffa34a144aaf1bcb5b9f2c87673ff0c76e \
@@ -613,9 +612,6 @@ incremental==21.3.0 \
     --hash=sha256:02f5de5aff48f6b9f665d99d48bfc7ec03b6e3943210de7cfc88856d755d6f57 \
     --hash=sha256:92014aebc6a20b78a8084cdd5645eeaa7f74b8933f70fa3ada2cfbd1e3b54321
     # via twisted
-intervaltree==3.1.0 \
-    --hash=sha256:902b1b88936918f9b2a19e0e5eb7ccb430ae45cde4f39ea4b36932920d33952d
-    # via pyre-check
 ipython==7.16.2 \
     --hash=sha256:2f644313be4fdc5c8c2a17467f2949c29423c9e283a159d1fc9bf450a1a300af \
     --hash=sha256:613085f8acb0f35f759e32bea35fba62c651a4a2e409a0da11414618f5eec0c4
@@ -1210,9 +1206,7 @@ psutil==5.8.0 \
     --hash=sha256:ea372bcc129394485824ae3e3ddabe67dc0b118d262c568b4d2602a7070afdb0 \
     --hash=sha256:f4634b033faf0d968bb9220dd1c793b897ab7f1189956e1aa9eae752527127d3 \
     --hash=sha256:fcc01e900c1d7bee2a37e5d6e4f9194760a93597c97fee89c4ae51701de03563
-    # via
-    #   pyre-check
-    #   testslide
+    # via pyre-check
 psycopg2==2.9.3 \
     --hash=sha256:06f32425949bd5fe8f625c49f17ebb9784e1e4fe928b7cce72edc36fb68e4c0c \
     --hash=sha256:0762c27d018edbcb2d34d51596e4346c983bd27c330218c56c4dc25ef7e819bf \
@@ -1279,7 +1273,6 @@ pygments==2.11.1 \
     #   ipython
     #   jsx-lexer
     #   sphinx
-    #   testslide
 pyinotify==0.9.6 \
     --hash=sha256:9c998a5d7606ca835065cdabc013ae6c66eb9ea76a00a1e3bc6e0cfe2b4f71f4
     # via -r requirements/dev.in
@@ -1484,6 +1477,9 @@ pyuca==1.2 \
     --hash=sha256:8a382fe74627f08c0d18908c0713ca4a20aad5385f077579e56208beea2893b2 \
     --hash=sha256:abaa12e1bd2c7c68ca8396ff8383bc0654a739cef3ae68fd7af58bf29af0a91e
     # via -r requirements/common.in
+pywatchman==1.4.1 \
+    --hash=sha256:d0047eb275deafb0011eda0a1a815fbd9742478c3d2b5ad6956d300e447dc2f9
+    # via pyre-check
 pyyaml==6.0 \
     --hash=sha256:0283c35a6a9fbf047493e3a0ce8d79ef5030852c51e9d911a27badfde0605293 \
     --hash=sha256:055d937d65826939cb044fc8c9b08889e8c743fdc6a32b33e2390f66013e449b \
@@ -1630,6 +1626,7 @@ requests[security]==2.26.0 \
     #   sphinx
     #   stripe
     #   twilio
+    #   youtube-transcript-api
     #   zulip
 requests-oauthlib==1.3.0 \
     --hash=sha256:7f71572defaecd16372f9006f33c2ec8c077c3cfa6f5911a9a90202beb513f3d \
@@ -1752,10 +1749,6 @@ social-auth-core[azuread,openidconnect,saml]==4.1.0 \
     # via
     #   -r requirements/common.in
     #   social-auth-app-django
-sortedcontainers==2.4.0 \
-    --hash=sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88 \
-    --hash=sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0
-    # via intervaltree
 soupsieve==2.3.1 \
     --hash=sha256:1a3cca2617c6b38c0343ed661b1fa5de5637f257d4fe22bd9f1338010a1efefb \
     --hash=sha256:b8d49b1cd4f037c7082a9683dfa1801aa2597fb11c3a1155b7a5b94829b4f1f9
@@ -1868,9 +1861,6 @@ tblib==1.7.0 \
     --hash=sha256:059bd77306ea7b419d4f76016aef6d7027cc8a0785579b5aad198803435f882c \
     --hash=sha256:289fa7359e580950e7d9743eab36b0691f0310fce64dee7d9c31065b8f723e23
     # via -r requirements/dev.in
-testslide==2.7.0 \
-    --hash=sha256:23ece0b9f5b704b33b978e9c8797936034516adc3c4743ebdaed664aa700c3cb
-    # via pyre-check
 tinycss2==1.1.1 \
     --hash=sha256:b2e44dd8883c360c35dd0d1b5aad0b610e5156c2cb3b33434634e539ead9d8bf \
     --hash=sha256:fe794ceaadfe3cf3e686b22155d0da5780dd0e273471a51846d0a02bc204fec8
@@ -1938,10 +1928,6 @@ typed-ast==1.5.1 \
     # via
     #   black
     #   mypy
-typeguard==2.13.3 \
-    --hash=sha256:00edaa8da3a133674796cf5ea87d9f4b4c367d77476e185e80251cc13dfbb8c4 \
-    --hash=sha256:5e3e3be01e887e7eafae5af63d1f36c849aaa94e3a0112097312aabfa16284f1
-    # via testslide
 types-boto==2.49.3 \
     --hash=sha256:27645e05058cad878839e5cb9edb48ef7215045481680db5d6ced374ce7a3a8d \
     --hash=sha256:c7aadb5a613e022b96267d350193148c92a6ebe3f705f127e03654eda970c721
@@ -2182,6 +2168,10 @@ xmltodict==0.12.0 \
     --hash=sha256:50d8c638ed7ecb88d90561beedbf720c9b4e851a9fa6c47ebd64e99d166d8a21 \
     --hash=sha256:8bbcb45cc982f48b2ca8fe7e7827c5d792f217ecf1792626f808bf41c3b86051
     # via moto
+youtube-transcript-api==0.4.3 \
+    --hash=sha256:7e0a0e47587bf83e25b94912ecbbde8d0e763d5eca5a75164399c5dbca294a0a \
+    --hash=sha256:f1a26dfc92547ee2123223d30315946b46610ad2ca639f5a5a9911f9840c6b06
+    # via -r requirements/common.in
 zipp==3.6.0 \
     --hash=sha256:71c644c5369f4a6e07636f0aa966270449561fcea2e3d6747b8d23efaa9d7832 \
     --hash=sha256:9fe5ea21568a0a70e50f273397638d39b03353731e6cbbb3fd8502a33fec40bc

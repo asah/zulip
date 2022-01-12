@@ -112,6 +112,7 @@ virtualenv-clone
 beautifulsoup4
 pyoembed
 python-magic
+youtube_transcript_api
 
 # The Zulip API bindings, from its own repository.  We integrate with
 # these tightly, including fetching content not included in the official
