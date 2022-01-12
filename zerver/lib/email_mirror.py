@@ -360,7 +360,7 @@ def extract_and_upload_attachments(message: EmailMessage, realm: Realm) -> str:
 def decode_stream_email_address(email: str) -> Tuple[Stream, Dict[str, bool]]:
     token, options = decode_email_address(email)
 
-<    try:
+    try:
         stream = Stream.objects.get(email_token=token)
     except Stream.DoesNotExist:
         raise ZulipEmailForwardError("Bad stream token from email recipient " + email)
