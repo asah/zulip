@@ -1183,12 +1183,15 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         yt_id = self.youtube_id(url)
 
         div = Element("div")
-        root.insert(info["index"], div)
-        for r in yt_ts_api.get_transcript(yt_id):
-            link = SubElement(div, "a")
-            start = int(float(r["start"]))
-            link.set("href", f'https://youtu.be/{yt_id}?t={start}')
-            link.text = r["text"] + " "
+        info["parent"].insert(info["index"], div)
+        try:
+            for r in yt_ts_api.get_transcript(yt_id):
+                link = SubElement(div, "a")
+                start = int(float(r["start"]))
+                link.set("href", f'https://youtu.be/{yt_id}?t={start}')
+                link.text = r["text"] + " "
+        except Exception as exc:
+            div.text = "sorry, couldn't insert a YT transcript for this video."
         self.add_a(
             info["parent"],
             yt_image,
