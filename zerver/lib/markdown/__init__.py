@@ -1182,8 +1182,11 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         (url, text) = found_url.result
         yt_id = self.youtube_id(url)
 
-        div = Element("div")
-        info["parent"].insert(info["index"], div)
+        if info["index"] is None:
+            div = SubElement(info["parent"], "div")
+        else:
+            div = Element("div")
+            info["parent"].insert(info["index"], div)
         try:
             for r in yt_ts_api.get_transcript(yt_id):
                 link = SubElement(div, "a")
