@@ -180,7 +180,7 @@ body.dark-theme {
     #settings_page .form-sidebar,
     .stream_name_search_section,
     .column-right .right-sidebar {
-        border-color: hsla(0, 0%, 0%, 0.2);
+        border-color: white; /* make sidebar stand out more */
     }
 
     .dark .message_label_clickable.stream_label,
