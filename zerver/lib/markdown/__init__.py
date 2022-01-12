@@ -1192,6 +1192,7 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
                 link = SubElement(div, "a")
                 start = int(float(r["start"]))
                 link.set("href", f'https://youtu.be/{yt_id}?t={start}')
+                link.set("target", "_blank")
                 link.text = r["text"] + " "
         except Exception as exc:
             div.text = "sorry, couldn't insert a YT transcript for this video."
