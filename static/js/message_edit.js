@@ -67,15 +67,10 @@ export function is_topic_editable(message, edit_limit_seconds_buffer = 0) {
         // If message editing is disabled, so is topic editing.
         return false;
     }
-    // Organization admins and moderators - zulipcraze/forecast.chat
-    if (page_params.is_admin || page_params.is_moderator) {
+    // Organization admins and message senders can edit message topics indefinitely.
+    if (page_params.is_admin) {
         return true;
     }
-    return false; 		// zulipcraze/forecast.chat
-}
-
-// zulipcraze/forecast.chat
-export function is_msg_editable(message, edit_limit_seconds_buffer = 0) {
     if (message.sent_by_me) {
         return true;
     }
@@ -89,8 +84,7 @@ export function is_msg_editable(message, edit_limit_seconds_buffer = 0) {
     if (page_params.is_moderator) {
         return true;
     }
-    return false;
-/* zulipcraze/forecast.chat
+
     // If you're using community topic editing, there's a deadline.
     return (
         page_params.realm_community_topic_editing_limit_seconds +
@@ -98,7 +92,6 @@ export function is_msg_editable(message, edit_limit_seconds_buffer = 0) {
             (message.timestamp - Date.now() / 1000) >
         0
     );
-*/
 }
 
 function is_widget_message(message) {
@@ -113,9 +106,6 @@ export function get_editability(message, edit_limit_seconds_buffer = 0) {
         return editability_types.NO;
     }
     if (!is_topic_editable(message, edit_limit_seconds_buffer)) {
-	if (is_msg_editable(message, edit_limit_seconds_buffer)) {
-            return editability_types.MSG_ONLY;
-	}
         return editability_types.NO;
     }
 
