@@ -27,6 +27,7 @@ from typing import (
 from urllib.parse import urlencode, urljoin, urlsplit
 from xml.etree import ElementTree as etree
 from xml.etree.ElementTree import Element, SubElement
+from xml.sax.saxutils import escape as xml_escape
 
 import ahocorasick
 import dateutil.parser
@@ -46,6 +47,7 @@ from markdown.extensions import codehilite, nl2br, sane_lists, tables
 from soupsieve import escape as css_escape
 from tlds import tld_set
 from typing_extensions import TypedDict
+from youtube_transcript_api import YouTubeTranscriptApi as yt_ts_api
 
 from zerver.lib import mention as mention
 from zerver.lib.cache import NotFoundInCache, cache_with_key
@@ -1179,6 +1181,14 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         info = self.get_inlining_information(root, found_url)
         (url, text) = found_url.result
         yt_id = self.youtube_id(url)
+
+        div = Element("div")
+        root.insert(info["index"], div)
+        for r in yt_ts_api.get_transcript(yt_id):
+            link = SubElement(div, "a")
+            start = int(float(r["start"]))
+            link.set("href", f'https://youtu.be/{yt_id}?t={start}')
+            link.text = r["text"] + " "
         self.add_a(
             info["parent"],
             yt_image,
