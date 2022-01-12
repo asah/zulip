@@ -41,6 +41,7 @@ from zerver.models import (
     get_stream_by_id_in_realm,
     get_system_bot,
     get_user,
+    get_user_by_delivery_email,
 )
 from zproject.backends import is_user_active
 
@@ -359,7 +360,7 @@ def extract_and_upload_attachments(message: EmailMessage, realm: Realm) -> str:
 def decode_stream_email_address(email: str) -> Tuple[Stream, Dict[str, bool]]:
     token, options = decode_email_address(email)
 
-    try:
+<    try:
         stream = Stream.objects.get(email_token=token)
     except Stream.DoesNotExist:
         raise ZulipEmailForwardError("Bad stream token from email recipient " + email)
@@ -433,7 +434,11 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
             return process_stream_message('zulipinbox+discussion-crypto.010159f6013837128ddf58e7cfb89e72.show-sender@forecast.chat', message);
 
     from_header = message.get("From", "")
-    userprofile = get_user_by_delivery_email(from_header, stream.realm)
+    try:
+        from_header = re.sub(r'^.*<(.+?)>', r'\1', from_header.strip())
+        userprofile = get_user_by_delivery_email(from_header, stream.realm)
+    except Exception as exc:
+        userprofile = None
     if userprofile is None:
         print(f"couldn't find user matching delivery_address {from_header}, " +
               "using the system_bot userprofile instead")
