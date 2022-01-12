@@ -427,6 +427,7 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
     try:
         from_header = re.sub(r'^.*<(.+?)>', r'\1', from_header.strip())
         userprofile = get_user_by_delivery_email(from_header, stream.realm)
+        options['show_sender'] = False
     except Exception as exc:
         userprofile = None
     body = construct_zulip_body(message, stream.realm, **options)
