@@ -432,7 +432,13 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
         if re.search('crypto|bitcoin', body):
             return process_stream_message('zulipinbox+discussion-crypto.010159f6013837128ddf58e7cfb89e72.show-sender@forecast.chat', message);
 
-    send_zulip(get_system_bot(settings.EMAIL_GATEWAY_BOT, stream.realm_id), stream, subject, body)
+    from_header = message.get("From", "")
+    userprofile = get_user_by_delivery_email(from_header, stream.realm)
+    if userprofile is None:
+        print(f"couldn't find user matching delivery_address {from_header}, " +
+              "using the system_bot userprofile instead")
+        userprofile = get_system_bot(settings.EMAIL_GATEWAY_BOT, stream.realm_id)
+    send_zulip(userprofile, stream, subject, body)
     logger.info(
         "Successfully processed email to %s (%s)",
         stream.name,
