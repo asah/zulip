@@ -1192,7 +1192,9 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             info["parent"].insert(info["index"], div)
         try:
             def secs_to_mmss(secs):
-                return f"{int(secs / 60)}:{secs % 60:02}: "
+                sec = secs % 60
+                sec = 0 if sec <= 6 else sec
+                return f"{int(secs / 60)}:{sec:02}: "
             last = -59 # just in case it doesn't start at 0:00
             for r in yt_ts_api.get_transcript(yt_id):
                 start = int(float(r["start"]))
