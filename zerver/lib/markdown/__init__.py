@@ -638,6 +638,7 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         data_id: Optional[str] = None,
         insertion_index: Optional[int] = None,
         already_thumbnailed: bool = False,
+        a_class_attr: Optional[str] = None,
     ) -> None:
         desc = desc if desc is not None else ""
 
@@ -658,6 +659,8 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             a.set("title", title)
         if data_id is not None:
             a.set("data-id", data_id)
+        if a_class_attr is not None:
+            a.set("class", a_class_attr)
         img = SubElement(a, "img")
         if (
             settings.THUMBNAIL_IMAGES
@@ -1188,13 +1191,24 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             div = Element("div")
             info["parent"].insert(info["index"], div)
         try:
+            def secs_to_mmss(secs):
+                return f"{int(secs / 60)}:{secs % 60:02}: "
+            last = -59 # just in case it doesn't start at 0:00
             for r in yt_ts_api.get_transcript(yt_id):
-                link = SubElement(div, "a")
                 start = int(float(r["start"]))
+                if start % 60 == 0 or start >= last + 60:
+                    if start >= 60:
+                        SubElement(div, "br")
+                    span = SubElement(div, "span")
+                    span.text = secs_to_mmss(start)
+                    last = (start - start % 60)
+                link = SubElement(div, "a")
                 link.set("href", f'https://youtu.be/{yt_id}?t={start}')
                 link.set("target", "_blank")
                 link.text = r["text"] + " "
+            has_transcript = True
         except Exception as exc:
+            has_transcript = False
             div.text = "sorry, couldn't insert a YT transcript for this video."
         self.add_a(
             info["parent"],
@@ -1202,10 +1216,12 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             url,
             None,
             None,
-            "youtube-video message_inline_image",
+            "youtube-video " + ("message_inline_image_with_transcript"
+                                if has_transcript else "message_inline_image"),
             yt_id,
             insertion_index=info["index"],
             already_thumbnailed=True,
+            a_class_attr="youtube-video-link",
         )
 
     def find_proper_insertion_index(

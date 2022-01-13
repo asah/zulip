@@ -313,6 +313,18 @@
         border: none !important;
     }
 
+    .message_inline_image_with_transcript {
+        position: relative;
+        margin-bottom: 5px;
+        margin-left: 5px;
+        display: block !important;
+        border: none !important;
+    }
+
+    a.youtube-video-link {
+        height: unset;
+    }
+
     &.rtl .twitter-image,
     &.rtl .message_inline_image {
         margin-left: unset;
