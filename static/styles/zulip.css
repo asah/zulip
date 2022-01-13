@@ -1491,7 +1491,12 @@ div.focused_table {
     display: block;
     position: relative;
     overflow: hidden;
-    width: 110%;
+    @media (width < $sm_min) {
+	width: 90%;
+    }
+    @media (width >= $sm_min) {
+	width: 110%;
+    }
 
     &:empty {
         display: none;
