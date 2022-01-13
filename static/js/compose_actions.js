@@ -93,7 +93,8 @@ function show_box(msg_type, opts) {
     $("#compose-send-status").removeClass(common.status_classes).hide();
     $("#compose").css({visibility: "visible"});
     // When changing this, edit the 42px in _maybe_autoscroll
-    $(".new_message_textarea").css("min-height", "200px");
+//    $(".new_message_textarea").css("min-height", "200px");
+    $(".new_message_textarea").css("min-height", "3em");
     // forecast hack
     $("#message_feed_container").height(
 	$("body").height() - $("#message_feed_container").position().top - 210);
