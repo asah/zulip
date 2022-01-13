@@ -1491,6 +1491,7 @@ div.focused_table {
     display: block;
     position: relative;
     overflow: hidden;
+    width: 110%;
 
     &:empty {
         display: none;

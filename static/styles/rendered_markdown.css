@@ -644,5 +644,18 @@ a:hover code {
 }
 
 div.yt-transcript {
-    display: inline !important
+    display: inline !important;
+}
+
+.ytsecs {
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.ythl {
+    color: hsl(51, 94%, 74%);
+}
+
+.ytbk {
+    display: none; /* not ready to release yet */
 }

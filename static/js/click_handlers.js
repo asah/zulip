@@ -251,6 +251,41 @@ export function initialize() {
         e.stopPropagation();
         popovers.hide_all();
     });
+    $("body").on("click", ".ytbk", function (e) {
+        const row = message_lists.current.get_row(rows.id($(this).closest(".message_row")));
+	let message_id = rows.id(row);
+	const message = message_lists.current.get(message_id);
+	const tag = "\nbk:"+ $(this).attr("ts");
+	// toggle content and save
+	const msg_list = message_lists.current;
+	channel.get({
+            url: "/json/messages/" + message.id,
+            idempotent: true,
+            success(data) {
+		if (message_lists.current === msg_list) {
+                    message.raw_content = data.raw_content;
+		    if (message.raw_content.includes(tag)) {
+			message.raw_content.replace(tag, "");
+		    } else {
+			message.raw_content += tag;
+		    }
+		    const request = { message_id: message.id, content: message.raw_content, }
+		    channel.patch({
+			url: "/json/messages/" + message.id,
+			data: request,
+			success() {
+			},
+			error(xhr) {
+			    alert("backend error: bookmark change not saved")
+			}
+		    });
+		    $(this).parent().children().toggleClass("ythl");
+		    $(this).toggleClass("fa-bookmark").toggleClass("fa-bookmark-o");
+		}
+	    },
+	});
+        e.stopPropagation();
+    });
     $("body").on("click", ".always_visible_topic_edit,.on_hover_topic_edit", function (e) {
         const recipient_row = $(this).closest(".recipient_row");
         message_edit.start_inline_topic_edit(recipient_row);

@@ -1186,39 +1186,53 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         yt_id = self.youtube_id(url)
 
         if info["index"] is None:
-            div = SubElement(info["parent"], "div")
+            transcript = SubElement(info["parent"], "div")
         else:
-            div = Element("div")
-            info["parent"].insert(info["index"], div)
-        div.set("class", "yt-transcript");
+            transcript = Element("div")
+            info["parent"].insert(info["index"], transcript)
+        transcript.set("class", "yt-transcript");
         try:
             def secs_to_mmss(secs):
                 sec = secs % 60
                 sec = 0 if sec <= 6 else sec
-                return f"{int(secs / 60)}:{sec:02}: "
+                return f"{int(secs / 60)}:{sec:02} "
             last = -59 # just in case it doesn't start at 0:00
-            for r in yt_ts_api.get_transcript(yt_id):
+            recs = [r for r in yt_ts_api.get_transcript(yt_id)]
+            # detect more than 80% upcase
+            alltext = ''.join([r['text'] for r in recs])
+            use_lcase = (100*sum(map(str.isupper, alltext)) /
+                         sum(map(str.isalpha, alltext)) > 80)
+            for r in recs:
+                span = SubElement(transcript, "span")
+                text = r['text']
+                if text in ["[Music]", "[Applause]"]:
+                    continue
+                text = re.sub(r' um ', ' - ', text)
+                if use_lcase:
+                    text = text.lower()
+                text = re.sub(r'>', '', text)
+                text = re.sub(r'([\.\?!])\s+([a-z]+)',
+                              lambda pat: pat.group(1) + " " +
+                              pat.group(2)[0].upper() + pat.group(2)[1:], text)
                 start = int(float(r["start"]))
-#                if start % 60 == 0 or start >= last + 60:
-#                    if start >= 60:
-#                        SubElement(div, "br")
-#                    span = SubElement(div, "span")
-#                    span.text = secs_to_mmss(start)
-#                    last = (start - start % 60)
                 if start % 30 == 0 or start >= last + 30:
-                    link = SubElement(div, "a")
+                    display_secs = secs_to_mmss(start)
+                    bookmark = SubElement(span, "a")
+                    bookmark.set("class", f"fa fa-bookmark-o ytsecs ytbk bk{display_secs}")
+                    bookmark.set("ts", display_secs)
+                    link = SubElement(span, "a")
                     link.text = secs_to_mmss(start)
+                    link.set("class", "ytsecs")
                     link.set("href", f'https://youtu.be/{yt_id}?t={start}')
                     link.set("target", "_blank")
                     last = (start - start % 60)
-                link = SubElement(div, "span")
-#                link.set("href", f'https://youtu.be/{yt_id}?t={start}')
-#                link.set("target", "_blank")
-                link.text = r["text"] + " "
+                words = SubElement(span, "span")
+                words.set("class", "ytspn")
+                words.text = text + " "
             has_transcript = True
         except Exception as exc:
             has_transcript = False
-            div.text = "sorry, couldn't insert a YT transcript for this video."
+            transcript.text = "sorry, couldn't insert a YT transcript for this video."
         self.add_a(
             info["parent"],
             yt_image,
