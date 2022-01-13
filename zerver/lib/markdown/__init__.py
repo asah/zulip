@@ -1190,6 +1190,7 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         else:
             div = Element("div")
             info["parent"].insert(info["index"], div)
+        div.set("class", "yt-transcript");
         try:
             def secs_to_mmss(secs):
                 sec = secs % 60
@@ -1198,15 +1199,21 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             last = -59 # just in case it doesn't start at 0:00
             for r in yt_ts_api.get_transcript(yt_id):
                 start = int(float(r["start"]))
-                if start % 60 == 0 or start >= last + 60:
-                    if start >= 60:
-                        SubElement(div, "br")
-                    span = SubElement(div, "span")
-                    span.text = secs_to_mmss(start)
+#                if start % 60 == 0 or start >= last + 60:
+#                    if start >= 60:
+#                        SubElement(div, "br")
+#                    span = SubElement(div, "span")
+#                    span.text = secs_to_mmss(start)
+#                    last = (start - start % 60)
+                if start % 30 == 0 or start >= last + 30:
+                    link = SubElement(div, "a")
+                    link.text = secs_to_mmss(start)
+                    link.set("href", f'https://youtu.be/{yt_id}?t={start}')
+                    link.set("target", "_blank")
                     last = (start - start % 60)
-                link = SubElement(div, "a")
-                link.set("href", f'https://youtu.be/{yt_id}?t={start}')
-                link.set("target", "_blank")
+                link = SubElement(div, "span")
+#                link.set("href", f'https://youtu.be/{yt_id}?t={start}')
+#                link.set("target", "_blank")
                 link.text = r["text"] + " "
             has_transcript = True
         except Exception as exc:

@@ -317,7 +317,9 @@
         position: relative;
         margin-bottom: 5px;
         margin-left: 5px;
-        display: block !important;
+        display: inline !important;
+	float:left;
+	margin-right:15px;
         border: none !important;
     }
 
@@ -390,6 +392,7 @@
         float: none;
     }
 
+    .fa-play::before,
     .youtube-video .fa-play::before,
     .embed-video .fa-play::before {
         position: absolute;
@@ -638,4 +641,8 @@ a:hover code {
 /* Search highlight used in both topics and rendered_markdown */
 .highlight {
     background-color: hsl(51, 94%, 74%);
+}
+
+div.yt-transcript {
+    display: inline !important
 }

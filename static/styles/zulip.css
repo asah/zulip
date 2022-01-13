@@ -879,7 +879,7 @@ td.pointer {
     position: absolute;
     top: -1px;
     right: -56px;
-    width: 54px;
+    width: 100px;
     height: 22px;
     z-index: 1;
 
@@ -899,7 +899,7 @@ td.pointer {
         color: hsl(0, 0%, 73%);
 
         > i {
-            vertical-align: middle;
+/*            vertical-align: middle; */
         }
     }
 
@@ -916,7 +916,9 @@ td.pointer {
     }
 
     .edit_content {
-        width: 12px;
+        width: 75%;
+	text-align: right;
+	padding-right: 5px;
 
         &:hover {
             cursor: pointer;
