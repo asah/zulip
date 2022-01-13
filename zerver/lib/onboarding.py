@@ -125,6 +125,9 @@ Welcome!  Some things to know:
 
 6. **get help** early and often!
 **~*Post [here](https://forecast.chat/#narrow/stream/6-suggestions.3A-site.20features/topic/help.20me.20!) or send a PM to @**Massy Ghausi** or @**Adam Sah** - we need the feedback!*~**
+
+7. **mobile - just use the website ( https://forecast.chat/ )**
+**~*We've extensively hacked Zulip and the mobile app is no longer recommended. Instead just open the website on your mobile browser.*~**
 """
 
     internal_send_private_message(
