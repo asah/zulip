@@ -22,7 +22,6 @@ function compare_function(a, b) {
     let stream_name_b = stream_b ? stream_b.name : "";
     stream_name_a = stream_name_a.startsWith("forecast.chat") ? " "+stream_name_a : stream_name_a;
     stream_name_b = stream_name_b.startsWith("forecast.chat") ? " "+stream_name_b : stream_name_b;
-    console.log(stream_name_a + " vs " + stream_name_b);
     return util.strcmp(stream_name_a, stream_name_b);
 }
 
