@@ -255,34 +255,22 @@ export function initialize() {
         const row = message_lists.current.get_row(rows.id($(this).closest(".message_row")));
 	let message_id = rows.id(row);
 	const message = message_lists.current.get(message_id);
-	const tag = "\nbk:"+ $(this).attr("ts");
 	// toggle content and save
 	const msg_list = message_lists.current;
-	channel.get({
-            url: "/json/messages/" + message.id,
-            idempotent: true,
-            success(data) {
-		if (message_lists.current === msg_list) {
-                    message.raw_content = data.raw_content;
-		    if (message.raw_content.includes(tag)) {
-			message.raw_content.replace(tag, "");
-		    } else {
-			message.raw_content += tag;
-		    }
-		    const request = { message_id: message.id, content: message.raw_content, }
-		    channel.patch({
-			url: "/json/messages/" + message.id,
-			data: request,
-			success() {
-			},
-			error(xhr) {
-			    alert("backend error: bookmark change not saved")
-			}
-		    });
-		    $(this).parent().children().toggleClass("ythl");
-		    $(this).toggleClass("fa-bookmark").toggleClass("fa-bookmark-o");
-		}
+	$(this).parent().children().toggleClass("ythl");
+	$(this).toggleClass("fa-bookmark").toggleClass("fa-bookmark-o");
+	const secs = $(this).attr("ts");
+	let content = message.raw_content + "<ytbk:" + secs + ">";
+	console.log(content)
+	const request = { message_id: message.id, content: content };
+	channel.patch({
+	    url: "/json/messages/" + message.id,
+	    data: request,
+	    success() {
 	    },
+	    error(xhr) {
+		alert("backend error: bookmark change not saved")
+	    }
 	});
         e.stopPropagation();
     });

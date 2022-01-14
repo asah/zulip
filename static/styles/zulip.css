@@ -2870,7 +2870,7 @@ select.inline_select_topic_edit {
     }
 
     .search_closed .fa-search {
-        right: 115px;
+        right: 75px;
     }
 
     #top_navbar:not(.rightside-userlist) {
@@ -2956,7 +2956,7 @@ select.inline_select_topic_edit {
 
     .top-navbar-border {
         margin-left: 40px;
-        width: calc(100% - 108px);
+        width: calc(100% - 68px);
     }
     /* todo: Figure out why this has to be different
        from above at this width and resolve it */
@@ -2966,7 +2966,7 @@ select.inline_select_topic_edit {
     }
 
     .search_closed .fa-search {
-        right: 115px;
+        right: 75px;
     }
 
     #top_navbar:not(.rightside-userlist) {

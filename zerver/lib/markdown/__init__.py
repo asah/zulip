@@ -1218,13 +1218,13 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
                 if start % 30 == 0 or start >= last + 30:
                     display_secs = secs_to_mmss(start)
                     bookmark = SubElement(span, "a")
-                    bookmark.set("class", f"fa fa-bookmark-o ytsecs ytbk bk{display_secs}")
-                    bookmark.set("ts", display_secs)
+                    bookmark.set("class", f"fa fa-bookmark-o ytsecs ytbk")
+                    bookmark.set("ts", str(start))
                     link = SubElement(span, "a")
-                    link.text = secs_to_mmss(start)
                     link.set("class", "ytsecs")
                     link.set("href", f'https://youtu.be/{yt_id}?t={start}')
                     link.set("target", "_blank")
+                    link.text = str(secs_to_mmss(start))
                     last = (start - start % 60)
                 words = SubElement(span, "span")
                 words.set("class", "ytspn")
@@ -1458,6 +1458,14 @@ class Timestamp(markdown.inlinepatterns.Pattern):
         # HTML to text will at least display something.
         time_element.text = markdown.util.AtomicString(time_input_string)
         return time_element
+
+class YoutubeBookmark(markdown.inlinepatterns.Pattern):
+    def handleMatch(self, match: Match[str]) -> Optional[Element]:
+        ytbk_input_string = match.group("ytbk")
+        ytbk_element = Element("ytbk")
+        ytbk_element.set("ts", ytbk_input_string)
+        ytbk_element.text = ""
+        return ytbk_element
 
 
 # All of our emojis(non ZWJ sequences) belong to one of these Unicode blocks:
@@ -2287,6 +2295,7 @@ class Markdown(markdown.Markdown):
         WEAK_RE = r"(\*~\*)([^\n]+?)\2"
         TEX_RE = r"\B(?<!\$)\$\$(?P<body>[^\n_$](\\\$|[^$\n])*)\$\$(?!\$)\B"
         TIMESTAMP_RE = r"<time:(?P<time>[^>]*?)>"
+        YTBK_RE = r"<ytbk:(?P<ytbk>[0-9]+)>"
 
         # Add inline patterns.  We use a custom numbering of the
         # rules, that preserves the order from upstream but leaves
@@ -2301,6 +2310,7 @@ class Markdown(markdown.Markdown):
         reg.register(StreamTopicPattern(get_compiled_stream_topic_link_regex(), self), "topic", 87)
         reg.register(StreamPattern(get_compiled_stream_link_regex(), self), "stream", 85)
         reg.register(Timestamp(TIMESTAMP_RE), "timestamp", 75)
+        reg.register(YoutubeBookmark(YTBK_RE), "ytbk", 20)
         reg.register(
             UserGroupMentionPattern(mention.USER_GROUP_MENTIONS_RE, self), "usergroupmention", 65
         )
