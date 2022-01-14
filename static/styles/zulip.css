@@ -1747,11 +1747,11 @@ div.focused_table {
     white-space: nowrap;
     cursor: default;
 
+    .sub_count,
     .hidden {
         display: none;
     }
 
-    .sub_count,
     .stream,
     & > span {
         white-space: nowrap;
@@ -1763,7 +1763,7 @@ div.focused_table {
         font-size: 16px;
         line-height: 16px;
         margin: 0 -4px 0 0;
-        padding: 12px 6px;
+        padding: 12px 3px;
         overflow: hidden;
         text-overflow: ellipsis;
         @media (width < $sm_min) {
@@ -1796,6 +1796,19 @@ div.focused_table {
         text-decoration: none;
         /* The first ~3px of padding here overlaps with the left padding from sub_count for some reason. */
         padding-right: calc(3px + 10px);
+
+        &::after {
+	    margin-left: 3px;
+            content: "|";
+            position: absolute;
+            top: 30%;
+            height: 50%;
+            color: hsl(0, 0%, 30%);
+            font-size: 20px;
+            @media (width < $sm_min) {
+                top: 10%;
+            }
+        }
     }
 
     .sub_count,
@@ -1856,7 +1869,7 @@ div.focused_table {
         white-space: nowrap;
         margin: 0;
         padding: 12px 0;
-        padding-left: 10px;
+        padding-left: 3px;
 
         @media (width < $sm_min) {
             padding: 7px 0;
@@ -2792,6 +2805,7 @@ select.inline_select_topic_edit {
     }
 }
 
+
 /* This max-width must be synced with message_viewport.is_narrow */
 @media (width < $xl_min) {
     .app-main,
@@ -2830,9 +2844,11 @@ select.inline_select_topic_edit {
         width: 30px;
     }
 
+/*
     #top_navbar.rightside-userlist #navbar-buttons {
         margin-right: 41px;
     }
+*/
 
     .nav .dropdown-menu {
         min-width: 180px;
@@ -2850,7 +2866,7 @@ select.inline_select_topic_edit {
     .top-navbar-container,
     #searchbox_legacy .navbar-search.expanded,
     #searchbox .navbar-search.expanded {
-        width: calc(100% - 84px);
+        width: calc(100% - 44px);
     }
 
     .search_closed .fa-search {
@@ -3096,3 +3112,4 @@ select.inline_select_topic_edit {
         margin: 0;
     }
 }
+

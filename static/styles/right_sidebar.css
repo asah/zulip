@@ -163,7 +163,7 @@
     display: block;
     width: 45px;
     height: 19px;
-    padding-top: 12px;
+    padding-top: 3px;
     padding-bottom: 9px;
 
     &:hover {
@@ -224,7 +224,7 @@
 /* This max-width must be synced with message_viewport.is_narrow */
 @media (width < $xl_min) {
     #userlist-toggle {
-        display: block;
+	display: none;
     }
 }
 
@@ -239,6 +239,7 @@
     #userlist-toggle {
         height: 30px;
         line-height: 30px;
+	display: none;
     }
 
     #userlist-toggle-button {
