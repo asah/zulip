@@ -1204,7 +1204,7 @@ class StreamAdminTest(ZulipTestCase):
 
         messages = get_topic_messages(user_profile, stream, "stream events")
         expected_notification = (
-            f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n"
+            f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n\n"
             "Old description:\n"
             "``` quote\n"
             "Test description\n"
@@ -1266,7 +1266,7 @@ class StreamAdminTest(ZulipTestCase):
 
         messages = get_topic_messages(user_profile, stream, "stream events")
         expected_notification = (
-            f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n"
+            f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n\n"
             "Old description:\n"
             "``` quote\n"
             "See https://zulip.com/team\n"
@@ -1323,7 +1323,30 @@ class StreamAdminTest(ZulipTestCase):
         )
         self.assert_json_success(result)
         stream = get_stream("stream_name1", user_profile.realm)
-        self.assertTrue(stream.stream_post_policy == Stream.STREAM_POST_POLICY_ADMINS)
+        self.assertEqual(stream.stream_post_policy, Stream.STREAM_POST_POLICY_ADMINS)
+
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        expected_notification = (
+            f"@_**{user_profile.full_name}|{user_profile.id}** changed the "
+            "[posting permissions](/help/stream-sending-policy) for this stream:\n\n"
+            "* **Old permissions**: All stream members can post.\n"
+            "* **New permissions**: Only organization administrators can post."
+        )
+        self.assertEqual(messages[-1].content, expected_notification)
+
+        realm_audit_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert realm_audit_log is not None
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: Stream.STREAM_POST_POLICY_EVERYONE,
+                RealmAuditLog.NEW_VALUE: Stream.STREAM_POST_POLICY_ADMINS,
+                "property": "stream_post_policy",
+            }
+        ).decode()
+        self.assertEqual(realm_audit_log.extra_data, expected_extra_data)
 
     def test_change_stream_post_policy_requires_admin(self) -> None:
         user_profile = self.example_user("hamlet")
@@ -1369,24 +1392,73 @@ class StreamAdminTest(ZulipTestCase):
         )
 
         for policy in policies:
-            stream_id = get_stream("stream_name1", user_profile.realm).id
+            stream = get_stream("stream_name1", user_profile.realm)
+            old_post_policy = stream.stream_post_policy
             result = self.client_patch(
-                f"/json/streams/{stream_id}", {"stream_post_policy": orjson.dumps(policy).decode()}
+                f"/json/streams/{stream.id}", {"stream_post_policy": orjson.dumps(policy).decode()}
             )
             self.assert_json_success(result)
             stream = get_stream("stream_name1", user_profile.realm)
             self.assertEqual(stream.stream_post_policy, policy)
+
+            messages = get_topic_messages(user_profile, stream, "stream events")
+            expected_notification = (
+                f"@_**{user_profile.full_name}|{user_profile.id}** changed the "
+                "[posting permissions](/help/stream-sending-policy) for this stream:\n\n"
+                f"* **Old permissions**: {Stream.POST_POLICIES[old_post_policy]}.\n"
+                f"* **New permissions**: {Stream.POST_POLICIES[policy]}."
+            )
+            self.assertEqual(messages[-1].content, expected_notification)
+
+            realm_audit_log = RealmAuditLog.objects.filter(
+                event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+                modified_stream=stream,
+            ).last()
+            assert realm_audit_log is not None
+            expected_extra_data = orjson.dumps(
+                {
+                    RealmAuditLog.OLD_VALUE: old_post_policy,
+                    RealmAuditLog.NEW_VALUE: policy,
+                    "property": "stream_post_policy",
+                }
+            ).decode()
+            self.assertEqual(realm_audit_log.extra_data, expected_extra_data)
 
         do_change_user_role(user_profile, UserProfile.ROLE_REALM_ADMINISTRATOR, acting_user=None)
 
         for policy in policies:
-            stream_id = get_stream("stream_name1", user_profile.realm).id
+            stream = get_stream("stream_name1", user_profile.realm)
+            old_post_policy = stream.stream_post_policy
             result = self.client_patch(
-                f"/json/streams/{stream_id}", {"stream_post_policy": orjson.dumps(policy).decode()}
+                f"/json/streams/{stream.id}", {"stream_post_policy": orjson.dumps(policy).decode()}
             )
             self.assert_json_success(result)
             stream = get_stream("stream_name1", user_profile.realm)
             self.assertEqual(stream.stream_post_policy, policy)
+
+            messages = get_topic_messages(user_profile, stream, "stream events")
+            expected_notification = (
+                f"@_**{user_profile.full_name}|{user_profile.id}** changed the "
+                "[posting permissions](/help/stream-sending-policy) for this stream:\n\n"
+                f"* **Old permissions**: {Stream.POST_POLICIES[old_post_policy]}.\n"
+                f"* **New permissions**: {Stream.POST_POLICIES[policy]}."
+            )
+
+            self.assertEqual(messages[-1].content, expected_notification)
+
+            realm_audit_log = RealmAuditLog.objects.filter(
+                event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+                modified_stream=stream,
+            ).last()
+            assert realm_audit_log is not None
+            expected_extra_data = orjson.dumps(
+                {
+                    RealmAuditLog.OLD_VALUE: old_post_policy,
+                    RealmAuditLog.NEW_VALUE: policy,
+                    "property": "stream_post_policy",
+                }
+            ).decode()
+            self.assertEqual(realm_audit_log.extra_data, expected_extra_data)
 
     def test_change_stream_message_retention_days_notifications(self) -> None:
         user_profile = self.example_user("desdemona")
@@ -3099,7 +3171,7 @@ class SubscriptionRestApiTest(ZulipTestCase):
             "delete": orjson.dumps([invalid_stream_name]).decode(),
         }
         result = self.api_patch(user, "/api/v1/users/me/subscriptions", request)
-        self.assert_json_error(result, f"Invalid stream name '{invalid_stream_name}'")
+        self.assert_json_error(result, "Stream name can't be empty!")
 
     def test_stream_name_too_long(self) -> None:
         user = self.example_user("hamlet")
@@ -3704,7 +3776,7 @@ class SubscriptionAPITest(ZulipTestCase):
         result = self.common_subscribe_to_streams(
             self.test_user, [invalid_stream_name], allow_fail=True
         )
-        self.assert_json_error(result, f"Invalid stream name '{invalid_stream_name}'")
+        self.assert_json_error(result, "Stream name can't be empty!")
 
     def assert_adding_subscriptions_for_principal(
         self,
@@ -3905,7 +3977,7 @@ class SubscriptionAPITest(ZulipTestCase):
         """
         member = self.example_user("AARON")
         stream = self.make_stream("stream1")
-        do_change_stream_post_policy(stream, Stream.STREAM_POST_POLICY_ADMINS)
+        do_change_stream_post_policy(stream, Stream.STREAM_POST_POLICY_ADMINS, acting_user=member)
         result = self.common_subscribe_to_streams(member, ["stream1"])
         self.assert_json_success(result)
 
@@ -3925,7 +3997,9 @@ class SubscriptionAPITest(ZulipTestCase):
         self.assertTrue(new_member.is_provisional_member)
 
         stream = self.make_stream("stream1")
-        do_change_stream_post_policy(stream, Stream.STREAM_POST_POLICY_RESTRICT_NEW_MEMBERS)
+        do_change_stream_post_policy(
+            stream, Stream.STREAM_POST_POLICY_RESTRICT_NEW_MEMBERS, acting_user=new_member
+        )
         result = self.common_subscribe_to_streams(new_member, ["stream1"])
         self.assert_json_success(result)
 
@@ -3942,7 +4016,9 @@ class SubscriptionAPITest(ZulipTestCase):
         # Make sure that we are testing this with full member which is just below the moderator
         # in the role hierarchy.
         self.assertFalse(member.is_provisional_member)
-        do_change_stream_post_policy(stream, Stream.STREAM_POST_POLICY_MODERATORS)
+        do_change_stream_post_policy(
+            stream, Stream.STREAM_POST_POLICY_MODERATORS, acting_user=member
+        )
         result = self.common_subscribe_to_streams(member, ["stream1"])
         self.assert_json_success(result)
 
@@ -4413,7 +4489,7 @@ class SubscriptionAPITest(ZulipTestCase):
         # currently, the only invalid stream name is the empty string
         invalid_stream_name = ""
         result = self.client_post("/json/subscriptions/exists", {"stream": invalid_stream_name})
-        self.assert_json_error(result, "Invalid stream name ''")
+        self.assert_json_error(result, "Stream name can't be empty!")
 
     def test_existing_subscriptions_autosubscription(self) -> None:
         """

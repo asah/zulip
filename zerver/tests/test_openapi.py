@@ -8,7 +8,6 @@ from unittest.mock import MagicMock, patch
 import yaml
 from django.http import HttpResponse
 from django.utils import regex_helper
-from jsonschema.exceptions import ValidationError
 
 from zerver.lib.request import _REQ, arguments_map
 from zerver.lib.rest import rest_dispatch
@@ -78,15 +77,15 @@ class OpenAPIToolsTest(ZulipTestCase):
             "name": "message_id",
             "in": "path",
             "description": "The target message's ID.\n",
-            "example": 42,
+            "example": 43,
             "required": True,
             "schema": {"type": "integer"},
         }
         assert expected_item in actual
 
     def test_validate_against_openapi_schema(self) -> None:
-        with self.assertRaises(
-            ValidationError, msg="Additional properties are not allowed ('foo' was unexpected)"
+        with self.assertRaisesRegex(
+            SchemaError, r"Additional properties are not allowed \('foo' was unexpected\)"
         ):
             bad_content: Dict[str, object] = {
                 "msg": "",
@@ -97,7 +96,7 @@ class OpenAPIToolsTest(ZulipTestCase):
                 bad_content, TEST_ENDPOINT, TEST_METHOD, TEST_RESPONSE_SUCCESS
             )
 
-        with self.assertRaises(ValidationError, msg=("42 is not of type string")):
+        with self.assertRaisesRegex(SchemaError, r"42 is not of type string"):
             bad_content = {
                 "msg": 42,
                 "result": "success",
@@ -106,7 +105,7 @@ class OpenAPIToolsTest(ZulipTestCase):
                 bad_content, TEST_ENDPOINT, TEST_METHOD, TEST_RESPONSE_SUCCESS
             )
 
-        with self.assertRaises(ValidationError, msg='Expected to find the "msg" required key'):
+        with self.assertRaisesRegex(SchemaError, r"'msg' is a required property"):
             bad_content = {
                 "result": "success",
             }
@@ -132,36 +131,46 @@ class OpenAPIToolsTest(ZulipTestCase):
         # 'deep' opaque object. Also the parameters are a heterogeneous
         # mix of arrays and objects to verify that our descent logic
         # correctly gets to the the deeply nested objects.
-        with open(os.path.join(os.path.dirname(OPENAPI_SPEC_PATH), "testing.yaml")) as test_file:
+        test_filename = os.path.join(os.path.dirname(OPENAPI_SPEC_PATH), "testing.yaml")
+        with open(test_filename) as test_file:
             test_dict = yaml.safe_load(test_file)
-        openapi_spec.openapi()["paths"]["testing"] = test_dict
-        try:
+        with patch("zerver.openapi.openapi.openapi_spec", OpenAPISpec(test_filename)):
             validate_against_openapi_schema(
-                (test_dict["test1"]["responses"]["200"]["content"]["application/json"]["example"]),
-                "testing",
-                "test1",
+                {
+                    "top_array": [
+                        {"obj": {"str3": "test"}},
+                        [{"str1": "success", "str2": "success"}],
+                    ],
+                },
+                "/test1",
+                "get",
                 "200",
             )
-            with self.assertRaises(
-                ValidationError, msg='Extraneous key "str4" in response\'s content'
+            with self.assertRaisesRegex(
+                SchemaError,
+                r"\{'obj': \{'str3': 'test', 'str4': 'extraneous'\}\} is not valid under any of the given schemas",
             ):
                 validate_against_openapi_schema(
-                    (
-                        test_dict["test2"]["responses"]["200"]["content"]["application/json"][
-                            "example"
-                        ]
-                    ),
-                    "testing",
-                    "test2",
+                    {
+                        "top_array": [
+                            {"obj": {"str3": "test", "str4": "extraneous"}},
+                            [{"str1": "success", "str2": "success"}],
+                        ],
+                    },
+                    "/test2",
+                    "get",
                     "200",
                 )
-            with self.assertRaises(SchemaError, msg='Opaque object "obj"'):
+            with self.assertRaisesRegex(
+                SchemaError,
+                r"additionalProperties needs to be defined for objects to makesure they have no additional properties left to be documented\.",
+            ):
                 # Checks for opaque objects
                 validate_schema(
-                    test_dict["test3"]["responses"]["200"]["content"]["application/json"]["schema"]
+                    test_dict["paths"]["/test3"]["get"]["responses"]["200"]["content"][
+                        "application/json"
+                    ]["schema"]
                 )
-        finally:
-            openapi_spec.openapi()["paths"].pop("testing", None)
 
     def test_live_reload(self) -> None:
         # Force the reload by making the last update date < the file's last
@@ -810,7 +819,7 @@ class TestCurlExampleGeneration(ZulipTestCase):
             "```curl",
             "curl -sSX GET -G http://localhost:9991/api/v1/messages \\",
             "    -u BOT_EMAIL_ADDRESS:BOT_API_KEY \\",
-            "    --data-urlencode anchor=42 \\",
+            "    --data-urlencode anchor=43 \\",
             "    --data-urlencode num_before=4 \\",
             "    --data-urlencode num_after=8 \\",
             '    --data-urlencode \'narrow=[{"operand": "Denmark", "operator": "stream"}]\' \\',
@@ -884,7 +893,7 @@ class TestCurlExampleGeneration(ZulipTestCase):
             "```curl",
             "curl -sSX GET -G http://localhost:9991/api/v1/messages \\",
             "    -u BOT_EMAIL_ADDRESS:BOT_API_KEY \\",
-            "    --data-urlencode anchor=42 \\",
+            "    --data-urlencode anchor=43 \\",
             "    --data-urlencode num_before=4 \\",
             "    --data-urlencode num_after=8 \\",
             '    --data-urlencode \'narrow=[{"operand": "Denmark", "operator": "stream"}]\' \\',

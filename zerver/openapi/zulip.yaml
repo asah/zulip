@@ -4132,7 +4132,7 @@ paths:
             The ID of the stream to access.
           schema:
             type: integer
-          example: 42
+          example: 43
           required: true
       responses:
         "200":
@@ -4157,7 +4157,7 @@ paths:
             The ID of the stream to access.
           schema:
             type: integer
-          example: 42
+          example: 43
           required: true
         - name: topic_name
           in: query
@@ -4306,10 +4306,12 @@ paths:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/JsonSuccess"
+                  - $ref: "#/components/schemas/JsonSuccessBase"
                   - $ref: "#/components/schemas/SuccessDescription"
                   - additionalProperties: false
                     properties:
+                      result: {}
+                      msg: {}
                       count:
                         type: integer
                         description: |
@@ -4393,7 +4395,7 @@ paths:
             application/json:
               schema:
                 allOf:
-                  - $ref: "#/components/schemas/JsonSuccess"
+                  - $ref: "#/components/schemas/JsonSuccessBase"
                   - additionalProperties: false
                     description: |
                       When all of the drafts in the request are valid, this endpoint will return
@@ -4402,6 +4404,8 @@ paths:
                       step, then none of the drafts will be created and we would not get this
                       status code. The typical JSON response in such a case is:
                     properties:
+                      result: {}
+                      msg: {}
                       ids:
                         type: array
                         description: |
@@ -4588,7 +4592,7 @@ paths:
             oneOf:
               - type: string
               - type: integer
-          example: 42
+          example: 43
         - name: num_before
           in: query
           description: |
@@ -5542,7 +5546,7 @@ paths:
             if the target message is not a stream message.
           schema:
             type: integer
-          example: 42
+          example: 43
       responses:
         "200":
           description: Success.
@@ -6695,38 +6699,25 @@ paths:
           content:
             application/json:
               schema:
-                oneOf:
-                  - allOf:
-                      - $ref: "#/components/schemas/AddSubscriptionsResponse"
-                      - $ref: "#/components/schemas/SuccessDescription"
-                      - example:
-                          {
-                            "already_subscribed": {},
-                            "msg": "",
-                            "result": "success",
-                            "subscribed": {"iago@zulip.com": ["new stream"]},
-                          }
-                  - allOf:
-                      - $ref: "#/components/schemas/AddSubscriptionsResponse"
-                      - example:
-                          {
-                            "already_subscribed":
-                              {"newbie@zulip.com": ["new stream"]},
-                            "msg": "",
-                            "result": "success",
-                            "subscribed": {},
-                          }
-                        description: |
-                          A typical successful JSON response when the user is already subscribed to
-                          the streams specified
+                allOf:
+                  - $ref: "#/components/schemas/AddSubscriptionsResponse"
+                  - $ref: "#/components/schemas/SuccessDescription"
+                  - example:
+                      {
+                        "already_subscribed":
+                          {"newbie@zulip.com": ["new stream"]},
+                        "msg": "",
+                        "result": "success",
+                        "subscribed": {"iago@zulip.com": ["new stream"]},
+                      }
         "400":
-          description: Success.
+          description: Bad request.
           content:
             application/json:
               schema:
                 oneOf:
                   - allOf:
-                      - $ref: "#/components/schemas/AddSubscriptionsResponse"
+                      - $ref: "#/components/schemas/JsonError"
                       - example:
                           {
                             "msg": "Unable to access stream (private_stream).",
@@ -6980,7 +6971,7 @@ paths:
             The ID of the stream to access.
           schema:
             type: integer
-          example: 42
+          example: 43
           required: false
         - name: topic
           in: query
@@ -8383,7 +8374,7 @@ paths:
             The ID of the linkifier that you want to remove.
           schema:
             type: integer
-          example: 42
+          example: 43
           required: true
       responses:
         "200":
@@ -9153,9 +9144,11 @@ paths:
                                 rendered_description: {}
                                 is_web_public: {}
                                 stream_post_policy: {}
-                                message_retention_days: {}
+                                message_retention_days:
+                                  nullable: true
                                 history_public_to_subscribers: {}
-                                first_message_id: {}
+                                first_message_id:
+                                  nullable: true
                                 is_announcement_only: {}
                                 stream_weekly_traffic:
                                   type: integer
@@ -11600,16 +11593,19 @@ paths:
                               properties:
                                 email: {}
                                 is_bot: {}
-                                avatar_url: {}
+                                avatar_url:
+                                  nullable: true
                                 avatar_version: {}
                                 full_name: {}
                                 is_admin: {}
                                 is_owner: {}
                                 is_billing_admin: {}
                                 role: {}
-                                bot_type: {}
+                                bot_type:
+                                  nullable: true
                                 user_id: {}
-                                bot_owner_id: {}
+                                bot_owner_id:
+                                  nullable: true
                                 is_active: {}
                                 is_guest: {}
                                 timezone: {}
@@ -12519,6 +12515,8 @@ paths:
                   - $ref: "#/components/schemas/SuccessDescription"
                   - additionalProperties: false
                     properties:
+                      result: {}
+                      msg: {}
                       subscribers:
                         type: array
                         items:
@@ -12647,9 +12645,11 @@ paths:
                                 rendered_description: {}
                                 is_web_public: {}
                                 stream_post_policy: {}
-                                message_retention_days: {}
+                                message_retention_days:
+                                  nullable: true
                                 history_public_to_subscribers: {}
-                                first_message_id: {}
+                                first_message_id:
+                                  nullable: true
                                 is_announcement_only: {}
                                 is_default:
                                   type: boolean
@@ -13411,7 +13411,8 @@ paths:
                       - $ref: "#/components/schemas/MessagesBase"
                       - additionalProperties: false
                         properties:
-                          avatar_url: {}
+                          avatar_url:
+                            nullable: true
                           client: {}
                           content: {}
                           content_type: {}
@@ -13611,15 +13612,16 @@ components:
             rendered_description: {}
             is_web_public: {}
             stream_post_policy: {}
-            message_retention_days: {}
+            message_retention_days:
+              nullable: true
             history_public_to_subscribers: {}
-            first_message_id: {}
+            first_message_id:
+              nullable: true
             is_announcement_only: {}
     BasicStreamBase:
       type: object
       description: |
         Object containing basic details about the stream.
-      additionalProperties: false
       properties:
         stream_id:
           type: integer
@@ -13722,12 +13724,16 @@ components:
             user_id: {}
             full_name: {}
             api_key: {}
-            default_sending_stream: {}
-            default_events_register_stream: {}
+            default_sending_stream:
+              nullable: true
+            default_events_register_stream:
+              nullable: true
             default_all_public_streams: {}
             avatar_url: {}
-            owner_id: {}
-            services: {}
+            owner_id:
+              nullable: true
+            services:
+              items: {} # https://github.com/p1c2u/openapi-core/issues/380
     BasicBotBase:
       type: object
       properties:
@@ -13826,12 +13832,16 @@ components:
             user_id: {}
             full_name: {}
             api_key: {}
-            default_sending_stream: {}
-            default_events_register_stream: {}
+            default_sending_stream:
+              nullable: true
+            default_events_register_stream:
+              nullable: true
             default_all_public_streams: {}
             avatar_url: {}
-            owner_id: {}
-            services: {}
+            owner_id:
+              nullable: true
+            services:
+              items: {} # https://github.com/p1c2u/openapi-core/issues/380
             email:
               type: string
               description: |
@@ -14429,7 +14439,8 @@ components:
         - $ref: "#/components/schemas/MessagesBase"
         - additionalProperties: false
           properties:
-            avatar_url: {}
+            avatar_url:
+              nullable: true
             client: {}
             content: {}
             content_type: {}
@@ -14605,7 +14616,8 @@ components:
         - $ref: "#/components/schemas/MessagesBase"
         - additionalProperties: false
           properties:
-            avatar_url: {}
+            avatar_url:
+              nullable: true
             client: {}
             content: {}
             content_type: {}
@@ -14741,16 +14753,19 @@ components:
           properties:
             email: {}
             is_bot: {}
-            avatar_url: {}
+            avatar_url:
+              nullable: true
             avatar_version: {}
             full_name: {}
             is_admin: {}
             is_owner: {}
             is_billing_admin: {}
             role: {}
-            bot_type: {}
+            bot_type:
+              nullable: true
             user_id: {}
-            bot_owner_id: {}
+            bot_owner_id:
+              nullable: true
             is_active: {}
             is_guest: {}
             timezone: {}
@@ -14802,7 +14817,7 @@ components:
           type: boolean
           description: |
             A boolean specifying whether the user is an organization owner.
-            If true, is_admin will also be true.
+            If true, `is_admin` will also be true.
 
             **Changes**: New in Zulip 3.0 (feature level 8).
         is_billing_admin:
@@ -14820,8 +14835,8 @@ components:
             - 400
             - 600
           description: |
-            [Organization-level role](/help/roles-and-permissions)) of the user.
-            Poosible values are:
+            [Organization-level role](/help/roles-and-permissions) of the user.
+            Possible values are:
 
             - Organization owner => 100
             - Organization administrator => 200
@@ -15337,7 +15352,7 @@ components:
         The target message's ID.
       schema:
         type: integer
-      example: 42
+      example: 43
       required: true
     UserId:
       name: user_id
@@ -15431,11 +15446,13 @@ components:
       content:
         application/json:
           schema:
-            type: array
-            items:
-              oneOf:
-                - type: string
-                - type: integer
+            oneOf:
+              - type: array
+                items:
+                  type: string
+              - type: array
+                items:
+                  type: integer
           example: ["ZOE@zulip.com"]
     ReactionType:
       name: reaction_type

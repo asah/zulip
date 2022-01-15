@@ -192,7 +192,21 @@ class EditMessagePayloadTest(EditMessageTestCase):
                 "topic": " ",
             },
         )
-        self.assert_json_error(result, "Topic can't be empty")
+        self.assert_json_error(result, "Topic can't be empty!")
+
+    def test_edit_message_invalid_topic(self) -> None:
+        self.login("hamlet")
+        msg_id = self.send_stream_message(
+            self.example_user("hamlet"), "Denmark", topic_name="editing", content="before edit"
+        )
+        result = self.client_patch(
+            "/json/messages/" + str(msg_id),
+            {
+                "message_id": msg_id,
+                "topic": "editing\nfun",
+            },
+        )
+        self.assert_json_error(result, "Invalid character in topic, at position 8!")
 
     def test_move_message_to_stream_with_content(self) -> None:
         (user_profile, old_stream, new_stream, msg_id, msg_id_later) = self.prepare_move_topics(
@@ -1697,7 +1711,9 @@ class EditMessageTest(EditMessageTestCase):
                 self.assert_length(messages, 4)
 
         # Check when stream_post_policy is STREAM_POST_POLICY_ADMINS.
-        do_change_stream_post_policy(new_stream, Stream.STREAM_POST_POLICY_ADMINS)
+        do_change_stream_post_policy(
+            new_stream, Stream.STREAM_POST_POLICY_ADMINS, acting_user=user_profile
+        )
         error_msg = "Only organization administrators can send to this stream."
         check_move_message_to_stream(UserProfile.ROLE_MODERATOR, error_msg)
         check_move_message_to_stream(UserProfile.ROLE_REALM_ADMINISTRATOR)
@@ -1707,7 +1723,9 @@ class EditMessageTest(EditMessageTestCase):
         )
 
         # Check when stream_post_policy is STREAM_POST_POLICY_MODERATORS.
-        do_change_stream_post_policy(new_stream, Stream.STREAM_POST_POLICY_MODERATORS)
+        do_change_stream_post_policy(
+            new_stream, Stream.STREAM_POST_POLICY_MODERATORS, acting_user=user_profile
+        )
         error_msg = "Only organization administrators and moderators can send to this stream."
         check_move_message_to_stream(UserProfile.ROLE_MEMBER, error_msg)
         check_move_message_to_stream(UserProfile.ROLE_MODERATOR)
@@ -1717,7 +1735,9 @@ class EditMessageTest(EditMessageTestCase):
         )
 
         # Check when stream_post_policy is STREAM_POST_POLICY_RESTRICT_NEW_MEMBERS.
-        do_change_stream_post_policy(new_stream, Stream.STREAM_POST_POLICY_RESTRICT_NEW_MEMBERS)
+        do_change_stream_post_policy(
+            new_stream, Stream.STREAM_POST_POLICY_RESTRICT_NEW_MEMBERS, acting_user=user_profile
+        )
         error_msg = "New members cannot send to this stream."
 
         do_set_realm_property(
@@ -1736,7 +1756,9 @@ class EditMessageTest(EditMessageTestCase):
         # In this case also, guest is not allowed as we do not allow guest to move
         # messages between streams in any case, so stream_post_policy of new stream does
         # not matter.
-        do_change_stream_post_policy(new_stream, Stream.STREAM_POST_POLICY_EVERYONE)
+        do_change_stream_post_policy(
+            new_stream, Stream.STREAM_POST_POLICY_EVERYONE, acting_user=user_profile
+        )
         do_set_realm_property(
             user_profile.realm, "waiting_period_threshold", 100000, acting_user=None
         )

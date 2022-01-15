@@ -148,7 +148,6 @@ from zerver.lib.streams import (
     access_stream_for_send_message,
     can_access_stream_user_ids,
     check_stream_access_based_on_stream_post_policy,
-    check_stream_name,
     create_stream_if_needed,
     get_default_value_for_history_public_to_subscribers,
     get_web_public_streams_queryset,
@@ -156,6 +155,7 @@ from zerver.lib.streams import (
     send_stream_creation_event,
     subscribed_to_stream,
 )
+from zerver.lib.string_validation import check_stream_name, check_stream_topic
 from zerver.lib.timestamp import datetime_to_timestamp, timestamp_to_datetime
 from zerver.lib.timezone import canonicalize_timezone
 from zerver.lib.topic import (
@@ -412,10 +412,10 @@ def notify_new_user(user_profile: UserProfile) -> None:
         pass
 
 
-def notify_invites_changed(user_profile: UserProfile) -> None:
+def notify_invites_changed(realm: Realm) -> None:
     event = dict(type="invites_changed")
-    admin_ids = [user.id for user in user_profile.realm.get_admin_users_and_bots()]
-    send_event(user_profile.realm, event, admin_ids)
+    admin_ids = [user.id for user in realm.get_admin_users_and_bots()]
+    send_event(realm, event, admin_ids)
 
 
 def add_new_user_history(user_profile: UserProfile, streams: Iterable[Stream]) -> None:
@@ -522,7 +522,7 @@ def process_new_human_user(
 
     revoke_preregistration_users(user_profile, prereg_user, realm_creation)
     if not realm_creation and prereg_user is not None and prereg_user.referred_by is not None:
-        notify_invites_changed(user_profile)
+        notify_invites_changed(user_profile.realm)
 
     notify_new_user(user_profile)
     # Clear any scheduled invitation emails to prevent them
@@ -812,6 +812,29 @@ def do_reactivate_user(user_profile: UserProfile, *, acting_user: Optional[UserP
 
     if user_profile.is_bot:
         notify_created_bot(user_profile)
+
+    subscribed_recipient_ids = Subscription.objects.filter(
+        user_profile_id=user_profile.id, active=True, recipient__type=Recipient.STREAM
+    ).values_list("recipient__type_id", flat=True)
+    subscribed_streams = Stream.objects.filter(id__in=subscribed_recipient_ids, deactivated=False)
+    subscriber_peer_info = bulk_get_subscriber_peer_info(
+        realm=user_profile.realm,
+        streams=subscribed_streams,
+    )
+
+    altered_user_dict: Dict[int, Set[int]] = defaultdict(set)
+    for stream in subscribed_streams:
+        altered_user_dict[stream.id] = {user_profile.id}
+
+    stream_dict = {stream.id: stream for stream in subscribed_streams}
+
+    send_peer_subscriber_events(
+        op="peer_add",
+        realm=user_profile.realm,
+        altered_user_dict=altered_user_dict,
+        stream_dict=stream_dict,
+        private_peer_dict=subscriber_peer_info.private_peer_dict,
+    )
 
 
 def active_humans_in_realm(realm: Realm) -> Sequence[UserProfile]:
@@ -1300,6 +1323,7 @@ def do_deactivate_user(
 
         delete_user_sessions(user_profile)
         clear_scheduled_emails(user_profile.id)
+        revoke_invites_generated_by_user(user_profile)
 
         event_time = timezone_now()
         RealmAuditLog.objects.create(
@@ -2975,8 +2999,8 @@ def validate_message_edit_payload(
     if propagate_mode != "change_one" and topic_name is None and stream_id is None:
         raise JsonableError(_("Invalid propagate_mode without topic edit"))
 
-    if topic_name == "":
-        raise JsonableError(_("Topic can't be empty"))
+    if topic_name is not None:
+        check_stream_topic(topic_name)
 
     if stream_id is not None and content is not None:
         raise JsonableError(_("Cannot change message content while changing stream"))
@@ -5012,9 +5036,51 @@ def do_change_stream_permission(
         do_change_stream_invite_only(stream, invite_only, history_public_to_subscribers)
 
 
-def do_change_stream_post_policy(stream: Stream, stream_post_policy: int) -> None:
-    stream.stream_post_policy = stream_post_policy
-    stream.save(update_fields=["stream_post_policy"])
+def send_change_stream_post_policy_notification(
+    stream: Stream, *, old_post_policy: int, new_post_policy: int, acting_user: UserProfile
+) -> None:
+    sender = get_system_bot(settings.NOTIFICATION_BOT, acting_user.realm_id)
+    user_mention = silent_mention_syntax_for_user(acting_user)
+
+    with override_language(stream.realm.default_language):
+        notification_string = _(
+            "{user} changed the [posting permissions](/help/stream-sending-policy) "
+            "for this stream:\n\n"
+            "* **Old permissions**: {old_policy}.\n"
+            "* **New permissions**: {new_policy}.\n"
+        )
+        notification_string = notification_string.format(
+            user=user_mention,
+            old_policy=Stream.POST_POLICIES[old_post_policy],
+            new_policy=Stream.POST_POLICIES[new_post_policy],
+        )
+        internal_send_stream_message(
+            sender, stream, Realm.STREAM_EVENTS_NOTIFICATION_TOPIC, notification_string
+        )
+
+
+def do_change_stream_post_policy(
+    stream: Stream, stream_post_policy: int, *, acting_user: UserProfile
+) -> None:
+    old_post_policy = stream.stream_post_policy
+    with transaction.atomic():
+        stream.stream_post_policy = stream_post_policy
+        stream.save(update_fields=["stream_post_policy"])
+        RealmAuditLog.objects.create(
+            realm=stream.realm,
+            acting_user=acting_user,
+            modified_stream=stream,
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            event_time=timezone_now(),
+            extra_data=orjson.dumps(
+                {
+                    RealmAuditLog.OLD_VALUE: old_post_policy,
+                    RealmAuditLog.NEW_VALUE: stream_post_policy,
+                    "property": "stream_post_policy",
+                }
+            ).decode(),
+        )
+
     event = dict(
         op="update",
         type="stream",
@@ -5038,6 +5104,13 @@ def do_change_stream_post_policy(stream: Stream, stream_post_policy: int) -> Non
         name=stream.name,
     )
     send_event(stream.realm, event, can_access_stream_user_ids(stream))
+
+    send_change_stream_post_policy_notification(
+        stream,
+        old_post_policy=old_post_policy,
+        new_post_policy=stream_post_policy,
+        acting_user=acting_user,
+    )
 
 
 def do_rename_stream(stream: Stream, new_name: str, user_profile: UserProfile) -> Dict[str, str]:
@@ -5124,7 +5197,7 @@ def send_change_stream_description_notification(
 
     with override_language(stream.realm.default_language):
         notification_string = _(
-            "{user} changed the description for this stream.\n"
+            "{user} changed the description for this stream.\n\n"
             "Old description:\n"
             "``` quote\n"
             "{old_description}\n"
@@ -7423,10 +7496,15 @@ def do_invite_users(
             skipped,
             sent_invitations=True,
         )
-    notify_invites_changed(user_profile)
+    notify_invites_changed(user_profile.realm)
 
 
-def do_get_user_invites(user_profile: UserProfile) -> List[Dict[str, Any]]:
+def do_get_invites_controlled_by_user(user_profile: UserProfile) -> List[Dict[str, Any]]:
+    """
+    Returns a list of dicts representing invitations that can be controlled by user_profile.
+    This isn't necessarily the same as all the invitations generated by the user, as administrators
+    can control also invitations that they did not themselves create.
+    """
     if user_profile.is_realm_admin:
         prereg_users = filter_to_valid_prereg_users(
             PreregistrationUser.objects.filter(referred_by__realm=user_profile.realm)
@@ -7480,6 +7558,39 @@ def do_get_user_invites(user_profile: UserProfile) -> List[Dict[str, Any]]:
     return invites
 
 
+def get_valid_invite_confirmations_generated_by_user(
+    user_profile: UserProfile,
+) -> List[Confirmation]:
+    prereg_user_ids = filter_to_valid_prereg_users(
+        PreregistrationUser.objects.filter(referred_by=user_profile)
+    ).values_list("id", flat=True)
+    confirmations = list(
+        Confirmation.objects.filter(type=Confirmation.INVITATION, object_id__in=prereg_user_ids)
+    )
+
+    multiuse_invite_ids = MultiuseInvite.objects.filter(referred_by=user_profile).values_list(
+        "id", flat=True
+    )
+    confirmations += list(
+        Confirmation.objects.filter(
+            type=Confirmation.MULTIUSE_INVITE,
+            expiry_date__gte=timezone_now(),
+            object_id__in=multiuse_invite_ids,
+        )
+    )
+
+    return confirmations
+
+
+def revoke_invites_generated_by_user(user_profile: UserProfile) -> None:
+    confirmations_to_revoke = get_valid_invite_confirmations_generated_by_user(user_profile)
+    now = timezone_now()
+    for confirmation in confirmations_to_revoke:
+        confirmation.expiry_date = now
+
+    Confirmation.objects.bulk_update(confirmations_to_revoke, ["expiry_date"])
+
+
 def do_create_multiuse_invite_link(
     referred_by: UserProfile,
     invited_as: int,
@@ -7492,7 +7603,7 @@ def do_create_multiuse_invite_link(
         invite.streams.set(streams)
     invite.invited_as = invited_as
     invite.save()
-    notify_invites_changed(referred_by)
+    notify_invites_changed(referred_by.realm)
     return create_confirmation_link(
         invite, Confirmation.MULTIUSE_INVITE, validity_in_days=invite_expires_in_days
     )
@@ -7500,6 +7611,8 @@ def do_create_multiuse_invite_link(
 
 def do_revoke_user_invite(prereg_user: PreregistrationUser) -> None:
     email = prereg_user.email
+    realm = prereg_user.realm
+    assert realm is not None
 
     # Delete both the confirmation objects and the prereg_user object.
     # TODO: Probably we actually want to set the confirmation objects
@@ -7509,14 +7622,16 @@ def do_revoke_user_invite(prereg_user: PreregistrationUser) -> None:
     Confirmation.objects.filter(content_type=content_type, object_id=prereg_user.id).delete()
     prereg_user.delete()
     clear_scheduled_invitation_emails(email)
-    notify_invites_changed(prereg_user)
+    notify_invites_changed(realm)
 
 
 def do_revoke_multi_use_invite(multiuse_invite: MultiuseInvite) -> None:
+    realm = multiuse_invite.referred_by.realm
+
     content_type = ContentType.objects.get_for_model(MultiuseInvite)
     Confirmation.objects.filter(content_type=content_type, object_id=multiuse_invite.id).delete()
     multiuse_invite.delete()
-    notify_invites_changed(multiuse_invite.referred_by)
+    notify_invites_changed(realm)
 
 
 def do_resend_user_invite_email(prereg_user: PreregistrationUser) -> int:
