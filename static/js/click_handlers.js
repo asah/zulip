@@ -517,6 +517,7 @@ export function initialize() {
         const sidebarHidden = !$(".app-main .column-right").hasClass("expanded");
         popovers.hide_all();
         if (sidebarHidden) {
+	    $(".app-main .column-right .right-sidebar").css('left', '100px');
             popovers.show_userlist_sidebar();
         }
     });
