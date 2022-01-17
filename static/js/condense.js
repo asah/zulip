@@ -1,5 +1,6 @@
 import $ from "jquery";
 
+import { format, getUnixTime, startOfToday, fromUnixTime } from "date-fns";
 import * as message_flags from "./message_flags";
 import * as message_lists from "./message_lists";
 import * as message_viewport from "./message_viewport";
@@ -50,7 +51,7 @@ export function fc_uncollapse(row, message) {
     row.closest(".message_row").find(".date_row").show();
 }
 
-export function fc_collapse(row, message) {
+export function fc_collapse(row, message, datestr_cutoff) {
     // todo: performance on initial rendering - static rendering?
     // also, I left in a lot of old code for preparing content
     // which is ultimate hidden (left to avoid merge conflicts)
@@ -60,6 +61,10 @@ export function fc_collapse(row, message) {
     mbox.children(".messagebox-content").hide();
     const fc = mbox.find(".message_fc_collapsed_line > .fc_summary");
     fc.text(message.fc_summary).parent().show();
+    if (message.timestamp < datestr_cutoff) {
+	const datestr = format(fromUnixTime(message.timestamp), "MMM d");
+	mbox.find(".fc_message_time").text(datestr);
+    }
     //console.timeEnd('fc_collapse');
 }
 
@@ -104,7 +109,8 @@ export function collapse(row) {
     // [Show less] link if necessary.
     const message = message_lists.current.get(rows.id(row));
     message.collapsed = true;
-    fc_collapse(row, message);
+    const datestr_cutoff = getUnixTime(startOfToday());
+    fc_collapse(row, message, datestr_cutoff);
 
     if (message.locally_echoed) {
         // Trying to collapse a locally echoed message is
@@ -219,7 +225,7 @@ export function show_message_condenser(row) {
 
 export function condense_and_collapse(elems) {
     const height_cutoff = message_viewport.height() * 0.65;
-
+    const datestr_cutoff = getUnixTime(startOfToday());
     for (const elem of elems) {
         const content = $(elem).find(".message_content");
 
@@ -272,7 +278,7 @@ export function condense_and_collapse(elems) {
         // Completely hide the message and replace it with a [More]
         // link if the user has collapsed it.
         if (message.collapsed) {
-	    fc_collapse($(elem), message);
+	    fc_collapse($(elem), message, datestr_cutoff);
             content.addClass("collapsed");
             $(elem).find(".message_expander").show();
         }
