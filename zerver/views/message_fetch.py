@@ -1161,14 +1161,12 @@ def get_messages_backend(
     def get_poll_msg(stream_id: int, topic: str) -> Optional["Message"]:
         promo_rx = r"promo: (?:.*)?(#narrow/)?stream/%d-?[^/]*/topic/%s" % (
             stream_id, hash_util_encode(topic))
-        print(promo_rx)
         try:
             polls_stream = get_stream("polls", realm)
         except Exception:
             return None
         if polls_stream is None:
             return None
-        print(f"polls stream id: {polls_stream.id}")
         msgs = Message.objects.filter(
             recipient__type=Recipient.STREAM,
             recipient__type_id=polls_stream.id
@@ -1181,14 +1179,11 @@ def get_messages_backend(
                     re.sub(r'[^a-zA-Z0-9]', '_', f"poll-msg-for-{stream_id}-{topic}"),
                     timeout=10) # 3600 * 24 * 7
     def get_poll_promo_msg_id(stream_id: int, topic: str) -> Optional[int]:
-        print(f"checking poll_msg for stream_id={stream_id}, topic={topic}")
         poll_msg = get_poll_msg(stream_id, topic)
         if poll_msg is None:
             return None
-        print(f"poll_msg id: {poll_msg.id}")
         sender_id = None
         for submsg in SubMessage.objects.filter(message_id=poll_msg.id):
-            print(f"submsg.content: {submsg.content}")
             if 'promo_msg_id' not in submsg.content:
                 continue
             try:
@@ -1200,11 +1195,9 @@ def get_messages_backend(
 
     if len(message_ids) > 0 and narrow is not None and len(narrow) > 0:
         # [..., {'operator': 'topic', 'operand': 'new streams', 'negated': False}]
-        print(f"fetch: narrow: {narrow}")
         stream_id = topic = None
         for op in narrow:
             if op['operator'] == 'stream' and op['negated'] == False:
-                print(f"found op={op['operand']}")
                 if type(op['operand']) is int:
                     stream_id = op['operand']
                 else:
@@ -1219,11 +1212,9 @@ def get_messages_backend(
                             stream_id = None
             if op['operator'] == 'topic' and op['negated'] == False:
                 topic = op['operand']
-        print(f"get_messages_backend: stream_id={stream_id}, topic={topic}")
         # locate the promo msg and change its order to be second in the display
         if stream_id is not None and topic is not None:
             poll_promo_msgid = get_poll_promo_msg_id(stream_id, topic)
-            print(f"poll_promo_msgid: {poll_promo_msgid}")
             if poll_promo_msgid is not None:
                 if poll_promo_msgid in message_ids:
                     message_ids.remove(poll_promo_msgid)
