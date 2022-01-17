@@ -80,14 +80,14 @@ export const update_elements = (content) => {
         $(this).hide();
     });
 
-    content.find("ytbk").each(function () {
-	let ts = $(this).attr("ts");
-	console.log("found ts="+ts);
-	let transcript_section = $("a.ytbk[ts="+ts+"]");
-	console.log(transcript_section);
-	transcript_section.parent().children().addClass("ythl");
-	transcript_section.removeClass("fa-bookmark").addClass("fa-bookmark-o");
-    });
+//    content.find("ytbk").each(function () {
+//	let ts = $(this).attr("ts");
+//	console.log("found ts="+ts);
+//	let transcript_section = $("a.ytbk[ts="+ts+"]");
+//	console.log(transcript_section);
+//	transcript_section.parent().children().addClass("ythl");
+//	transcript_section.removeClass("fa-bookmark").addClass("fa-bookmark-o");
+//    });
 
     content.find(".user-mention").each(function () {
         const user_id = get_user_id_for_mention_button(this);
