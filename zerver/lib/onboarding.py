@@ -115,18 +115,15 @@ Welcome!  Some things to know:
 **~*If you need more account(s), message @**Massy Ghausi** or @**Adam Sah***~**~*with the email(s) you'd like to invite.*~**
 
 3. **use percentages**.
-**~*For privacy and respect, please use percentages to discuss personal finances, e.g. I'm 4% USD, etc.*~**~*We assume everyone has plenty of capital.*~**
+**~*For privacy and respect, please use percentages to discuss personal finances, e.g. "I'm 4% USD" *~**
 
 4. **streams and topics**. Please learn about them.
 **~*This site is based on [Zulip](zulip.com), which is similar to Slack/etc but with extra "level." [learn more](https://zulip.com/help/about-streams-and-topics) *~**
 
-5. **inquiries** and other forecast features.
-**~*We modified Zulip to add "inquiries" as a simple type of [prediction market](https://www.google.com/search?q=prediction+market). More coming...*~**
-
-6. **get help** early and often!
+5. **get help** early and often!
 **~*Post [here](https://forecast.chat/#narrow/stream/6-suggestions.3A-site.20features/topic/help.20me.20!) or send a PM to @**Massy Ghausi** or @**Adam Sah** - we need the feedback!*~**
 
-7. **mobile - just use the website ( https://forecast.chat/ )**
+6. **mobile - just use the website ( https://forecast.chat/ )**
 **~*We've extensively hacked Zulip and the mobile app is no longer recommended. Instead just open the website on your mobile browser.*~**
 """
 
