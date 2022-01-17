@@ -42,10 +42,32 @@ function uncondense_row(row) {
     show_condense_link(row);
 }
 
+export function fc_uncollapse(row, message) {
+    const mbox = row.find(".messagebox");
+    mbox.css("height", "");
+    mbox.find(".messagebox-content").show();
+    mbox.find(".message_fc_collapsed_line").hide();
+    row.closest(".message_row").find(".date_row").show();
+}
+
+export function fc_collapse(row, message) {
+    // todo: performance on initial rendering - static rendering?
+    // also, I left in a lot of old code for preparing content
+    // which is ultimate hidden (left to avoid merge conflicts)
+    //console.time('fc_collapse');
+    row.children(".date_row").hide();
+    const mbox = row.find(".messagebox").css("height", "20px");
+    mbox.children(".messagebox-content").hide();
+    const fc = mbox.find(".message_fc_collapsed_line > .fc_summary");
+    fc.text(message.fc_summary).parent().show();
+    //console.timeEnd('fc_collapse');
+}
+
 export function uncollapse(row) {
     // Uncollapse a message, restoring the condensed message [More] or
     // [Show less] link if necessary.
     const message = message_lists.current.get(rows.id(row));
+    fc_uncollapse(row, message);
     message.collapsed = false;
     message_flags.save_uncollapsed(message);
 
@@ -82,6 +104,7 @@ export function collapse(row) {
     // [Show less] link if necessary.
     const message = message_lists.current.get(rows.id(row));
     message.collapsed = true;
+    fc_collapse(row, message);
 
     if (message.locally_echoed) {
         // Trying to collapse a locally echoed message is
@@ -249,6 +272,7 @@ export function condense_and_collapse(elems) {
         // Completely hide the message and replace it with a [More]
         // link if the user has collapsed it.
         if (message.collapsed) {
+	    fc_collapse($(elem), message);
             content.addClass("collapsed");
             $(elem).find(".message_expander").show();
         }
@@ -257,6 +281,26 @@ export function condense_and_collapse(elems) {
 
 export function initialize() {
     $("#message_feed_container").on("click", ".message_expander", function (e) {
+        // Expanding a message can mean either uncollapsing or
+        // uncondensing it.
+        const row = $(this).closest(".message_row");
+        const message = message_lists.current.get(rows.id(row));
+        const content = row.find(".message_content");
+        if (message.collapsed) {
+            // Uncollapse.
+            uncollapse(row);
+        } else if (content.hasClass("condensed")) {
+            // Uncondense (show the full long message).
+            message.condensed = false;
+            content.removeClass("condensed");
+            $(this).hide();
+            row.find(".message_condenser").show();
+        }
+        e.stopPropagation();
+        e.preventDefault();
+    });
+
+    $("#message_feed_container").on("click", ".fc_message_expander", function (e) {
         // Expanding a message can mean either uncollapsing or
         // uncondensing it.
         const row = $(this).closest(".message_row");

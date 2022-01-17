@@ -1191,6 +1191,7 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             transcript = Element("div")
             info["parent"].insert(info["index"], transcript)
         transcript.set("class", "yt-transcript");
+        ytspans = []
         try:
             def secs_to_mmss(secs):
                 sec = secs % 60
@@ -1198,38 +1199,45 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
                 return f"{int(secs / 60)}:{sec:02} "
             last = -59 # just in case it doesn't start at 0:00
             recs = [r for r in yt_ts_api.get_transcript(yt_id)]
-            # detect more than 80% upcase
-            alltext = ''.join([r['text'] for r in recs])
-            use_lcase = (100*sum(map(str.isupper, alltext)) /
-                         sum(map(str.isalpha, alltext)) > 80)
+            last_ytspn = None
             for r in recs:
-                span = SubElement(transcript, "span")
                 text = r['text']
                 if text in ["[Music]", "[Applause]"]:
                     continue
                 text = re.sub(r' um ', ' - ', text)
-                if use_lcase:
-                    text = text.lower()
                 text = re.sub(r'>', '', text)
-                text = re.sub(r'([\.\?!])\s+([a-z]+)',
-                              lambda pat: pat.group(1) + " " +
-                              pat.group(2)[0].upper() + pat.group(2)[1:], text)
                 start = int(float(r["start"]))
                 if start % 30 == 0 or start >= last + 30:
                     display_secs = secs_to_mmss(start)
-                    bookmark = SubElement(span, "a")
+                    bookmark = SubElement(transcript, "a")
                     bookmark.set("class", f"fa fa-bookmark-o ytsecs ytbk")
                     bookmark.set("ts", str(start))
-                    link = SubElement(span, "a")
+                    link = SubElement(transcript, "a")
                     link.set("class", "ytsecs")
                     link.set("href", f'https://youtu.be/{yt_id}?t={start}')
                     link.set("target", "_blank")
                     link.text = str(secs_to_mmss(start))
-                    last = (start - start % 60)
-                words = SubElement(span, "span")
-                words.set("class", "ytspn")
-                words.text = text + " "
+                    last = start
+                    last_ytspn = None
+                if last_ytspn is None:
+                    last_ytspn = SubElement(transcript, "span")
+                    last_ytspn.set("class", "ytspn")
+                    last_ytspn.text = ""
+                    ytspans.append(last_ytspn)
+                last_ytspn.text = last_ytspn.text + text + " "
             has_transcript = True
+            for ytspn in ytspans:
+                ytspn.text = re.sub(r'\s{2,}', ' ', ytspn.text.strip()) + " "
+            # I looked into real capitalizers ("truecase") but they changed
+            # the length, which is a no-go for us, because we have to keep
+            # text in chunks and match up the strings.
+            capstxt = re.sub(r'([\.\?!]"?\s+)([a-z])', lambda r:
+                             r.group(1) + r.group(2).upper(),
+                             ''.join([ytspn.text for ytspn in ytspans]).lower())
+            capstxt_idx = 0
+            for ytspn in ytspans:
+                ytspn.text = capstxt[capstxt_idx:capstxt_idx+len(ytspn.text)]
+                capstxt_idx += len(ytspn.text)
         except Exception as exc:
             has_transcript = False
             transcript.text = "sorry, couldn't insert a YT transcript for this video."

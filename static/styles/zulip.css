@@ -3113,3 +3113,37 @@ select.inline_select_topic_edit {
     }
 }
 
+.message_fc_collapsed_line {
+    display: none;
+    width: calc(100% - 0px);
+    text-overflow: ellipsis;
+    height: 30px;
+}
+
+.fc_sender_name {
+    display: inline-block;
+    font-size:12px;
+    width: 80px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    margin-top: 5px;
+}
+
+.fc_summary {
+    display: inline-block;
+    font-size: 14px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    width: calc(100% - 160px);
+    vertical-align: top;
+    margin-top: 3px;
+}
+.fc_message_expander {
+}
+.fc_message_time {
+    font-size: 12px;
+    text-align: right;
+    margin-left: 7px; /* line up with non-collapsed */
+}

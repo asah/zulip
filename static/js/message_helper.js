@@ -74,6 +74,7 @@ export function process_new_message(message) {
     if (!message.reactions) {
         message.reactions = [];
     }
+    message.fc_summary = message.content.replace(/(<([^>]+)>)/gi, "").substr(0,120);
     message_store.update_message_cache(message);
     return message;
 }
