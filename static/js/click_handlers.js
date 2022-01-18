@@ -166,6 +166,10 @@ export function initialize() {
 
         const row = $(this).closest(".message_row");
         const id = rows.id(row);
+        const message = message_store.get(id);
+	if (message.collapsed) {
+	    return;
+	}
 
         if (message_edit.is_editing(id)) {
             // Clicks on a message being edited shouldn't trigger a reply.

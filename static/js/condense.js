@@ -21,6 +21,31 @@ This library implements two related, similar concepts:
 
 const _message_content_height_cache = new Map();
 
+export function fc_uncollapse(row, message) {
+    const mbox = row.find(".messagebox");
+    mbox.css("height", "");
+    mbox.find(".messagebox-content").show();
+    mbox.find(".message_fc_collapsed_line").hide();
+    row.closest(".message_row").find(".date_row").show();
+}
+
+export function fc_collapse(row, message, datestr_cutoff) {
+    // todo: performance on initial rendering - static rendering?
+    // also, I left in a lot of old code for preparing content
+    // which is ultimate hidden (left to avoid merge conflicts)
+    //console.time('fc_collapse');
+    row.children(".date_row").hide();
+    const mbox = row.find(".messagebox").css("height", "20px");
+    const mc = mbox.children(".messagebox-content").hide();
+    const fc = mbox.find(".message_fc_collapsed_line > .fc_summary");
+    fc.text(message.fc_summary).parent().show();
+    if (message.timestamp < datestr_cutoff) {
+	const datestr = format(fromUnixTime(message.timestamp), "MMM d");
+	mbox.find(".fc_message_time").text(datestr);
+    }
+    //console.timeEnd('fc_collapse');
+}
+
 function show_more_link(row) {
     row.find(".message_condenser").hide();
     row.find(".message_expander").show();
@@ -41,31 +66,6 @@ function uncondense_row(row) {
     const content = row.find(".message_content");
     content.removeClass("condensed");
     show_condense_link(row);
-}
-
-export function fc_uncollapse(row, message) {
-    const mbox = row.find(".messagebox");
-    mbox.css("height", "");
-    mbox.find(".messagebox-content").show();
-    mbox.find(".message_fc_collapsed_line").hide();
-    row.closest(".message_row").find(".date_row").show();
-}
-
-export function fc_collapse(row, message, datestr_cutoff) {
-    // todo: performance on initial rendering - static rendering?
-    // also, I left in a lot of old code for preparing content
-    // which is ultimate hidden (left to avoid merge conflicts)
-    //console.time('fc_collapse');
-    row.children(".date_row").hide();
-    const mbox = row.find(".messagebox").css("height", "20px");
-    mbox.children(".messagebox-content").hide();
-    const fc = mbox.find(".message_fc_collapsed_line > .fc_summary");
-    fc.text(message.fc_summary).parent().show();
-    if (message.timestamp < datestr_cutoff) {
-	const datestr = format(fromUnixTime(message.timestamp), "MMM d");
-	mbox.find(".fc_message_time").text(datestr);
-    }
-    //console.timeEnd('fc_collapse');
 }
 
 export function uncollapse(row) {
@@ -224,6 +224,7 @@ export function show_message_condenser(row) {
 }
 
 export function condense_and_collapse(elems) {
+    console.log('condense_and_collapse');
     const height_cutoff = message_viewport.height() * 0.65;
     const datestr_cutoff = getUnixTime(startOfToday());
     for (const elem of elems) {
@@ -286,27 +287,7 @@ export function condense_and_collapse(elems) {
 }
 
 export function initialize() {
-    $("#message_feed_container").on("click", ".message_expander", function (e) {
-        // Expanding a message can mean either uncollapsing or
-        // uncondensing it.
-        const row = $(this).closest(".message_row");
-        const message = message_lists.current.get(rows.id(row));
-        const content = row.find(".message_content");
-        if (message.collapsed) {
-            // Uncollapse.
-            uncollapse(row);
-        } else if (content.hasClass("condensed")) {
-            // Uncondense (show the full long message).
-            message.condensed = false;
-            content.removeClass("condensed");
-            $(this).hide();
-            row.find(".message_condenser").show();
-        }
-        e.stopPropagation();
-        e.preventDefault();
-    });
-
-    $("#message_feed_container").on("click", ".fc_message_expander", function (e) {
+    $("#message_feed_container").on("click", ".message_expander,.fc_message_expander,.fc_summary", function (e) {
         // Expanding a message can mean either uncollapsing or
         // uncondensing it.
         const row = $(this).closest(".message_row");
