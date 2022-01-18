@@ -1204,8 +1204,8 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
                 text = r['text']
                 if text in ["[Music]", "[Applause]"]:
                     continue
-                text = re.sub(r' um ', ' - ', text)
-                text = re.sub(r'>', '', text)
+                text = text.replace('>', '')
+                text = re.sub(r'\s(um|uh)\s', ' - ', text)
                 start = int(float(r["start"]))
                 if start % 30 == 0 or start >= last + 30:
                     display_secs = secs_to_mmss(start)
