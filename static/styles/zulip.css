@@ -3147,3 +3147,7 @@ select.inline_select_topic_edit {
     text-align: right;
     margin-left: 7px; /* line up with non-collapsed */
 }
+.fc_misc {
+    display: inline-block;
+    vertical-align: top;
+}

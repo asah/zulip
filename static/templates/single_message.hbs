@@ -12,8 +12,8 @@
         <div class="message_fc_collapsed_line">
            <div class="fc_sender_name auto-select" role="button" tabindex="0">{{msg/sender_full_name}}</div>
            <div class="fc_summary" tabindex="1"></div>
-           <a href="#" class="fc_message_expander fa fa-plus-square" tabindex="3"></a>
-           <a href="{{ msg/url }}" class="fc_message_time">{{timestr}}</a>
+           <div class="fc_misc"><a href="#" class="fc_message_expander fa fa-plus-square" tabindex="2"></a></div>
+           <div class="fc_misc"><a href="{{ msg/url }}" class="fc_message_time">{{timestr}}</a></div>
         </div>
         <div class="messagebox-content">
             {{> message_body}}
