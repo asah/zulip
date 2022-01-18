@@ -405,6 +405,10 @@ function handleTex(tex, fullmatch) {
     }
 }
 
+export function compute_fc_summary(content) {
+    return content.replace(/(<([^>]+)>)/gi, "").substr(0,120);
+}
+
 export function initialize(helper_config) {
     helpers = helper_config;
 

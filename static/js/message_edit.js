@@ -887,6 +887,7 @@ export function save_message_row_edit(row) {
             orig_content: message.content,
             orig_raw_content: message.raw_content,
 
+
             // Store flags that are about user interaction with the
             // message so that echo.edit_locally() can restore these
             // flags.

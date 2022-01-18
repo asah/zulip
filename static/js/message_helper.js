@@ -1,6 +1,7 @@
 import * as alert_words from "./alert_words";
 import * as message_store from "./message_store";
 import * as message_user_ids from "./message_user_ids";
+import { compute_fc_summary } from "./markdown";
 import * as people from "./people";
 import * as pm_conversations from "./pm_conversations";
 import * as recent_senders from "./recent_senders";
@@ -74,7 +75,7 @@ export function process_new_message(message) {
     if (!message.reactions) {
         message.reactions = [];
     }
-    message.fc_summary = message.content.replace(/(<([^>]+)>)/gi, "").substr(0,120);
+    message.fc_summary = compute_fc_summary(message.content);
     message_store.update_message_cache(message);
     return message;
 }

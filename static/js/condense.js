@@ -27,6 +27,10 @@ export function fc_uncollapse(row, message) {
     mbox.find(".messagebox-content").show();
     mbox.find(".message_fc_collapsed_line").hide();
     row.closest(".message_row").find(".date_row").show();
+    if (row.hasClass("fc_mention_collapse")) {
+	row.removeClass("fc_mention_collapse");
+	row.addClass("mention");
+    }
 }
 
 export function fc_collapse(row, message, datestr_cutoff) {
@@ -36,6 +40,10 @@ export function fc_collapse(row, message, datestr_cutoff) {
     //console.time('fc_collapse');
     row.children(".date_row").hide();
     const mbox = row.find(".messagebox").css("height", "20px");
+    if (row.hasClass("mention")) {
+	row.removeClass("mention");
+	row.addClass("fc_mention_collapse");
+    }
     const mc = mbox.children(".messagebox-content").hide();
     const fc = mbox.find(".message_fc_collapsed_line > .fc_summary");
     fc.text(message.fc_summary).parent().show();
