@@ -257,7 +257,7 @@ export function condense_and_collapse(elems) {
         // Completely hide the message and replace it with a [More]
         // link if the user has collapsed it.
 	// do this early, since it speeds up rendering
-        if (message.collapsed || !message.unread) {
+        if (message.collapsed) { // || !message.unread) {
 	    fc_collapse($(elem), message, datestr_cutoff);
             content.addClass("collapsed");
             $(elem).find(".message_expander").show();
