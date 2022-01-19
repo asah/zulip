@@ -232,7 +232,6 @@ export function show_message_condenser(row) {
 }
 
 export function condense_and_collapse(elems) {
-    console.log('condense_and_collapse');
     const height_cutoff = message_viewport.height() * 0.65;
     const datestr_cutoff = getUnixTime(startOfToday());
     for (const elem of elems) {
@@ -253,6 +252,15 @@ export function condense_and_collapse(elems) {
         const message = message_lists.current.get(message_id);
         if (message === undefined) {
             continue;
+        }
+
+        // Completely hide the message and replace it with a [More]
+        // link if the user has collapsed it.
+	// do this early, since it speeds up rendering
+        if (message.collapsed || !message.unread) {
+	    fc_collapse($(elem), message, datestr_cutoff);
+            content.addClass("collapsed");
+            $(elem).find(".message_expander").show();
         }
 
         const message_height = get_message_height(elem, message.id);
@@ -282,14 +290,6 @@ export function condense_and_collapse(elems) {
         } else {
             content.removeClass("condensed");
             $(elem).find(".message_expander").hide();
-        }
-
-        // Completely hide the message and replace it with a [More]
-        // link if the user has collapsed it.
-        if (message.collapsed) {
-	    fc_collapse($(elem), message, datestr_cutoff);
-            content.addClass("collapsed");
-            $(elem).find(".message_expander").show();
         }
     }
 }
