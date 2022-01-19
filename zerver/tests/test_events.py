@@ -744,7 +744,25 @@ class NormalActionsTest(BaseAction):
         )
         check_invites_changed("events[0]", events[0])
 
+    def test_deactivate_user_invites_changed_event(self) -> None:
+        self.user_profile = self.example_user("iago")
+        user_profile = self.example_user("cordelia")
+        invite_expires_in_days = 2
+        do_invite_users(
+            user_profile,
+            ["foo@zulip.com"],
+            [],
+            invite_expires_in_days=invite_expires_in_days,
+        )
+
+        events = self.verify_action(
+            lambda: do_deactivate_user(user_profile, acting_user=None), num_events=2
+        )
+        check_invites_changed("events[0]", events[0])
+
     def test_revoke_user_invite_event(self) -> None:
+        # We need set self.user_profile to be an admin, so that
+        # we receive the invites_changed event.
         self.user_profile = self.example_user("iago")
         streams = []
         for stream_name in ["Denmark", "Verona"]:
@@ -1839,12 +1857,18 @@ class NormalActionsTest(BaseAction):
         events = self.verify_action(action)
         check_realm_bot_update("events[0]", events[0], "services")
 
-    def test_do_deactivate_user(self) -> None:
+    def test_do_deactivate_bot(self) -> None:
         bot = self.create_bot("test")
         action = lambda: do_deactivate_user(bot, acting_user=None)
         events = self.verify_action(action, num_events=2)
         check_realm_user_remove("events[0]", events[0])
         check_realm_bot_remove("events[1]", events[1])
+
+    def test_do_deactivate_user(self) -> None:
+        user_profile = self.example_user("cordelia")
+        action = lambda: do_deactivate_user(user_profile, acting_user=None)
+        events = self.verify_action(action, num_events=1)
+        check_realm_user_remove("events[0]", events[0])
 
     def test_do_reactivate_user(self) -> None:
         bot = self.create_bot("test")

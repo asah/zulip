@@ -230,6 +230,7 @@ from zerver.models import (
     UserPresence,
     UserProfile,
     UserStatus,
+    UserTopic,
     active_non_guest_user_ids,
     active_user_ids,
     custom_profile_fields_for_realm,
@@ -3688,7 +3689,9 @@ def pick_colors(
         if i < len(available_colors):
             color = available_colors[i]
         else:
-            color = STREAM_ASSIGNMENT_COLORS[i % len(STREAM_ASSIGNMENT_COLORS)]
+            # We have to start re-using old colors, and we use recipient_id
+            # to choose the color.
+            color = STREAM_ASSIGNMENT_COLORS[recipient_id % len(STREAM_ASSIGNMENT_COLORS)]
         result[recipient_id] = color
 
     return result
@@ -4498,6 +4501,7 @@ def check_change_bot_full_name(
     do_change_full_name(user_profile, new_full_name, acting_user)
 
 
+@transaction.atomic(durable=True)
 def do_change_bot_owner(
     user_profile: UserProfile, bot_owner: UserProfile, acting_user: UserProfile
 ) -> None:
@@ -4521,16 +4525,19 @@ def do_change_bot_owner(
 
     # Delete the bot from previous owner's bot data.
     if previous_owner and not previous_owner.is_realm_admin:
-        send_event(
-            user_profile.realm,
-            dict(
-                type="realm_bot",
-                op="delete",
-                bot=dict(
-                    user_id=user_profile.id,
-                ),
+        delete_event = dict(
+            type="realm_bot",
+            op="delete",
+            bot=dict(
+                user_id=user_profile.id,
             ),
-            {previous_owner.id},
+        )
+        transaction.on_commit(
+            lambda: send_event(
+                user_profile.realm,
+                delete_event,
+                {previous_owner.id},
+            )
         )
         # Do not send update event for previous bot owner.
         update_users = update_users - {previous_owner.id}
@@ -4538,26 +4545,29 @@ def do_change_bot_owner(
     # Notify the new owner that the bot has been added.
     if not bot_owner.is_realm_admin:
         add_event = created_bot_event(user_profile)
-        send_event(user_profile.realm, add_event, {bot_owner.id})
+        transaction.on_commit(lambda: send_event(user_profile.realm, add_event, {bot_owner.id}))
         # Do not send update event for bot_owner.
         update_users = update_users - {bot_owner.id}
 
-    send_event(
-        user_profile.realm,
-        dict(
-            type="realm_bot",
-            op="update",
-            bot=dict(
-                user_id=user_profile.id,
-                owner_id=user_profile.bot_owner.id,
-            ),
+    bot_event = dict(
+        type="realm_bot",
+        op="update",
+        bot=dict(
+            user_id=user_profile.id,
+            owner_id=user_profile.bot_owner.id,
         ),
-        update_users,
+    )
+    transaction.on_commit(
+        lambda: send_event(
+            user_profile.realm,
+            bot_event,
+            update_users,
+        )
     )
 
     # Since `bot_owner_id` is included in the user profile dict we need
     # to update the users dict with the new bot owner id
-    event: Dict[str, Any] = dict(
+    event = dict(
         type="realm_user",
         op="update",
         person=dict(
@@ -4565,9 +4575,12 @@ def do_change_bot_owner(
             bot_owner_id=user_profile.bot_owner.id,
         ),
     )
-    send_event(user_profile.realm, event, active_user_ids(user_profile.realm_id))
+    transaction.on_commit(
+        lambda: send_event(user_profile.realm, event, active_user_ids(user_profile.realm_id))
+    )
 
 
+@transaction.atomic(durable=True)
 def do_change_tos_version(user_profile: UserProfile, tos_version: str) -> None:
     user_profile.tos_version = tos_version
     user_profile.save(update_fields=["tos_version"])
@@ -4682,6 +4695,7 @@ def do_delete_avatar_image(user: UserProfile, *, acting_user: Optional[UserProfi
     delete_avatar_image(user)
 
 
+@transaction.atomic(durable=True)
 def do_change_icon_source(
     realm: Realm, icon_source: str, *, acting_user: Optional[UserProfile]
 ) -> None:
@@ -4698,18 +4712,22 @@ def do_change_icon_source(
         acting_user=acting_user,
     )
 
-    send_event(
-        realm,
-        dict(
-            type="realm",
-            op="update_dict",
-            property="icon",
-            data=dict(icon_source=realm.icon_source, icon_url=realm_icon_url(realm)),
-        ),
-        active_user_ids(realm.id),
+    event = dict(
+        type="realm",
+        op="update_dict",
+        property="icon",
+        data=dict(icon_source=realm.icon_source, icon_url=realm_icon_url(realm)),
+    )
+    transaction.on_commit(
+        lambda: send_event(
+            realm,
+            event,
+            active_user_ids(realm.id),
+        )
     )
 
 
+@transaction.atomic(durable=True)
 def do_change_logo_source(
     realm: Realm, logo_source: str, night: bool, *, acting_user: Optional[UserProfile]
 ) -> None:
@@ -4736,9 +4754,10 @@ def do_change_logo_source(
         property="night_logo" if night else "logo",
         data=get_realm_logo_data(realm, night),
     )
-    send_event(realm, event, active_user_ids(realm.id))
+    transaction.on_commit(lambda: send_event(realm, event, active_user_ids(realm.id)))
 
 
+@transaction.atomic(durable=True)
 def do_change_realm_org_type(
     realm: Realm,
     org_type: int,
@@ -4808,6 +4827,7 @@ def do_change_realm_plan_type(
     send_event(realm, event, active_user_ids(realm.id))
 
 
+@transaction.atomic(durable=True)
 def do_change_default_sending_stream(
     user_profile: UserProfile, stream: Optional[Stream], *, acting_user: Optional[UserProfile]
 ) -> None:
@@ -4835,20 +4855,24 @@ def do_change_default_sending_stream(
             stream_name: Optional[str] = stream.name
         else:
             stream_name = None
-        send_event(
-            user_profile.realm,
-            dict(
-                type="realm_bot",
-                op="update",
-                bot=dict(
-                    user_id=user_profile.id,
-                    default_sending_stream=stream_name,
-                ),
+        event = dict(
+            type="realm_bot",
+            op="update",
+            bot=dict(
+                user_id=user_profile.id,
+                default_sending_stream=stream_name,
             ),
-            bot_owner_user_ids(user_profile),
+        )
+        transaction.on_commit(
+            lambda: send_event(
+                user_profile.realm,
+                event,
+                bot_owner_user_ids(user_profile),
+            )
         )
 
 
+@transaction.atomic(durable=True)
 def do_change_default_events_register_stream(
     user_profile: UserProfile, stream: Optional[Stream], *, acting_user: Optional[UserProfile]
 ) -> None:
@@ -4876,20 +4900,25 @@ def do_change_default_events_register_stream(
             stream_name: Optional[str] = stream.name
         else:
             stream_name = None
-        send_event(
-            user_profile.realm,
-            dict(
-                type="realm_bot",
-                op="update",
-                bot=dict(
-                    user_id=user_profile.id,
-                    default_events_register_stream=stream_name,
-                ),
+
+        event = dict(
+            type="realm_bot",
+            op="update",
+            bot=dict(
+                user_id=user_profile.id,
+                default_events_register_stream=stream_name,
             ),
-            bot_owner_user_ids(user_profile),
+        )
+        transaction.on_commit(
+            lambda: send_event(
+                user_profile.realm,
+                event,
+                bot_owner_user_ids(user_profile),
+            )
         )
 
 
+@transaction.atomic(durable=True)
 def do_change_default_all_public_streams(
     user_profile: UserProfile, value: bool, *, acting_user: Optional[UserProfile]
 ) -> None:
@@ -4913,17 +4942,20 @@ def do_change_default_all_public_streams(
     )
 
     if user_profile.is_bot:
-        send_event(
-            user_profile.realm,
-            dict(
-                type="realm_bot",
-                op="update",
-                bot=dict(
-                    user_id=user_profile.id,
-                    default_all_public_streams=user_profile.default_all_public_streams,
-                ),
+        event = dict(
+            type="realm_bot",
+            op="update",
+            bot=dict(
+                user_id=user_profile.id,
+                default_all_public_streams=user_profile.default_all_public_streams,
             ),
-            bot_owner_user_ids(user_profile),
+        )
+        transaction.on_commit(
+            lambda: send_event(
+                user_profile.realm,
+                event,
+                bot_owner_user_ids(user_profile),
+            )
         )
 
 
@@ -5494,6 +5526,7 @@ def update_scheduled_email_notifications_time(
     )
 
 
+@transaction.atomic(durable=True)
 def do_change_user_setting(
     user_profile: UserProfile,
     setting_name: str,
@@ -5553,7 +5586,7 @@ def do_change_user_setting(
         assert isinstance(setting_value, str)
         event["language_name"] = get_language_name(setting_value)
 
-    send_event(user_profile.realm, event, [user_profile.id])
+    transaction.on_commit(lambda: send_event(user_profile.realm, event, [user_profile.id]))
 
     if setting_name in UserProfile.notification_settings_legacy:
         # This legacy event format is for backwards-compatiblity with
@@ -5565,7 +5598,9 @@ def do_change_user_setting(
             "notification_name": setting_name,
             "setting": setting_value,
         }
-        send_event(user_profile.realm, legacy_event, [user_profile.id])
+        transaction.on_commit(
+            lambda: send_event(user_profile.realm, legacy_event, [user_profile.id])
+        )
 
     if setting_name in UserProfile.display_settings_legacy or setting_name == "timezone":
         # This legacy event format is for backwards-compatiblity with
@@ -5581,7 +5616,9 @@ def do_change_user_setting(
             assert isinstance(setting_value, str)
             legacy_event["language_name"] = get_language_name(setting_value)
 
-        send_event(user_profile.realm, legacy_event, [user_profile.id])
+        transaction.on_commit(
+            lambda: send_event(user_profile.realm, legacy_event, [user_profile.id])
+        )
 
     # Updates to the timezone display setting are sent to all users
     if setting_name == "timezone":
@@ -5590,10 +5627,13 @@ def do_change_user_setting(
             user_id=user_profile.id,
             timezone=canonicalize_timezone(user_profile.timezone),
         )
-        send_event(
-            user_profile.realm,
-            dict(type="realm_user", op="update", person=payload),
-            active_user_ids(user_profile.realm_id),
+        timezone_event = dict(type="realm_user", op="update", person=payload)
+        transaction.on_commit(
+            lambda: send_event(
+                user_profile.realm,
+                timezone_event,
+                active_user_ids(user_profile.realm_id),
+            )
         )
 
     if setting_name == "enable_drafts_synchronization" and setting_value is False:
@@ -7589,6 +7629,8 @@ def revoke_invites_generated_by_user(user_profile: UserProfile) -> None:
         confirmation.expiry_date = now
 
     Confirmation.objects.bulk_update(confirmations_to_revoke, ["expiry_date"])
+    if len(confirmations_to_revoke):
+        notify_invites_changed(realm=user_profile.realm)
 
 
 def do_create_multiuse_invite_link(
@@ -7740,7 +7782,10 @@ def do_mute_topic(
 
 
 def do_unmute_topic(user_profile: UserProfile, stream: Stream, topic: str) -> None:
-    remove_topic_mute(user_profile, stream.id, topic)
+    try:
+        remove_topic_mute(user_profile, stream.id, topic)
+    except UserTopic.DoesNotExist:
+        raise JsonableError(_("Topic is not muted"))
     event = dict(type="muted_topics", muted_topics=get_topic_mutes(user_profile))
     send_event(user_profile.realm, event, [user_profile.id])
 
