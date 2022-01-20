@@ -22,6 +22,7 @@ This library implements two related, similar concepts:
 const _message_content_height_cache = new Map();
 
 export function fc_uncollapse(row, message) {
+    console.time('fc_uncollapse');
     const mbox = row.find(".messagebox");
     mbox.css("height", "");
     mbox.find(".messagebox-content").show();
@@ -37,7 +38,7 @@ export function fc_collapse(row, message, datestr_cutoff) {
     // todo: performance on initial rendering - static rendering?
     // also, I left in a lot of old code for preparing content
     // which is ultimate hidden (left to avoid merge conflicts)
-    //console.time('fc_collapse');
+    console.time('fc_collapse');
     row.children(".date_row").hide();
     const mbox = row.find(".messagebox").css("height", "20px");
     if (row.hasClass("mention")) {
@@ -79,6 +80,7 @@ function uncondense_row(row) {
 export function uncollapse(row) {
     // Uncollapse a message, restoring the condensed message [More] or
     // [Show less] link if necessary.
+    console.log('uncollapse');
     const message = message_lists.current.get(rows.id(row));
     fc_uncollapse(row, message);
     message.collapsed = false;
@@ -254,10 +256,10 @@ export function condense_and_collapse(elems) {
             continue;
         }
 
-        // Completely hide the message and replace it with a [More]
+        // Completely hide the message and replace it with a [+]
         // link if the user has collapsed it.
 	// do this early, since it speeds up rendering
-        if (message.collapsed) { // || !message.unread) {
+        if (message.collapsed) { // || (!message.unread && !message.force_uncollapsed)) {
 	    fc_collapse($(elem), message, datestr_cutoff);
             content.addClass("collapsed");
             $(elem).find(".message_expander").show();
@@ -295,11 +297,15 @@ export function condense_and_collapse(elems) {
 }
 
 export function initialize() {
-    $("#message_feed_container").on("click", ".message_expander,.fc_message_expander,.fc_summary", function (e) {
+    $("#message_feed_container").on("click", ".message_expander,.fc_message_expander,.fc_summary", function (e) {	
         // Expanding a message can mean either uncollapsing or
         // uncondensing it.
         const row = $(this).closest(".message_row");
         const message = message_lists.current.get(rows.id(row));
+	if ($(this).hasClass(".fc_message_expander") || $(this).hasClass(".fc_summary")) {
+	    message.force_uncollapsed = true;
+	    message_flags.save_force_uncollapsed(message);
+	}
         const content = row.find(".message_content");
         if (message.collapsed) {
             // Uncollapse.

@@ -653,6 +653,15 @@ export class MessageListView {
             return undefined;
         }
 
+//	messages.forEach((message) => {
+//	    console.log(message.id.toString() + ": " + (message.collapsed ? "collapsed" : "open"));
+//
+//	    // make sure 3 of the last 12 are open... highest relevancy score...
+//	    // (did this user upvote?)
+//	    
+//	    
+//	});
+	
         const list = this.list; // for convenience
         const table_name = this.table_name;
         const table = rows.get_table(table_name);

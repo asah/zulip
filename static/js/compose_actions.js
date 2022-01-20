@@ -515,7 +515,7 @@ export function quote_and_reply(opts) {
         //     ```
         const prev_caret = textarea.caret();
         let content = $t(
-            {defaultMessage: "{username} [said]({link_to_message}):"},
+            {defaultMessage: "*~* {username} [said]({link_to_message}):*~*"},
             {
                 username: `@_**${message.sender_full_name}|${message.sender_id}**`,
                 link_to_message: `${hash_util.by_conversation_and_time_uri(message)}`,
