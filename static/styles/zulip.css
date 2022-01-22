@@ -879,9 +879,10 @@ td.pointer {
     position: absolute;
     top: -1px;
     right: -56px;
-    width: 100px;
+    width: 120px;
     height: 22px;
     z-index: 1;
+    text-align: right;
 
     /* This is a bit tricky; we need to reserve space for the message
        controls even when the message isn't hovered, so that hover
