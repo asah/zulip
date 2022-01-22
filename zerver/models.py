@@ -2986,8 +2986,8 @@ class AbstractUserMessage(models.Model):
         "wildcard_mentioned",
         "historical",
         # Unused flags can't be edited.
-        "force_expand",
-        "force_collapse",
+        #"force_expand",  
+        #"force_collapse",
         "summarize_in_home",
         "summarize_in_stream",
     }

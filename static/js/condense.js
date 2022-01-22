@@ -23,7 +23,6 @@ This library implements two related, similar concepts:
 const _message_content_height_cache = new Map();
 
 export function fc_uncollapse(row, message) {
-    console.time('fc_uncollapse');
     const mbox = row.find(".messagebox");
     mbox.css("height", "");
     mbox.find(".messagebox-content").show();
@@ -39,7 +38,6 @@ export function fc_collapse(row, message, datestr_cutoff) {
     // todo: performance on initial rendering - static rendering?
     // also, I left in a lot of old code for preparing content
     // which is ultimate hidden (left to avoid merge conflicts)
-    console.time('fc_collapse');
     row.children(".date_row").hide();
     const mbox = row.find(".messagebox").css("height", "20px");
     if (row.hasClass("mention")) {
@@ -53,7 +51,6 @@ export function fc_collapse(row, message, datestr_cutoff) {
 	const datestr = format(fromUnixTime(message.timestamp), "MMM d");
 	mbox.find(".fc_message_time").text(datestr);
     }
-    //console.timeEnd('fc_collapse');
 }
 
 function show_more_link(row) {
@@ -81,11 +78,11 @@ function uncondense_row(row) {
 export function uncollapse(row) {
     // Uncollapse a message, restoring the condensed message [More] or
     // [Show less] link if necessary.
-    console.log('uncollapse');
     const message = message_lists.current.get(rows.id(row));
     fc_uncollapse(row, message);
     message.collapsed = false;
-    message_flags.save_uncollapsed(message);
+    message.unread = false;
+    message_flags.save_force_uncollapsed(message);
 
     const process_row = function process_row(row) {
         const content = row.find(".message_content");
@@ -119,6 +116,7 @@ export function collapse(row) {
     // Collapse a message, hiding the condensed message [More] or
     // [Show less] link if necessary.
     const message = message_lists.current.get(rows.id(row));
+    message.unread = false;
     message.collapsed = true;
     const datestr_cutoff = getUnixTime(startOfToday());
     fc_collapse(row, message, datestr_cutoff);
@@ -131,7 +129,7 @@ export function collapse(row) {
         return;
     }
 
-    message_flags.save_collapsed(message);
+    message_flags.save_force_collapsed(message);
 
     const process_row = function process_row(row) {
         row.find(".message_content").addClass("collapsed");
@@ -261,11 +259,7 @@ export function condense_and_collapse(elems) {
         // Completely hide the message and replace it with a [+]
         // link if the user has collapsed it.
 	// do this early, since it speeds up rendering
-//x	console.log("message.collapsed"); console.log(message.collapsed); 
-//x	console.log("message.unread"); console.log(message.unread); 
-//x	console.log("message.force_uncollapsed"); console.log(message.force_uncollapsed); 
-        if (message.collapsed) { // || (!message.unread && !message.force_uncollapsed)) {
-//x	    console.log("message.collapsed || (!message.unread && !message.force_uncollapsed)");
+        if (message.collapsed || (!message.unread && !message.force_uncollapsed)) {
 	    fc_collapse($(elem), message, datestr_cutoff);
             content.addClass("collapsed");
             $(elem).find(".message_expander").show();
@@ -308,14 +302,11 @@ export function initialize() {
         // uncondensing it.
         const row = $(this).closest(".message_row");
         const message = message_lists.current.get(rows.id(row));
-	if ($(this).hasClass(".fc_message_expander") || $(this).hasClass(".fc_summary")) {
-	    message.force_uncollapsed = true;
-	    message_flags.save_force_uncollapsed(message);
-	}
         const content = row.find(".message_content");
-        if (message.collapsed) {
+	const is_fc = ($(this).hasClass("fc_message_expander") || $(this).hasClass("fc_summary"));
+        if (message.collapsed || is_fc) {
             // Uncollapse.
-            uncollapse(row);
+	    uncollapse(row);
         } else if (content.hasClass("condensed")) {
             // Uncondense (show the full long message).
             message.condensed = false;
