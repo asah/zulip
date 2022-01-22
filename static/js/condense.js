@@ -4,6 +4,7 @@ import { format, getUnixTime, startOfToday, fromUnixTime } from "date-fns";
 import * as message_flags from "./message_flags";
 import * as message_lists from "./message_lists";
 import * as message_viewport from "./message_viewport";
+import * as popovers from "./popovers";
 import * as recent_topics_util from "./recent_topics_util";
 import * as rows from "./rows";
 
@@ -145,6 +146,7 @@ export function collapse(row) {
 }
 
 export function toggle_collapse(message) {
+    popovers.hide_all();
     if (message.is_me_message) {
         // Disabled temporarily because /me messages don't have a
         // styling for collapsing /me messages (they only recently
@@ -259,7 +261,11 @@ export function condense_and_collapse(elems) {
         // Completely hide the message and replace it with a [+]
         // link if the user has collapsed it.
 	// do this early, since it speeds up rendering
+//x	console.log("message.collapsed"); console.log(message.collapsed); 
+//x	console.log("message.unread"); console.log(message.unread); 
+//x	console.log("message.force_uncollapsed"); console.log(message.force_uncollapsed); 
         if (message.collapsed) { // || (!message.unread && !message.force_uncollapsed)) {
+//x	    console.log("message.collapsed || (!message.unread && !message.force_uncollapsed)");
 	    fc_collapse($(elem), message, datestr_cutoff);
             content.addClass("collapsed");
             $(elem).find(".message_expander").show();
