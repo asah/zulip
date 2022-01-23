@@ -2,27 +2,25 @@
 
 {% block content %}
     {% if top_reacted_msgs %}
-	Top 3 messages with the most reactions...<p/>
-        {% for msg in top_reacted_msgs %}
-        <div class='hot_convo_message_content_block'>
-          <!--
-SC:
-{{ msg.num_reactions }} /
-{{ msg.weighted_num_reactions }} /
-{{ msg.lnlen }} /
-{{ msg.score }}
- -->
-	  <span style="font-size:14px">
-	    {{ msg.stream_name }} | 
-	    <a href="{{ msg.near_message_url }}">{{ msg.subject }}</a>
-	  </span>
-          {{ msg.rendered_content_truncated|safe }}
-	  <hr/>
+    <p style="font-family:sans-serif; font-size:14px; font-weight:normal; margin:10px 0"><b>Most-reacted messages</b></p>
+        <div class='messages'>
+            {% for msg in top_reacted_msgs %}
+            <div class='hot_convo_recipient_block'>
+                <!-- SC: {{ msg.num_reactions }} / {{ msg.weighted_num_reactions }} / {{ msg.lnlen }} / {{ msg.score }} -->
+                <div class='hot_convo_recipient_header'>
+                    {{ msg.stream_name }} | 
+                    <a href="{{ msg.near_message_url }}">{{ msg.subject }}</a>
+                </div>
+                <div class='hot_convo_message_content_block'>
+                    {{ msg.rendered_content_truncated|replace('<div>', '<div style="margin-top:-10px">')||safe }}
+                </div>
+            </div>
+            {% endfor %}
         </div>
-        {% endfor %}
     {% endif %}
     {% if veryhot_conversations %}
-	New in the past day...<p/>
+    <hr/>
+        <p style="font-family:sans-serif; font-size:14px; font-weight:normal; margin:10px 0"><b>New in the past day</b></p>
         {% for convo in veryhot_conversations %}
         <div class='messages'>
             {% for recipient_block in convo.first_few_messages %}
@@ -45,9 +43,9 @@ SC:
     {% endif %}
 
     {% if hot_conversations %}
-        {% if veryhot_conversations %}
-	<hr/>
-	Older messages...<p/>
+    {% if veryhot_conversations %}
+        <hr/>
+        <p style="font-family:sans-serif; font-size:14px; font-weight:normal; margin:10px 0"><b>Older messages</b></p>
         {% endif %}
 
         {% for convo in hot_conversations %}
