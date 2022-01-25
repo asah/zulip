@@ -76,6 +76,7 @@ from zerver.models import (
     get_realm,
     get_stream,
 )
+from zilencer.models import RemoteZulipServerAuditLog
 
 if settings.ZILENCER_ENABLED:
     from zilencer.models import (
@@ -91,13 +92,13 @@ if settings.ZILENCER_ENABLED:
 class BouncerTestCase(ZulipTestCase):
     def setUp(self) -> None:
         self.server_uuid = "6cde5f7a-1f7e-4978-9716-49f69ebfc9fe"
-        server = RemoteZulipServer(
+        self.server = RemoteZulipServer(
             uuid=self.server_uuid,
             api_key="magic_secret_api_key",
             hostname="demo.example.com",
             last_updated=now(),
         )
-        server.save()
+        self.server.save()
         super().setUp()
 
     def tearDown(self) -> None:
@@ -163,6 +164,16 @@ class PushBouncerNotificationTest(BouncerTestCase):
             subdomain="",
         )
         self.assert_json_error(result, "Must validate with valid Zulip server API key")
+
+        # Try with deactivated remote servers
+        self.server.deactivated = True
+        self.server.save()
+        result = self.uuid_post(self.server_uuid, endpoint, self.get_generic_payload("unregister"))
+        self.assert_json_error_contains(
+            result,
+            "The mobile push notification service registration for your server has been deactivated",
+            401,
+        )
 
     def test_register_remote_push_user_paramas(self) -> None:
         token = "111222"
@@ -267,6 +278,16 @@ class PushBouncerNotificationTest(BouncerTestCase):
             result,
             f"Zulip server auth failure: {credentials_uuid} is not registered -- did you run `manage.py register_server`?",
             status_code=401,
+        )
+
+        # Try with deactivated remote servers
+        self.server.deactivated = True
+        self.server.save()
+        result = self.uuid_post(self.server_uuid, endpoint, self.get_generic_payload("register"))
+        self.assert_json_error_contains(
+            result,
+            "The mobile push notification service registration for your server has been deactivated",
+            401,
         )
 
     def test_remote_push_user_endpoints(self) -> None:
@@ -2269,7 +2290,7 @@ class GCMSendTest(PushNotificationTest):
             )
 
     def test_json_request_raises_ioerror(self, mock_gcm: mock.MagicMock) -> None:
-        mock_gcm.json_request.side_effect = IOError("error")
+        mock_gcm.json_request.side_effect = OSError("error")
         with self.assertLogs("zerver.lib.push_notifications", level="WARNING") as logger:
             send_android_push_notification_to_user(self.user_profile, {}, {})
             self.assertIn(
@@ -2465,6 +2486,44 @@ class TestPushNotificationsContent(ZulipTestCase):
 
 @skipUnless(settings.ZILENCER_ENABLED, "requires zilencer")
 class PushBouncerSignupTest(ZulipTestCase):
+    def test_deactivate_remote_server(self) -> None:
+        zulip_org_id = str(uuid.uuid4())
+        zulip_org_key = get_random_string(64)
+        request = dict(
+            zulip_org_id=zulip_org_id,
+            zulip_org_key=zulip_org_key,
+            hostname="example.com",
+            contact_email="server-admin@example.com",
+        )
+        result = self.client_post("/api/v1/remotes/server/register", request)
+        self.assert_json_success(result)
+        server = RemoteZulipServer.objects.get(uuid=zulip_org_id)
+        self.assertEqual(server.hostname, "example.com")
+        self.assertEqual(server.contact_email, "server-admin@example.com")
+
+        request = dict(zulip_org_id=zulip_org_id, zulip_org_key=zulip_org_key)
+        result = self.uuid_post(
+            zulip_org_id, "/api/v1/remotes/server/deactivate", request, subdomain=""
+        )
+        self.assert_json_success(result)
+
+        server = RemoteZulipServer.objects.get(uuid=zulip_org_id)
+        remote_realm_audit_log = RemoteZulipServerAuditLog.objects.filter(
+            event_type=RealmAuditLog.REMOTE_SERVER_DEACTIVATED
+        ).last()
+        assert remote_realm_audit_log is not None
+        self.assertTrue(server.deactivated)
+
+        # Now test that trying to deactivate again reports the right error.
+        result = self.uuid_post(
+            zulip_org_id, "/api/v1/remotes/server/deactivate", request, subdomain=""
+        )
+        self.assert_json_error(
+            result,
+            "The mobile push notification service registration for your server has been deactivated",
+            status_code=401,
+        )
+
     def test_push_signup_invalid_host(self) -> None:
         zulip_org_id = str(uuid.uuid4())
         zulip_org_key = get_random_string(64)

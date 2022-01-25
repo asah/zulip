@@ -357,7 +357,7 @@ community and fixing issues in Zulip now. Having good contributions
 and building a reputation for doing good work is the best way to have
 a strong application.
 
-Our [GSoC project ideas page][gsoc-guide] has lots more details on how
+Our [GSoC program page][gsoc-guide] has lots more details on how
 Zulip does GSoC, as well as project ideas. Note, however, that the project idea
 list is maintained only during the GSoC application period, so if
 you're looking at some other time of year, the project list is likely
@@ -370,7 +370,7 @@ same as with GSoC, and ZSoC has no separate application process; your
 GSoC application is your ZSoC application. If we'd like to select you
 for ZSoC, we'll contact you when the GSoC results are announced.
 
-[gsoc-guide]: https://zulip.readthedocs.io/en/latest/contributing/gsoc-ideas.html
+[gsoc-guide]: https://zulip.readthedocs.io/en/latest/contributing/gsoc.html
 [gsoc-faq]: https://developers.google.com/open-source/gsoc/faq
 
 ## Stay connected

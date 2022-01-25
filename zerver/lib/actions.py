@@ -150,6 +150,7 @@ from zerver.lib.streams import (
     check_stream_access_based_on_stream_post_policy,
     create_stream_if_needed,
     get_default_value_for_history_public_to_subscribers,
+    get_stream_permission_policy_name,
     get_web_public_streams_queryset,
     render_stream_description,
     send_stream_creation_event,
@@ -5007,65 +5008,149 @@ def do_change_can_create_users(user_profile: UserProfile, value: bool) -> None:
     user_profile.save(update_fields=["can_create_users"])
 
 
-def do_change_stream_invite_only(
-    stream: Stream, invite_only: bool, history_public_to_subscribers: Optional[bool] = None
+def send_change_stream_permission_notification(
+    stream: Stream,
+    *,
+    old_policy_name: str,
+    new_policy_name: str,
+    acting_user: UserProfile,
 ) -> None:
-    history_public_to_subscribers = get_default_value_for_history_public_to_subscribers(
-        stream.realm,
-        invite_only,
-        history_public_to_subscribers,
-    )
-    stream.invite_only = invite_only
-    stream.history_public_to_subscribers = history_public_to_subscribers
-    stream.is_web_public = False
-    stream.save(update_fields=["invite_only", "history_public_to_subscribers", "is_web_public"])
-    event = dict(
-        op="update",
-        type="stream",
-        property="invite_only",
-        value=invite_only,
-        history_public_to_subscribers=history_public_to_subscribers,
-        is_web_public=False,
-        stream_id=stream.id,
-        name=stream.name,
-    )
-    send_event(stream.realm, event, can_access_stream_user_ids(stream))
+    sender = get_system_bot(settings.NOTIFICATION_BOT, acting_user.realm_id)
+    user_mention = silent_mention_syntax_for_user(acting_user)
 
-
-def do_make_stream_web_public(stream: Stream) -> None:
-    stream.is_web_public = True
-    stream.invite_only = False
-    stream.history_public_to_subscribers = True
-    stream.save(update_fields=["invite_only", "history_public_to_subscribers", "is_web_public"])
-
-    # We reuse "invite_only" stream update API route here because
-    # both are similar events and similar UI updates will be required
-    # by the client to update this property for the user.
-    event = dict(
-        op="update",
-        type="stream",
-        property="invite_only",
-        value=False,
-        history_public_to_subscribers=True,
-        is_web_public=True,
-        stream_id=stream.id,
-        name=stream.name,
-    )
-    send_event(stream.realm, event, can_access_stream_user_ids(stream))
+    with override_language(stream.realm.default_language):
+        notification_string = _(
+            "{user} changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **{old_policy}** to **{new_policy}**."
+        )
+        notification_string = notification_string.format(
+            user=user_mention,
+            old_policy=old_policy_name,
+            new_policy=new_policy_name,
+        )
+        internal_send_stream_message(
+            sender, stream, Realm.STREAM_EVENTS_NOTIFICATION_TOPIC, notification_string
+        )
 
 
 def do_change_stream_permission(
     stream: Stream,
+    *,
     invite_only: Optional[bool] = None,
     history_public_to_subscribers: Optional[bool] = None,
     is_web_public: Optional[bool] = None,
+    acting_user: UserProfile,
 ) -> None:
-    # TODO: Ideally this would be just merged with do_change_stream_invite_only.
+    old_invite_only_value = stream.invite_only
+    old_history_public_to_subscribers_value = stream.history_public_to_subscribers
+    old_is_web_public_value = stream.is_web_public
+
+    # A note on these assertions: It's possible we'd be better off
+    # making all callers of this function pass the full set of
+    # parameters, rather than having default values.  Doing so would
+    # allow us to remove the messy logic below, where we sometimes
+    # ignore the passed parameters.
+    #
+    # But absent such a refactoring, it's important to assert that
+    # we're not requesting an unsupported configurations.
     if is_web_public:
-        do_make_stream_web_public(stream)
+        assert history_public_to_subscribers is not False
+        assert invite_only is not True
+        stream.is_web_public = True
+        stream.invite_only = False
+        stream.history_public_to_subscribers = True
     else:
         assert invite_only is not None
-        do_change_stream_invite_only(stream, invite_only, history_public_to_subscribers)
+        # is_web_public is Falsey
+        history_public_to_subscribers = get_default_value_for_history_public_to_subscribers(
+            stream.realm,
+            invite_only,
+            history_public_to_subscribers,
+        )
+        stream.invite_only = invite_only
+        stream.history_public_to_subscribers = history_public_to_subscribers
+        stream.is_web_public = False
+
+    with transaction.atomic():
+        stream.save(update_fields=["invite_only", "history_public_to_subscribers", "is_web_public"])
+
+        event_time = timezone_now()
+        if old_invite_only_value != stream.invite_only:
+            RealmAuditLog.objects.create(
+                realm=stream.realm,
+                acting_user=acting_user,
+                modified_stream=stream,
+                event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+                event_time=event_time,
+                extra_data=orjson.dumps(
+                    {
+                        RealmAuditLog.OLD_VALUE: old_invite_only_value,
+                        RealmAuditLog.NEW_VALUE: stream.invite_only,
+                        "property": "invite_only",
+                    }
+                ).decode(),
+            )
+
+        if old_history_public_to_subscribers_value != stream.history_public_to_subscribers:
+            RealmAuditLog.objects.create(
+                realm=stream.realm,
+                acting_user=acting_user,
+                modified_stream=stream,
+                event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+                event_time=event_time,
+                extra_data=orjson.dumps(
+                    {
+                        RealmAuditLog.OLD_VALUE: old_history_public_to_subscribers_value,
+                        RealmAuditLog.NEW_VALUE: stream.history_public_to_subscribers,
+                        "property": "history_public_to_subscribers",
+                    }
+                ).decode(),
+            )
+
+        if old_is_web_public_value != stream.is_web_public:
+            RealmAuditLog.objects.create(
+                realm=stream.realm,
+                acting_user=acting_user,
+                modified_stream=stream,
+                event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+                event_time=event_time,
+                extra_data=orjson.dumps(
+                    {
+                        RealmAuditLog.OLD_VALUE: old_is_web_public_value,
+                        RealmAuditLog.NEW_VALUE: stream.is_web_public,
+                        "property": "is_web_public",
+                    }
+                ).decode(),
+            )
+
+    event = dict(
+        op="update",
+        type="stream",
+        property="invite_only",
+        value=stream.invite_only,
+        history_public_to_subscribers=stream.history_public_to_subscribers,
+        is_web_public=stream.is_web_public,
+        stream_id=stream.id,
+        name=stream.name,
+    )
+    send_event(stream.realm, event, can_access_stream_user_ids(stream))
+
+    old_policy_name = get_stream_permission_policy_name(
+        invite_only=old_invite_only_value,
+        history_public_to_subscribers=old_history_public_to_subscribers_value,
+        is_web_public=old_is_web_public_value,
+    )
+    new_policy_name = get_stream_permission_policy_name(
+        invite_only=stream.invite_only,
+        history_public_to_subscribers=stream.history_public_to_subscribers,
+        is_web_public=stream.is_web_public,
+    )
+    send_change_stream_permission_notification(
+        stream,
+        old_policy_name=old_policy_name,
+        new_policy_name=new_policy_name,
+        acting_user=acting_user,
+    )
 
 
 def send_change_stream_post_policy_notification(
@@ -5230,11 +5315,11 @@ def send_change_stream_description_notification(
     with override_language(stream.realm.default_language):
         notification_string = _(
             "{user} changed the description for this stream.\n\n"
-            "Old description:\n"
+            "* **Old description:**\n"
             "``` quote\n"
             "{old_description}\n"
             "```\n"
-            "New description:\n"
+            "* **New description:**\n"
             "``` quote\n"
             "{new_description}\n"
             "```"

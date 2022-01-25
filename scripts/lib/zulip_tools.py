@@ -620,7 +620,7 @@ def has_application_server(once: bool = False) -> bool:
 def list_supervisor_processes(*args: str) -> List[str]:
     worker_status = subprocess.run(
         ["supervisorctl", "status", *args],
-        universal_newlines=True,
+        text=True,
         stdout=subprocess.PIPE,
     )
     # `supervisorctl status` returns 3 if any are stopped, which is
@@ -668,6 +668,24 @@ def start_arg_parser(action: str, add_help: bool = False) -> argparse.ArgumentPa
             help="Do not restart Tornado processes",
         )
     return parser
+
+
+def listening_publicly(port: int) -> List[str]:
+    filter = f"sport = :{port} and not src 127.0.0.1:{port} and not src [::1]:{port}"
+    # Parse lines that look like this:
+    # tcp    LISTEN     0          128             0.0.0.0:25672        0.0.0.0:*
+    lines = (
+        subprocess.check_output(
+            ["/bin/ss", "-Hnl", filter],
+            universal_newlines=True,
+            # Hosts with IPv6 disabled will get "RTNETLINK answers: Invalid
+            # argument"; eat stderr to hide that
+            stderr=subprocess.DEVNULL,
+        )
+        .strip()
+        .splitlines()
+    )
+    return [line.split()[4] for line in lines]
 
 
 if __name__ == "__main__":

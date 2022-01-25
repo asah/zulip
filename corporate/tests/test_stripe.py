@@ -15,6 +15,7 @@ from unittest.mock import Mock, patch
 import orjson
 import responses
 import stripe
+import stripe.util
 from django.conf import settings
 from django.core import signing
 from django.http import HttpResponse
@@ -190,7 +191,7 @@ def read_stripe_fixture(
             requestor.interpret_response(
                 fixture["http_body"], fixture["http_status"], fixture["headers"]
             )
-        return stripe.util.convert_to_stripe_object(fixture)
+        return stripe.util.convert_to_stripe_object(fixture)  # type: ignore[attr-defined] # missing from stubs
 
     return _read_stripe_fixture
 
@@ -497,7 +498,7 @@ class StripeTestCase(ZulipTestCase):
         stripe_session_dict["setup_intent"] = stripe_setup_intent.id
 
         event_payload = {
-            "id": "evt_{}".format(get_random_string(24)),
+            "id": f"evt_{get_random_string(24)}",
             "object": "event",
             "data": {"object": stripe_session_dict},
             "type": "checkout.session.completed",
@@ -3773,9 +3774,7 @@ class StripeTest(StripeTestCase):
         # customer's balance.
         stripe_customer_id = customer.stripe_customer_id
         assert stripe_customer_id is not None
-        _, cb_txn = stripe.Customer.list_balance_transactions(  # type: ignore[attr-defined] # mypy seems to incorrectly think that this function doesn't exist
-            stripe_customer_id
-        )
+        _, cb_txn = stripe.Customer.list_balance_transactions(stripe_customer_id)
         self.assertEqual(cb_txn.amount, -7200)
         self.assertEqual(
             cb_txn.description,

@@ -325,7 +325,11 @@ def update_stream_backend(
 
     if is_private is not None or is_web_public is not None:
         do_change_stream_permission(
-            stream, is_private, history_public_to_subscribers, is_web_public
+            stream,
+            invite_only=is_private,
+            history_public_to_subscribers=history_public_to_subscribers,
+            is_web_public=is_web_public,
+            acting_user=user_profile,
         )
     return json_success()
 

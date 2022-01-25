@@ -18,7 +18,10 @@ if ! check_version; then
     tmpdir="$(mktemp -d)"
     trap 'rm -r "$tmpdir"' EXIT
     cd "$tmpdir"
-    curl -fLO "https://registry.npmjs.org/yarn/-/$tarball"
+    tarball_url="https://registry.npmjs.org/yarn/-/$tarball"
+    echo $tarball_url
+    #curl -fLO $tarball_url
+    wget $tarball_url
     sha256sum -c <<<"$sha256 $tarball"
     rm -rf /srv/zulip-yarn
     mkdir /srv/zulip-yarn

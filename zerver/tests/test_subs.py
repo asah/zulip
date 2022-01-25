@@ -467,6 +467,44 @@ class StreamAdminTest(ZulipTestCase):
         self.assertFalse(stream.invite_only)
         self.assertTrue(stream.history_public_to_subscribers)
 
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        self.assert_length(messages, 1)
+        expected_notification = (
+            f"@_**King Hamlet|{user_profile.id}** changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **Private, protected history** to **Public**."
+        )
+        self.assertEqual(messages[0].content, expected_notification)
+
+        history_public_to_subscribers_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert history_public_to_subscribers_log is not None
+
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: False,
+                RealmAuditLog.NEW_VALUE: True,
+                "property": "history_public_to_subscribers",
+            }
+        ).decode()
+        self.assertEqual(history_public_to_subscribers_log.extra_data, expected_extra_data)
+
+        invite_only_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).order_by("-id")[1]
+        assert invite_only_log is not None
+
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: True,
+                RealmAuditLog.NEW_VALUE: False,
+                "property": "invite_only",
+            }
+        ).decode()
+        self.assertEqual(invite_only_log.extra_data, expected_extra_data)
+
         do_change_user_role(user_profile, UserProfile.ROLE_MEMBER, acting_user=None)
         params = {
             "stream_name": orjson.dumps("private_stream_2").decode(),
@@ -493,6 +531,44 @@ class StreamAdminTest(ZulipTestCase):
         self.assertFalse(stream.invite_only)
         self.assertTrue(stream.history_public_to_subscribers)
 
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        self.assert_length(messages, 1)
+        expected_notification = (
+            f"@_**King Hamlet|{user_profile.id}** changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **Private, protected history** to **Public**."
+        )
+        self.assertEqual(messages[0].content, expected_notification)
+
+        history_public_to_subscribers_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert history_public_to_subscribers_log is not None
+
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: False,
+                RealmAuditLog.NEW_VALUE: True,
+                "property": "history_public_to_subscribers",
+            }
+        ).decode()
+        self.assertEqual(history_public_to_subscribers_log.extra_data, expected_extra_data)
+
+        invite_only_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).order_by("-id")[1]
+        assert invite_only_log is not None
+
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: True,
+                RealmAuditLog.NEW_VALUE: False,
+                "property": "invite_only",
+            }
+        ).decode()
+        self.assertEqual(invite_only_log.extra_data, expected_extra_data)
+
     def test_make_stream_private(self) -> None:
         user_profile = self.example_user("hamlet")
         self.login_user(user_profile)
@@ -505,12 +581,50 @@ class StreamAdminTest(ZulipTestCase):
             "stream_name": orjson.dumps("public_stream_1").decode(),
             "is_private": orjson.dumps(True).decode(),
         }
-        stream_id = get_stream("public_stream_1", realm).id
+        stream_id = self.subscribe(user_profile, "public_stream_1").id
         result = self.client_patch(f"/json/streams/{stream_id}", params)
         self.assert_json_success(result)
         stream = get_stream("public_stream_1", realm)
         self.assertTrue(stream.invite_only)
         self.assertFalse(stream.history_public_to_subscribers)
+
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        self.assert_length(messages, 1)
+        expected_notification = (
+            f"@_**King Hamlet|{user_profile.id}** changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **Public** to **Private, protected history**."
+        )
+        self.assertEqual(messages[0].content, expected_notification)
+
+        history_public_to_subscribers_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert history_public_to_subscribers_log is not None
+
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: True,
+                RealmAuditLog.NEW_VALUE: False,
+                "property": "history_public_to_subscribers",
+            }
+        ).decode()
+        self.assertEqual(history_public_to_subscribers_log.extra_data, expected_extra_data)
+
+        invite_only_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).order_by("-id")[1]
+        assert invite_only_log is not None
+
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: False,
+                RealmAuditLog.NEW_VALUE: True,
+                "property": "invite_only",
+            }
+        ).decode()
+        self.assertEqual(invite_only_log.extra_data, expected_extra_data)
 
         default_stream = self.make_stream("default_stream", realm=realm)
         do_add_default_stream(default_stream)
@@ -547,6 +661,44 @@ class StreamAdminTest(ZulipTestCase):
         stream = get_stream("public_stream_2", realm)
         self.assertTrue(stream.invite_only)
         self.assertFalse(stream.history_public_to_subscribers)
+
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        self.assert_length(messages, 1)
+        expected_notification = (
+            f"@_**King Hamlet|{user_profile.id}** changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **Public** to **Private, protected history**."
+        )
+        self.assertEqual(messages[0].content, expected_notification)
+
+        history_public_to_subscribers_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert history_public_to_subscribers_log is not None
+
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: True,
+                RealmAuditLog.NEW_VALUE: False,
+                "property": "history_public_to_subscribers",
+            }
+        ).decode()
+        self.assertEqual(history_public_to_subscribers_log.extra_data, expected_extra_data)
+
+        invite_only_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).order_by("-id")[1]
+        assert invite_only_log is not None
+
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: False,
+                RealmAuditLog.NEW_VALUE: True,
+                "property": "invite_only",
+            }
+        ).decode()
+        self.assertEqual(invite_only_log.extra_data, expected_extra_data)
 
     def test_create_web_public_stream(self) -> None:
         user_profile = self.example_user("hamlet")
@@ -614,7 +766,30 @@ class StreamAdminTest(ZulipTestCase):
         self.assertFalse(stream.invite_only)
         self.assertFalse(stream.history_public_to_subscribers)
 
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        self.assert_length(messages, 1)
+        expected_notification = (
+            f"@_**{user_profile.full_name}|{user_profile.id}** changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **Private, protected history** to **Public, protected history**."
+        )
+        self.assertEqual(messages[0].content, expected_notification)
+
+        realm_audit_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert realm_audit_log is not None
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: True,
+                RealmAuditLog.NEW_VALUE: False,
+                "property": "invite_only",
+            }
+        ).decode()
+        self.assertEqual(realm_audit_log.extra_data, expected_extra_data)
+
     def test_make_stream_private_with_public_history(self) -> None:
+        # Convert a public stream to a private stream with shared history
         user_profile = self.example_user("hamlet")
         self.login_user(user_profile)
         realm = user_profile.realm
@@ -626,19 +801,83 @@ class StreamAdminTest(ZulipTestCase):
             "is_private": orjson.dumps(True).decode(),
             "history_public_to_subscribers": orjson.dumps(True).decode(),
         }
-        stream_id = get_stream("public_history_stream", realm).id
+        stream_id = self.subscribe(user_profile, "public_history_stream").id
         result = self.client_patch(f"/json/streams/{stream_id}", params)
         self.assert_json_success(result)
         stream = get_stream("public_history_stream", realm)
         self.assertTrue(stream.invite_only)
         self.assertTrue(stream.history_public_to_subscribers)
 
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        self.assert_length(messages, 1)
+        expected_notification = (
+            f"@_**King Hamlet|{user_profile.id}** changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **Public** to **Private, shared history**."
+        )
+        self.assertEqual(messages[0].content, expected_notification)
+
+        realm_audit_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert realm_audit_log is not None
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: False,
+                RealmAuditLog.NEW_VALUE: True,
+                "property": "invite_only",
+            }
+        ).decode()
+        self.assertEqual(realm_audit_log.extra_data, expected_extra_data)
+
+        # Convert a private stream with protected history to a private stream
+        # with shared history.
+        self.make_stream(
+            "private_protected_stream",
+            realm=realm,
+            invite_only=True,
+            history_public_to_subscribers=False,
+        )
+        params = {
+            "stream_name": orjson.dumps("public_protected_stream").decode(),
+            "is_private": orjson.dumps(True).decode(),
+            "history_public_to_subscribers": orjson.dumps(True).decode(),
+        }
+        stream_id = self.subscribe(user_profile, "private_protected_stream").id
+        result = self.client_patch(f"/json/streams/{stream_id}", params)
+        self.assert_json_success(result)
+        stream = get_stream("private_protected_stream", realm)
+        self.assertTrue(stream.invite_only)
+        self.assertTrue(stream.history_public_to_subscribers)
+
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        self.assert_length(messages, 1)
+        expected_notification = (
+            f"@_**King Hamlet|{user_profile.id}** changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **Private, protected history** to **Private, shared history**."
+        )
+        self.assertEqual(messages[0].content, expected_notification)
+
+        realm_audit_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert realm_audit_log is not None
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: False,
+                RealmAuditLog.NEW_VALUE: True,
+                "property": "history_public_to_subscribers",
+            }
+        ).decode()
+        self.assertEqual(realm_audit_log.extra_data, expected_extra_data)
+
     def test_make_stream_web_public(self) -> None:
         user_profile = self.example_user("hamlet")
         self.login_user(user_profile)
         realm = user_profile.realm
         self.make_stream("test_stream", realm=realm)
-        stream_id = get_stream("test_stream", realm).id
+        stream_id = self.subscribe(user_profile, "test_stream").id
 
         params = {
             "stream_name": orjson.dumps("test_stream").decode(),
@@ -699,6 +938,28 @@ class StreamAdminTest(ZulipTestCase):
         self.assertFalse(stream.invite_only)
         self.assertTrue(stream.history_public_to_subscribers)
 
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        self.assert_length(messages, 1)
+        expected_notification = (
+            f"@_**King Hamlet|{user_profile.id}** changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **Public** to **Web public**."
+        )
+        self.assertEqual(messages[0].content, expected_notification)
+
+        realm_audit_log = RealmAuditLog.objects.filter(
+            event_type=RealmAuditLog.STREAM_PROPERTY_CHANGED,
+            modified_stream=stream,
+        ).last()
+        assert realm_audit_log is not None
+        expected_extra_data = orjson.dumps(
+            {
+                RealmAuditLog.OLD_VALUE: False,
+                RealmAuditLog.NEW_VALUE: True,
+                "property": "is_web_public",
+            }
+        ).decode()
+        self.assertEqual(realm_audit_log.extra_data, expected_extra_data)
+
     def test_try_make_stream_public_with_private_history(self) -> None:
         user_profile = self.example_user("hamlet")
         self.login_user(user_profile)
@@ -711,12 +972,32 @@ class StreamAdminTest(ZulipTestCase):
             "is_private": orjson.dumps(False).decode(),
             "history_public_to_subscribers": orjson.dumps(False).decode(),
         }
-        stream_id = get_stream("public_stream", realm).id
+        stream_id = self.subscribe(user_profile, "public_stream").id
         result = self.client_patch(f"/json/streams/{stream_id}", params)
         self.assert_json_success(result)
         stream = get_stream("public_stream", realm)
         self.assertFalse(stream.invite_only)
         self.assertTrue(stream.history_public_to_subscribers)
+
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        self.assert_length(messages, 1)
+
+        # This test verifies the (weird) outcome for a transition that
+        # is not currently possible.  For background, we only support
+        # public streams with private history if
+        # is_zephyr_mirror_realm, and don't allow changing stream
+        # permissions in such realms.  So changing the
+        # history_public_to_subscribers property of a public stream is
+        # not possible in Zulip today; this test covers that situation
+        # and will produce the odd/wrong output of "Public to Public".
+        #
+        # This test should be corrected if we add support for such a
+        # stream configuration transition.
+        expected_notification = (
+            f"@_**King Hamlet|{user_profile.id}** changed the [access permissions](/help/stream-permissions) "
+            "for this stream from **Public** to **Public**."
+        )
+        self.assertEqual(messages[0].content, expected_notification)
 
     def test_subscriber_ids_with_stream_history_access(self) -> None:
         hamlet = self.example_user("hamlet")
@@ -1228,11 +1509,11 @@ class StreamAdminTest(ZulipTestCase):
         messages = get_topic_messages(user_profile, stream, "stream events")
         expected_notification = (
             f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n\n"
-            "Old description:\n"
+            "* **Old description:**\n"
             "``` quote\n"
             "Test description\n"
             "```\n"
-            "New description:\n"
+            "* **New description:**\n"
             "``` quote\n"
             "a multi line description\n"
             "```"
@@ -1290,11 +1571,11 @@ class StreamAdminTest(ZulipTestCase):
         messages = get_topic_messages(user_profile, stream, "stream events")
         expected_notification = (
             f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n\n"
-            "Old description:\n"
+            "* **Old description:**\n"
             "``` quote\n"
             "See https://zulip.com/team\n"
             "```\n"
-            "New description:\n"
+            "* **New description:**\n"
             "``` quote\n"
             "Test description\n"
             "```"

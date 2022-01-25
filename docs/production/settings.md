@@ -23,7 +23,7 @@ su zulip -c '/home/zulip/deployments/current/scripts/restart-server'
 Zulip has dozens of settings documented in the comments in
 `/etc/zulip/settings.py`; you can review [the latest version of the
 settings.py template][settings-py-template], and if you've upgraded
-from an old versions of Zulip, we recommend [carefully updating your
+from an old version of Zulip, we recommend [carefully updating your
 `/etc/zulip/settings.py`][update-settings-docs] to fold in the inline
 comment documentation for new configuration settings after upgrading
 to each new major release.
@@ -118,10 +118,11 @@ Some popular settings in `/etc/zulip/settings.py` include:
 
 ## Zulip announcement list
 
-If you haven't already, subscribe to the
-[zulip-announce](https://groups.google.com/g/zulip-announce)
-list so that you can receive important announces like new Zulip
-releases or major changes to the app ecosystem.
+Subscribe to the [Zulip announcements email
+list](https://groups.google.com/g/zulip-announce) for server administrators, if
+you have not done so already. This extremely low-traffic list is for important
+announcements, including [new releases](../overview/release-lifecycle.md) and
+security issues.
 
 ## Enjoy your Zulip installation!
 
