@@ -25,7 +25,7 @@ RUN echo locales locales/default_environment_locale select C.UTF-8 | debconf-set
 
 ARG VAGRANT_UID
 
-RUN pip3 install --upgrade pip \
+RUN \
     # We use https://github.com/gdraheim/docker-systemctl-replacement
     # to make services we install like PostgreSQL, Redis, etc. normally
     # managed by systemd start within Docker, which breaks normal
