@@ -31,7 +31,7 @@ const markdown_help_rows = [
     },
     {
         markdown: "*~*light*~*",
-        usage_html: "(or <kbd>Ctrl</kbd>+<kbd>L</kbd>)",
+        usage_html: "(or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>)",
     },
     {
         markdown: "~~strikethrough~~",

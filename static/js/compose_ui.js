@@ -199,7 +199,9 @@ export function handle_keydown(event, textarea) {
     // work regardless of whether Caps Lock was on or not.
     const key = event.key.toLowerCase();
     let type;
-    if (key === "b") {
+    if (key === "b" && event.shiftKey) {
+        type = "light";
+    } else if (key === "b") {
         type = "bold";
     } else if (key === "i" && !event.shiftKey) {
         type = "italic";
@@ -225,6 +227,7 @@ export function handle_keyup(event, textarea) {
 export function format_text(textarea, type) {
     const italic_syntax = "*";
     const bold_syntax = "**";
+    const light_syntax = "*~*";
     const bold_and_italic_syntax = "***";
     let is_selected_text_italic = false;
     let is_inner_text_italic = false;
@@ -253,6 +256,20 @@ export function format_text(textarea, type) {
         range.length > 4 &&
         selected_text.slice(0, bold_syntax.length) === bold_syntax &&
         selected_text.slice(-bold_syntax.length) === bold_syntax;
+
+    const is_selection_light = () =>
+        // First check if there are enough characters before/after selection.
+        range.start >= light_syntax.length &&
+        text.length - range.end >= light_syntax.length &&
+        // And then if the characters have light_syntax around them.
+        text.slice(range.start - light_syntax.length, range.start) === light_syntax &&
+        text.slice(range.end, range.end + light_syntax.length) === light_syntax;
+
+    const is_inner_text_light = () =>
+        // Check if selected text itself has light_syntax inside it.
+        range.length > 4 &&
+        selected_text.slice(0, light_syntax.length) === light_syntax &&
+        selected_text.slice(-light_syntax.length) === light_syntax;
 
     switch (type) {
         case "bold":
@@ -285,6 +302,37 @@ export function format_text(textarea, type) {
 
             // Otherwise, we don't have bold syntax, so we add it.
             wrapSelection(field, bold_syntax);
+            break;
+        case "light":
+            // Ctrl + Shift + B: Toggle light syntax on selection.
+
+            // If the selection is already surrounded by light syntax,
+            // remove it rather than adding another copy.
+            if (is_selection_light()) {
+                // Remove the light_syntax from text.
+                text =
+                    text.slice(0, range.start - light_syntax.length) +
+                    text.slice(range.start, range.end) +
+                    text.slice(range.end + light_syntax.length);
+                set(field, text);
+                field.setSelectionRange(
+                    range.start - light_syntax.length,
+                    range.end - light_syntax.length,
+                );
+                break;
+            } else if (is_inner_text_light()) {
+                // Remove light syntax inside the selection, if present.
+                text =
+                    text.slice(0, range.start) +
+                    text.slice(range.start + light_syntax.length, range.end - light_syntax.length) +
+                    text.slice(range.end);
+                set(field, text);
+                field.setSelectionRange(range.start, range.end - light_syntax.length * 2);
+                break;
+            }
+
+            // Otherwise, we don't have light syntax, so we add it.
+            wrapSelection(field, light_syntax);
             break;
         case "italic":
             // Ctrl + I: Toggle italic syntax on selection. This is
