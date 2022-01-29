@@ -254,6 +254,8 @@ def build_message_list(
             header_html = f"<a href='{stream_link}'>{stream.name}</a> > <a href='{narrow_link}'>{message.topic_name()}</a>"
         return {
             "plain": header,
+            "stream": stream.name,
+            "topic": message.topic_name(),
             "html": header_html,
             "stream_message": message.recipient.type_name() == "stream",
         }

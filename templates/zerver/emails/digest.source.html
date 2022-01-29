@@ -2,6 +2,17 @@
 
 {% block content %}
     <div style="width:100%">
+
+     {% if veryhot_conversations %}
+        <div>
+        {% for convo in veryhot_conversations %}
+            {% for recipient_block in convo.first_few_messages %}
+                {{recipient_block.stream}} &gt; {{recipient_block.topic}} {% if loop.index >= 1 %} | {% endif %}
+            {% endfor %}
+        {% endfor %}
+        </div>
+     {% endif %}
+
       <div style="float:left;padding-right:5px"><img height="60" width="60" src="https://forecast.chat/user_avatars/2/realm/night_logo.png?version=2" alt="forecast.chat logo"></div>
       <div style="float:left;text-align:left">
         <div style="font-size:18px;margin-top:8px"><b><a href="https://forecast.chat/">forecast.chat</a></b></div>
