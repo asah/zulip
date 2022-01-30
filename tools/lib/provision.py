@@ -7,6 +7,8 @@ import platform
 import subprocess
 import sys
 
+from nltk import download as nltk_download
+
 os.environ["PYTHONUNBUFFERED"] = "y"
 
 ZULIP_PATH = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -355,6 +357,9 @@ def main(options: argparse.Namespace) -> "NoReturn":
     # yarn and management commands expect to be run from the root of the
     # project.
     os.chdir(ZULIP_PATH)
+
+    nltk_download('stopwords')
+    nltk_download('punkt')
 
     # hash the apt dependencies
     sha_sum = hashlib.sha1()

@@ -191,3 +191,7 @@ soupsieve
 
 # Circuit-breaking for outgoing services
 circuitbreaker
+
+# keyword extraction
+rake-nltk
+bs4

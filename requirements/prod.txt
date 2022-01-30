@@ -61,6 +61,7 @@ beautifulsoup4==4.10.0 \
     --hash=sha256:c23ad23c521d818955a4151a67d81580319d4bf548d3d49f4223ae041ff98891
     # via
     #   -r requirements/common.in
+    #   bs4
     #   pyoembed
     #   zulip-bots
 boto3==1.20.41 \
@@ -73,6 +74,9 @@ botocore==1.23.41 \
     # via
     #   boto3
     #   s3transfer
+bs4==0.0.1 \
+    --hash=sha256:36ecea1fd7cc5c0c6e4a1ff075df26d50da647b75376626cc186e2212886dd3a
+    # via -r requirements/common.in
 cachetools==5.0.0 \
     --hash=sha256:486471dfa8799eb7ec503a8059e263db000cdda20075ce5e48903087f79d5fd6 \
     --hash=sha256:8fecd4203a38af17928be7b90689d8083603073622229ca7077b72d8e5a976e4
@@ -182,7 +186,9 @@ circuitbreaker==1.3.2 \
 click==8.0.3 \
     --hash=sha256:353f466495adaeb40b6b5f592f9f91cb22372351c84caeb068132442a4518ef3 \
     --hash=sha256:410e932b050f5eed773c4cda94de75971c89cdb3155a72a0831139a79e5ecb5b
-    # via zulip
+    # via
+    #   nltk
+    #   zulip
 cryptography==36.0.1 \
     --hash=sha256:0a817b961b46894c5ca8a66b599c745b9a3d9f822725221f0e0fe49dc043a3a3 \
     --hash=sha256:2d87cdcb378d3cfed944dac30596da1968f88fb96d7fc34fdae30a99054b2e31 \
@@ -418,12 +424,7 @@ importlib-metadata==4.10.1 ; python_version < "3.10" \
     --hash=sha256:951f0d8a5b7260e9db5e41d429285b5f451e928479f19d80818878527d36e95e
     # via
     #   -r requirements/common.in
-    #   click
-    #   cssutils
-    #   jsonschema
     #   markdown
-    #   redis
-    #   sqlalchemy
     #   zulip-bots
 ipython==7.31.1 \
     --hash=sha256:55df3e0bd0f94e715abd968bedd89d4e8a7bce4bf498fb123fed4f5398fea874 \
@@ -450,6 +451,10 @@ jmespath==0.10.0 \
     # via
     #   boto3
     #   botocore
+joblib==1.1.0 \
+    --hash=sha256:4158fcecd13733f8be669be0683b96ebdbbd38d23559f54dca7205aea1bf1e35 \
+    --hash=sha256:f21f109b3c7ff9d95f8387f752d0d9c34a02aa2f7060c2135f465da0e5160ff6
+    # via nltk
 jsonref==0.2 \
     --hash=sha256:b1e82fa0b62e2c2796a13e5401fe51790b248f6d9bf9d7212a3e31a3501b291f \
     --hash=sha256:f3c45b121cf6257eafabdc3a8008763aed1cd7da06dbabc59a9e4d2a5e4e6697
@@ -669,6 +674,10 @@ mypy-boto3-s3==1.20.35.post1 \
     --hash=sha256:d8a8fea7b974c456a864074972b9812e932cbdc83f061e346223bb0ac1cd0eb5 \
     --hash=sha256:e576fa0f3d1ea9ce53ad620ee565962687cdae5d8f1f8414db0669aed788836c
     # via -r requirements/common.in
+nltk==3.6.7 \
+    --hash=sha256:22e97be5d6c784d93a52d17860515cc50c5cfcc620b1f5c3747765041255a01e \
+    --hash=sha256:51bf1aef5304740a708be7c8e683f7798f03dc5c7a7e7feb758be9e95f4585e3
+    # via rake-nltk
 oauthlib==3.1.1 \
     --hash=sha256:42bf6354c2ed8c6acb54d971fce6f88193d97297e18602a3a886603f9d7730cc \
     --hash=sha256:8f0215fcc533dd8dd1bee6f4c412d4f0cd7297307d43ac61666389e3bc3198a3
@@ -1035,6 +1044,10 @@ pyyaml==6.0 \
 qrcode==7.3.1 \
     --hash=sha256:375a6ff240ca9bd41adc070428b5dfc1dcfbb0f2507f1ac848f6cded38956578
     # via django-two-factor-auth
+rake-nltk==1.0.6 \
+    --hash=sha256:1c1ffdb64cae8cb99d169d53a5ffa4635f1c4abd3a02c6e22d5d083136bdc5c1 \
+    --hash=sha256:7813d680b2ce77b51cdac1757f801a87ff47682c9dbd2982aea3b66730346122
+    # via -r requirements/common.in
 redis==4.1.1 \
     --hash=sha256:07420a3fbedd8e012c31d4fadac943fb81568946da202c5a5bc237774e5280a0 \
     --hash=sha256:bc97d18938ca18d66737d0ef88584a2073069589e4026813cfba9ad6df9a9f40
@@ -1114,7 +1127,9 @@ regex==2022.1.18 \
     --hash=sha256:ecfe51abf7f045e0b9cdde71ca9e153d11238679ef7b5da6c82093874adf3338 \
     --hash=sha256:f99112aed4fb7cee00c7f77e8b964a9b10f69488cdff626ffd797d02e2e4484f \
     --hash=sha256:fd914db437ec25bfa410f8aa0aa2f3ba87cdfc04d9919d608d02330947afaeab
-    # via talon-core
+    # via
+    #   nltk
+    #   talon-core
 requests[security]==2.27.1 \
     --hash=sha256:68d7c56fd5a8999887728ef304a6d12edc7be74f1cfa47714fc8b414525c9a61 \
     --hash=sha256:f22fa1e554c9ddfd16e6e41ac79759e17be9e492b3587efa038054674760e72d
@@ -1257,6 +1272,10 @@ tornado==4.5.3 \
     --hash=sha256:ab587996fe6fb9ce65abfda440f9b61e4f9f2cf921967723540679176915e4c3 \
     --hash=sha256:b36298e9f63f18cad97378db2222c0e0ca6a55f6304e605515e05a25483ed51a
     # via -r requirements/common.in
+tqdm==4.62.3 \
+    --hash=sha256:8dd278a422499cd6b727e6ae4061c40b48fce8b76d1ccbf5d34fca9b7f925b0c \
+    --hash=sha256:d359de7217506c9851b7869f3708d8ee53ed70a1b8edbba4dbcb47442592920d
+    # via nltk
 traitlets==5.1.1 \
     --hash=sha256:059f456c5a7c1c82b98c2e8c799f39c9b8128f6d0d46941ee118daace9eb70c7 \
     --hash=sha256:2d313cc50a42cd6c277e7d7dc8d4d7fedd06a2c215f78766ae7b1a66277e0033
@@ -1272,9 +1291,6 @@ typing-extensions==4.0.1 \
     --hash=sha256:7f001e5ac290a0c0401508864c7ec868be4e701886d5b573a9528ed3973d9d3b
     # via
     #   -r requirements/common.in
-    #   argon2-cffi
-    #   asgiref
-    #   importlib-metadata
     #   mypy-boto3-s3
     #   zulip-bots
 uhashring==2.1 \

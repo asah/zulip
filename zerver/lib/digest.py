@@ -12,6 +12,10 @@ from django.db.models.functions import Length, Ln
 from django.utils.timezone import now as timezone_now
 from django.utils.text import Truncator
 
+import nltk
+from rake_nltk import Rake
+from bs4 import BeautifulSoup
+
 from confirmation.models import one_click_unsubscribe_link
 from zerver.context_processors import common_context
 from zerver.lib.email_notifications import build_message_list
@@ -19,7 +23,7 @@ from zerver.lib.logging_util import log_to_file
 from zerver.lib.message import get_last_message_id
 from zerver.lib.queue import queue_json_publish
 from zerver.lib.send_email import FromAddress, send_future_email
-from zerver.lib.url_encoding import encode_stream, near_message_url
+from zerver.lib.url_encoding import encode_stream, near_message_url, hash_util_encode
 from zerver.models import (
     Message,
     Reaction,
@@ -237,6 +241,7 @@ def get_recent_topics(
     )
 
     digest_topic_map: Dict[TopicKey, DigestTopic] = {}
+    all_html = ""
     for message in messages:
         topic_key = (message.recipient.type_id, message.topic_name())
 
@@ -244,10 +249,20 @@ def get_recent_topics(
             digest_topic_map[topic_key] = DigestTopic(topic_key)
 
         digest_topic_map[topic_key].add_message(message)
+        all_html += message.rendered_content + " "
 
     topics = list(digest_topic_map.values())
 
-    return topics
+    # https://stackoverflow.com/a/64575233/430938
+    # todo: move to one-time installation process...
+    all_text = BeautifulSoup(all_html, features='html.parser').get_text()
+    #print(all_text[0:300] + "...")
+    r = Rake(max_length=3, word_tokenizer=nltk.tokenize.word_tokenize)
+    r.extract_keywords_from_text(all_text)
+    ranked_phrases = r.get_ranked_phrases_with_scores()
+    #print(ranked_phrases[0:10])
+
+    return topics, ranked_phrases
 
 
 def get_hot_topics(
@@ -336,12 +351,14 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
 
     # Convert from epoch seconds to a datetime object.
     cutoff_date = datetime.datetime.fromtimestamp(int(cutoff), tz=datetime.timezone.utc)
+    # uncommment for development
+    cutoff_date = timezone_now() - datetime.timedelta(days = 365)
     yesterday = timezone_now() - datetime.timedelta(hours = 24)
 
     result: Dict[int, Dict[str, Any]] = {}
 
     user_ids = [user.id for user in users]
-
+    print(f"bulk_get_digest_context: user_ids={user_ids}")
     user_stream_map = get_user_stream_map(user_ids)
     all_user_stream_map = deepcopy(user_stream_map)
 
@@ -350,14 +367,15 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
     all_stream_ids = set()
     for user in users:
         stream_ids = user_stream_map[user.id]
-        stream_ids -= recently_modified_streams.get(user.id, set())
+        # comment-out for development
+        #stream_ids -= recently_modified_streams.get(user.id, set())
         all_stream_ids |= stream_ids
 
     # Get all the recent topics for all the users.  This does the heavy
     # lifting of making an expensive query to the Message table.  Then
     # for each user, we filter to just the streams they care about.
-    veryrecent_topics = get_recent_topics(sorted(list(all_stream_ids)), yesterday, timezone_now())
-    recent_topics = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, yesterday)
+    veryrecent_topics,veryrecent_phrases = get_recent_topics(sorted(list(all_stream_ids)), yesterday, timezone_now())
+    recent_topics,_ = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, yesterday)
     most_reacted_msgs_all = get_most_reacted_messages(yesterday,  timezone_now())
     #localdev dbg_longago = datetime.datetime.fromtimestamp(300, tz=datetime.timezone.utc)
     #localdev most_reacted_msgs_all = get_most_reacted_messages(dbg_longago,  timezone_now())
@@ -383,6 +401,12 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
         context.update(unsubscribe_link=unsubscribe_link)
 
         # Get context data for hot conversations.
+        context["veryrecent_phrases"] = [
+            { 'score': phrase[0],
+              'phrase': phrase[1],
+              'encoded_phrase': hash_util_encode(phrase[1]),
+             } for phrase in veryrecent_phrases[:4]
+        ]
         context["top_reacted_msgs"] = [
             { 'near_message_url': near_message_url(
                 realm, {

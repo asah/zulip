@@ -89,6 +89,7 @@ beautifulsoup4==4.10.0 \
     --hash=sha256:c23ad23c521d818955a4151a67d81580319d4bf548d3d49f4223ae041ff98891
     # via
     #   -r requirements/common.in
+    #   bs4
     #   pyoembed
     #   zulip-bots
 black==21.12b0 \
@@ -120,6 +121,9 @@ bracex==2.2.1 \
     --hash=sha256:096c4b788bf492f7af4e90ef8b5bcbfb99759ae3415ea1b83c9d29a5ed8f9a94 \
     --hash=sha256:1c8d1296e00ad9a91030ccb4c291f9e4dc7c054f12c707ba3c5ff3e9a81bcd21
     # via wcmatch
+bs4==0.0.1 \
+    --hash=sha256:36ecea1fd7cc5c0c6e4a1ff075df26d50da647b75376626cc186e2212886dd3a
+    # via -r requirements/common.in
 cachetools==5.0.0 \
     --hash=sha256:486471dfa8799eb7ec503a8059e263db000cdda20075ce5e48903087f79d5fd6 \
     --hash=sha256:8fecd4203a38af17928be7b90689d8083603073622229ca7077b72d8e5a976e4
@@ -243,6 +247,7 @@ click==8.0.3 \
     #   black
     #   click-option-group
     #   gitlint-core
+    #   nltk
     #   pip-tools
     #   pyre-check
     #   semgrep
@@ -588,16 +593,8 @@ importlib-metadata==4.10.1 ; python_version < "3.10" \
     #   -r requirements/common.in
     #   -r requirements/dev.in
     #   -r requirements/mypy.in
-    #   click
-    #   cssutils
-    #   jsonpickle
-    #   jsonschema
     #   markdown
-    #   moto
-    #   pep517
-    #   redis
     #   sphinx
-    #   sqlalchemy
     #   zulip-bots
 incremental==21.3.0 \
     --hash=sha256:02f5de5aff48f6b9f665d99d48bfc7ec03b6e3943210de7cfc88856d755d6f57 \
@@ -652,6 +649,10 @@ jmespath==0.10.0 \
     #   boto3
     #   botocore
     #   itemloaders
+joblib==1.1.0 \
+    --hash=sha256:4158fcecd13733f8be669be0683b96ebdbbd38d23559f54dca7205aea1bf1e35 \
+    --hash=sha256:f21f109b3c7ff9d95f8387f752d0d9c34a02aa2f7060c2135f465da0e5160ff6
+    # via nltk
 jsonpickle==2.1.0 \
     --hash=sha256:1dee77ddc5d652dfdabc33d33cff9d7e131d428007007da4fd6f7071ae774b0f \
     --hash=sha256:84684cfc5338a534173c8dd69809e40f2865d0be1f8a2b7af8465e5b968dcfa9
@@ -1007,6 +1008,10 @@ natsort==8.0.2 \
     --hash=sha256:09cff3cabb617f9794f643758ab5b337c1c0af1a6df11edf5c04de496fd7fb26 \
     --hash=sha256:feb87e0ce1dc1f8f3f21e18a85216c790e746d76a5ff6889563394605f504a2b
     # via -r requirements/dev.in
+nltk==3.6.7 \
+    --hash=sha256:22e97be5d6c784d93a52d17860515cc50c5cfcc620b1f5c3747765041255a01e \
+    --hash=sha256:51bf1aef5304740a708be7c8e683f7798f03dc5c7a7e7feb758be9e95f4585e3
+    # via rake-nltk
 oauthlib==3.1.1 \
     --hash=sha256:42bf6354c2ed8c6acb54d971fce6f88193d97297e18602a3a886603f9d7730cc \
     --hash=sha256:8f0215fcc533dd8dd1bee6f4c412d4f0cd7297307d43ac61666389e3bc3198a3
@@ -1264,6 +1269,7 @@ pygments==2.11.2 \
     #   ipython
     #   jsx-lexer
     #   sphinx
+    #   testslide
 pyinotify==0.9.6 \
     --hash=sha256:9c998a5d7606ca835065cdabc013ae6c66eb9ea76a00a1e3bc6e0cfe2b4f71f4
     # via -r requirements/dev.in
@@ -1452,9 +1458,6 @@ pyuca==1.2 \
     --hash=sha256:8a382fe74627f08c0d18908c0713ca4a20aad5385f077579e56208beea2893b2 \
     --hash=sha256:abaa12e1bd2c7c68ca8396ff8383bc0654a739cef3ae68fd7af58bf29af0a91e
     # via -r requirements/common.in
-pywatchman==1.4.1 \
-    --hash=sha256:d0047eb275deafb0011eda0a1a815fbd9742478c3d2b5ad6956d300e447dc2f9
-    # via pyre-check
 pyyaml==6.0 \
     --hash=sha256:0283c35a6a9fbf047493e3a0ce8d79ef5030852c51e9d911a27badfde0605293 \
     --hash=sha256:055d937d65826939cb044fc8c9b08889e8c743fdc6a32b33e2390f66013e449b \
@@ -1501,6 +1504,10 @@ queuelib==1.6.2 \
     --hash=sha256:4b207267f2642a8699a1f806045c56eb7ad1a85a10c0e249884580d139c2fcd2 \
     --hash=sha256:4b96d48f650a814c6fb2fd11b968f9c46178b683aad96d68f930fe13a8574d19
     # via scrapy
+rake-nltk==1.0.6 \
+    --hash=sha256:1c1ffdb64cae8cb99d169d53a5ffa4635f1c4abd3a02c6e22d5d083136bdc5c1 \
+    --hash=sha256:7813d680b2ce77b51cdac1757f801a87ff47682c9dbd2982aea3b66730346122
+    # via -r requirements/common.in
 redis==4.1.1 \
     --hash=sha256:07420a3fbedd8e012c31d4fadac943fb81568946da202c5a5bc237774e5280a0 \
     --hash=sha256:bc97d18938ca18d66737d0ef88584a2073069589e4026813cfba9ad6df9a9f40
@@ -1580,7 +1587,9 @@ regex==2022.1.18 \
     --hash=sha256:ecfe51abf7f045e0b9cdde71ca9e153d11238679ef7b5da6c82093874adf3338 \
     --hash=sha256:f99112aed4fb7cee00c7f77e8b964a9b10f69488cdff626ffd797d02e2e4484f \
     --hash=sha256:fd914db437ec25bfa410f8aa0aa2f3ba87cdfc04d9919d608d02330947afaeab
-    # via talon-core
+    # via
+    #   nltk
+    #   talon-core
 requests[security]==2.27.1 \
     --hash=sha256:68d7c56fd5a8999887728ef304a6d12edc7be74f1cfa47714fc8b414525c9a61 \
     --hash=sha256:f22fa1e554c9ddfd16e6e41ac79759e17be9e492b3587efa038054674760e72d
@@ -1721,6 +1730,10 @@ social-auth-core[azuread,openidconnect,saml]==4.2.0 \
     # via
     #   -r requirements/common.in
     #   social-auth-app-django
+sortedcontainers==2.4.0 \
+    --hash=sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88 \
+    --hash=sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0
+    # via intervaltree
 soupsieve==2.3.1 \
     --hash=sha256:1a3cca2617c6b38c0343ed661b1fa5de5637f257d4fe22bd9f1338010a1efefb \
     --hash=sha256:b8d49b1cd4f037c7082a9683dfa1801aa2597fb11c3a1155b7a5b94829b4f1f9
@@ -1833,6 +1846,9 @@ tblib==1.7.0 \
     --hash=sha256:059bd77306ea7b419d4f76016aef6d7027cc8a0785579b5aad198803435f882c \
     --hash=sha256:289fa7359e580950e7d9743eab36b0691f0310fce64dee7d9c31065b8f723e23
     # via -r requirements/dev.in
+testslide==2.7.0 \
+    --hash=sha256:23ece0b9f5b704b33b978e9c8797936034516adc3c4743ebdaed664aa700c3cb
+    # via pyre-check
 tinycss2==1.1.1 \
     --hash=sha256:b2e44dd8883c360c35dd0d1b5aad0b610e5156c2cb3b33434634e539ead9d8bf \
     --hash=sha256:fe794ceaadfe3cf3e686b22155d0da5780dd0e273471a51846d0a02bc204fec8
@@ -1862,7 +1878,9 @@ tornado==4.5.3 \
 tqdm==4.62.3 \
     --hash=sha256:8dd278a422499cd6b727e6ae4061c40b48fce8b76d1ccbf5d34fca9b7f925b0c \
     --hash=sha256:d359de7217506c9851b7869f3708d8ee53ed70a1b8edbba4dbcb47442592920d
-    # via semgrep
+    # via
+    #   nltk
+    #   semgrep
 traitlets==5.1.1 \
     --hash=sha256:059f456c5a7c1c82b98c2e8c799f39c9b8128f6d0d46941ee118daace9eb70c7 \
     --hash=sha256:2d313cc50a42cd6c277e7d7dc8d4d7fedd06a2c215f78766ae7b1a66277e0033
@@ -1879,29 +1897,6 @@ twisted==21.7.0 \
     # via
     #   -r requirements/dev.in
     #   scrapy
-typed-ast==1.5.1 \
-    --hash=sha256:24058827d8f5d633f97223f5148a7d22628099a3d2efe06654ce872f46f07cdb \
-    --hash=sha256:256115a5bc7ea9e665c6314ed6671ee2c08ca380f9d5f130bd4d2c1f5848d695 \
-    --hash=sha256:38cf5c642fa808300bae1281460d4f9b7617cf864d4e383054a5ef336e344d32 \
-    --hash=sha256:484137cab8ecf47e137260daa20bafbba5f4e3ec7fda1c1e69ab299b75fa81c5 \
-    --hash=sha256:4f30a2bcd8e68adbb791ce1567fdb897357506f7ea6716f6bbdd3053ac4d9471 \
-    --hash=sha256:591bc04e507595887160ed7aa8d6785867fb86c5793911be79ccede61ae96f4d \
-    --hash=sha256:5b6ab14c56bc9c7e3c30228a0a0b54b915b1579613f6e463ba6f4eb1382e7fd4 \
-    --hash=sha256:5d8314c92414ce7481eee7ad42b353943679cf6f30237b5ecbf7d835519e1212 \
-    --hash=sha256:71dcda943a471d826ea930dd449ac7e76db7be778fcd722deb63642bab32ea3f \
-    --hash=sha256:7c42707ab981b6cf4b73490c16e9d17fcd5227039720ca14abe415d39a173a30 \
-    --hash=sha256:9caaf2b440efb39ecbc45e2fabde809cbe56272719131a6318fd9bf08b58e2cb \
-    --hash=sha256:a2b8d7007f6280e36fa42652df47087ac7b0a7d7f09f9468f07792ba646aac2d \
-    --hash=sha256:a6d495c1ef572519a7bac9534dbf6d94c40e5b6a608ef41136133377bba4aa08 \
-    --hash=sha256:a80d84f535642420dd17e16ae25bb46c7f4c16ee231105e7f3eb43976a89670a \
-    --hash=sha256:b53ae5de5500529c76225d18eeb060efbcec90ad5e030713fe8dab0fb4531631 \
-    --hash=sha256:b6d17f37f6edd879141e64a5db17b67488cfeffeedad8c5cec0392305e9bc775 \
-    --hash=sha256:c9bcad65d66d594bffab8575f39420fe0ee96f66e23c4d927ebb4e24354ec1af \
-    --hash=sha256:ca9e8300d8ba0b66d140820cf463438c8e7b4cdc6fd710c059bfcfb1531d03fb \
-    --hash=sha256:de4ecae89c7d8b56169473e08f6bfd2df7f95015591f43126e4ea7865928677e
-    # via
-    #   black
-    #   mypy
 typeguard==2.13.3 \
     --hash=sha256:00edaa8da3a133674796cf5ea87d9f4b4c367d77476e185e80251cc13dfbb8c4 \
     --hash=sha256:5e3e3be01e887e7eafae5af63d1f36c849aaa94e3a0112097312aabfa16284f1
@@ -2013,15 +2008,10 @@ typing-extensions==4.0.1 \
     --hash=sha256:7f001e5ac290a0c0401508864c7ec868be4e701886d5b573a9528ed3973d9d3b
     # via
     #   -r requirements/common.in
-    #   argon2-cffi
-    #   arrow
-    #   asgiref
     #   black
     #   boto3-stubs
     #   botocore-stubs
-    #   importlib-metadata
     #   libcst
-    #   markdown-it-py
     #   mypy
     #   mypy-boto3-s3
     #   pyre-check
@@ -2169,9 +2159,7 @@ youtube-transcript-api==0.4.3 \
 zipp==3.7.0 \
     --hash=sha256:9f50f446828eb9d45b267433fd3e9da8d801f614129124863f9c51ebceafb87d \
     --hash=sha256:b47250dd24f92b7dd6a0a8fc5244da14608f3ca90a5efcd37a3b1642fac9a375
-    # via
-    #   importlib-metadata
-    #   pep517
+    # via importlib-metadata
 zope.interface==5.4.0 \
     --hash=sha256:08f9636e99a9d5410181ba0729e0408d3d8748026ea938f3b970a0249daa8192 \
     --hash=sha256:0b465ae0962d49c68aa9733ba92a001b2a0933c317780435f00be7ecb959c702 \
