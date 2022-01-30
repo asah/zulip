@@ -256,6 +256,7 @@ def get_recent_topics(
     # https://stackoverflow.com/a/64575233/430938
     # todo: move to one-time installation process...
     all_text = BeautifulSoup(all_html, features='html.parser').get_text()
+    open("/tmp/alltext.txt", "w").write(all_text)
     #print(all_text[0:300] + "...")
     r = Rake(max_length=3, word_tokenizer=nltk.tokenize.word_tokenize)
     r.extract_keywords_from_text(all_text)
