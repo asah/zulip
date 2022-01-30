@@ -249,16 +249,27 @@ def get_recent_topics(
             digest_topic_map[topic_key] = DigestTopic(topic_key)
 
         digest_topic_map[topic_key].add_message(message)
+        all_html += 5 * (get_display_recipient(message.recipient) + " ")
+        all_html += 3 * (message.topic_name() + " ")
         all_html += message.rendered_content + " "
 
     topics = list(digest_topic_map.values())
 
     # https://stackoverflow.com/a/64575233/430938
     # todo: move to one-time installation process...
-    all_text = BeautifulSoup(all_html, features='html.parser').get_text()
+    soup = BeautifulSoup(all_html, features='html.parser')
+    for elem in soup.find_all('div', {"class": [
+        'message_inline_image'
+    ]}):
+        elem.decompose()
+    #print(str(soup))
+    for elem in soup.findAll('span',class_='user-mention'):
+        elem.replace_with("@mention")
+        print(f"{elem.string} => @mention")
+    all_text = soup.get_text()
     open("/tmp/alltext.txt", "w").write(all_text)
     #print(all_text[0:300] + "...")
-    r = Rake(max_length=3, word_tokenizer=nltk.tokenize.word_tokenize)
+    r = Rake(max_length=2, word_tokenizer=nltk.tokenize.word_tokenize)
     r.extract_keywords_from_text(all_text)
     ranked_phrases = r.get_ranked_phrases_with_scores()
     #print(ranked_phrases[0:10])
