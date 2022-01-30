@@ -14,6 +14,7 @@ import subprocess
 import sys
 import time
 from typing import TYPE_CHECKING, Optional
+from nltk import download as nltk_download
 
 if TYPE_CHECKING:
     from typing import NoReturn
@@ -197,6 +198,9 @@ if not args.skip_puppet:
 if not os.path.exists("/usr/share/doc/python3-yaml"):
     logging.info("Installing system YAML package, for puppet...")
     subprocess.check_call(["apt-get", "install", "python3-yaml"])
+
+nltk_download('stopwords')
+nltk_download('punkt')
 
 if not os.path.exists(os.path.join(deploy_path, "zproject/prod_settings.py")):
     # This is normally done in unpack-zulip, but for upgrading from
