@@ -12,8 +12,6 @@ from django.db.models.functions import Length, Ln
 from django.utils.timezone import now as timezone_now
 from django.utils.text import Truncator
 
-import nltk
-from rake_nltk import Rake
 from bs4 import BeautifulSoup
 
 from confirmation.models import one_click_unsubscribe_link
@@ -24,6 +22,7 @@ from zerver.lib.message import get_last_message_id
 from zerver.lib.queue import queue_json_publish
 from zerver.lib.send_email import FromAddress, send_future_email
 from zerver.lib.url_encoding import encode_stream, near_message_url, hash_util_encode
+from zerver.lib.processwords import processwords
 from zerver.models import (
     Message,
     Reaction,
@@ -249,9 +248,9 @@ def get_recent_topics(
             digest_topic_map[topic_key] = DigestTopic(topic_key)
 
         digest_topic_map[topic_key].add_message(message)
-        all_html += 5 * (get_display_recipient(message.recipient) + " ")
-        all_html += 3 * (message.topic_name() + " ")
-        all_html += message.rendered_content + " "
+        all_html += get_display_recipient(message.recipient) + " wordbreak "
+        all_html += message.topic_name() + " wordbreak "
+        all_html += message.rendered_content + " wordbreak "
 
     topics = list(digest_topic_map.values())
 
@@ -265,14 +264,12 @@ def get_recent_topics(
     #print(str(soup))
     for elem in soup.findAll('span',class_='user-mention'):
         elem.replace_with("@mention")
-        print(f"{elem.string} => @mention")
+        #print(f"{elem.string} => @mention")
     all_text = soup.get_text()
-    open("/tmp/alltext.txt", "w").write(all_text)
+    open("/tmp/alltext.txt", "w").write(all_text) # for development
     #print(all_text[0:300] + "...")
-    r = Rake(max_length=2, word_tokenizer=nltk.tokenize.word_tokenize)
-    r.extract_keywords_from_text(all_text)
-    ranked_phrases = r.get_ranked_phrases_with_scores()
-    #print(ranked_phrases[0:10])
+    freq = processwords(all_text)
+    ranked_phrases = sorted(freq.items(), key=lambda r:r[1], reverse=True)[0:8]
 
     return topics, ranked_phrases
 
@@ -386,8 +383,6 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
     # Get all the recent topics for all the users.  This does the heavy
     # lifting of making an expensive query to the Message table.  Then
     # for each user, we filter to just the streams they care about.
-    nltk.download('stopwords')
-    nltk.download('punkt')
     veryrecent_topics,veryrecent_phrases = get_recent_topics(sorted(list(all_stream_ids)), yesterday, timezone_now())
     recent_topics,_ = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, yesterday)
     most_reacted_msgs_all = get_most_reacted_messages(yesterday,  timezone_now())
@@ -416,9 +411,9 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
 
         # Get context data for hot conversations.
         context["veryrecent_phrases"] = [
-            { 'score': phrase[0],
-              'phrase': phrase[1],
-              'encoded_phrase': hash_util_encode(phrase[1]),
+            { 'score': phrase[1],
+              'phrase': phrase[0],
+              'encoded_phrase': hash_util_encode(phrase[0]),
              } for phrase in veryrecent_phrases[:4]
         ]
         context["top_reacted_msgs"] = [

@@ -193,5 +193,5 @@ soupsieve
 circuitbreaker
 
 # keyword extraction
-rake-nltk
+nltk
 bs4
