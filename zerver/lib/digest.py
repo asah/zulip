@@ -351,8 +351,8 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
 
     # Convert from epoch seconds to a datetime object.
     cutoff_date = datetime.datetime.fromtimestamp(int(cutoff), tz=datetime.timezone.utc)
-    # uncommment for development
-    cutoff_date = timezone_now() - datetime.timedelta(days = 365)
+    if settings.DEVELOPMENT:
+        cutoff_date = timezone_now() - datetime.timedelta(days = 365)
     yesterday = timezone_now() - datetime.timedelta(hours = 24)
 
     result: Dict[int, Dict[str, Any]] = {}
@@ -367,8 +367,8 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
     all_stream_ids = set()
     for user in users:
         stream_ids = user_stream_map[user.id]
-        # comment-out for development
-        #stream_ids -= recently_modified_streams.get(user.id, set())
+        if not settings.DEVELOPMENT:
+            stream_ids -= recently_modified_streams.get(user.id, set())
         all_stream_ids |= stream_ids
 
     # Get all the recent topics for all the users.  This does the heavy
