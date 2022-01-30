@@ -374,6 +374,8 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
     # Get all the recent topics for all the users.  This does the heavy
     # lifting of making an expensive query to the Message table.  Then
     # for each user, we filter to just the streams they care about.
+    nltk.download('stopwords')
+    nltk.download('punkt')
     veryrecent_topics,veryrecent_phrases = get_recent_topics(sorted(list(all_stream_ids)), yesterday, timezone_now())
     recent_topics,_ = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, yesterday)
     most_reacted_msgs_all = get_most_reacted_messages(yesterday,  timezone_now())

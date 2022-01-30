@@ -367,10 +367,6 @@ if migrations_needed:
 
 subprocess.check_call(["./manage.py", "create_realm_internal_bots"], preexec_fn=su_to_zulip)
 
-from nltk import download as nltk_download
-nltk_download('stopwords')
-nltk_download('punkt')
-
 logging.info("Restarting Zulip...")
 if IS_SERVER_UP or not args.skip_puppet:
     # Even if the server wasn't up previously, puppet might have
