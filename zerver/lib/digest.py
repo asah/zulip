@@ -254,24 +254,20 @@ def get_recent_topics(
 
     topics = list(digest_topic_map.values())
 
-    # https://stackoverflow.com/a/64575233/430938
-    # todo: move to one-time installation process...
     soup = BeautifulSoup(all_html, features='html.parser')
     for elem in soup.find_all('div', {"class": [
         'message_inline_image'
     ]}):
         elem.decompose()
-    #print(str(soup))
     for elem in soup.findAll('span',class_='user-mention'):
         elem.replace_with("@mention")
         #print(f"{elem.string} => @mention")
+    open("/tmp/alltext.html", "w").write(str(soup)) # for development
     all_text = soup.get_text()
     open("/tmp/alltext.txt", "w").write(all_text) # for development
-    #print(all_text[0:300] + "...")
     freq = processwords(all_text)
-    ranked_phrases = sorted(freq.items(), key=lambda r:r[1], reverse=True)[0:8]
-
-    return topics, ranked_phrases
+    top100_phrases = sorted(freq.items(), key=lambda r:r[1], reverse=True)[0:100]
+    return topics, top100_phrases
 
 
 def get_hot_topics(
@@ -410,12 +406,18 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
         context.update(unsubscribe_link=unsubscribe_link)
 
         # Get context data for hot conversations.
-        context["veryrecent_phrases"] = [
-            { 'score': phrase[1],
-              'phrase': phrase[0],
-              'encoded_phrase': hash_util_encode(phrase[0]),
-             } for phrase in veryrecent_phrases[:4]
-        ]
+        context["veryrecent_phrases"] = []
+        total_phrase_len = 0
+        for phrase in veryrecent_phrases:
+            # break on 100 chars
+            total_phrase_len += len(phrase[0])
+            if total_phrase_len > 100:
+                break
+            context["veryrecent_phrases"].append({
+                'score': phrase[1],
+                'phrase': phrase[0],
+                'encoded_phrase': hash_util_encode(phrase[0]),
+            })
         context["top_reacted_msgs"] = [
             { 'near_message_url': near_message_url(
                 realm, {
