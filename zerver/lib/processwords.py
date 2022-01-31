@@ -22,7 +22,28 @@ with open('zerver/lib/stopwords.txt') as fh:
         stopword = stopword.lower().strip()
         sw[ps.stem(stopword)] = True
 sw.update({ps.stem(word):True for word in '''
-we've who've it's hasn't i'm what's we're there's you're isn't that's
+    i'm     i'll     i'd    i've
+ you're   you'll   you'd  you've
+           he'll    he'd            he's
+          she'll   she'd           she's
+           it'll    it'd            it's
+  we're    we'll    we'd   we've
+they're  they'll  they'd they've
+         that'll  that'd that've  that's
+          who'll   who'd  who've   who's
+what're  what'll  what'd          what's
+        where'll where'd         where's
+         when'll  when'd          when's
+          why'll   why'd           why's
+          how'll   how'd           how's
+        there'll there'd there've there's
+         here'll here'd here've here's
+let's
+isn't aren't wasn't weren't haven't hasn't hadn't won't wouldn't
+don't doesn't didn't can't couldn't shouldn't mightn't mustn't
+would've should've could've might've must've
+c'mon
+
 mon tue tues wed weds thu thur thurs fri sat sun
 monday tuesday wednesday thursday friday saturday sunday
 jan feb mar apr may jun jul aug sep oct nov dec
