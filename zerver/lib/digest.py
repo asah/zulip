@@ -379,8 +379,9 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
     # Get all the recent topics for all the users.  This does the heavy
     # lifting of making an expensive query to the Message table.  Then
     # for each user, we filter to just the streams they care about.
-    veryrecent_topics,veryrecent_phrases = get_recent_topics(sorted(list(all_stream_ids)), yesterday, timezone_now())
+    veryrecent_topics,_ = get_recent_topics(sorted(list(all_stream_ids)), yesterday, timezone_now())
     recent_topics,_ = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, yesterday)
+    _,veryrecent_phrases = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, timezone_now())
     most_reacted_msgs_all = get_most_reacted_messages(yesterday,  timezone_now())
     #localdev dbg_longago = datetime.datetime.fromtimestamp(300, tz=datetime.timezone.utc)
     #localdev most_reacted_msgs_all = get_most_reacted_messages(dbg_longago,  timezone_now())
@@ -409,9 +410,9 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
         context["veryrecent_phrases"] = []
         total_phrase_len = 0
         for phrase in veryrecent_phrases:
-            # break on 100 chars
+            # break on N chars
             total_phrase_len += len(phrase[0])
-            if total_phrase_len > 100:
+            if total_phrase_len > 90:
                 break
             context["veryrecent_phrases"].append({
                 'score': phrase[1],
