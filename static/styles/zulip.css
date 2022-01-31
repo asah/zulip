@@ -1493,10 +1493,10 @@ div.focused_table {
     position: relative;
     overflow: hidden;
     @media (width < $sm_min) {
-	width: 90%;
+	width: 100%;
     }
     @media (width >= $sm_min) {
-	width: 110%;
+	width: 105%;
     }
 
     &:empty {
