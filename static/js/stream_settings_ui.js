@@ -39,22 +39,20 @@ import * as ui from "./ui";
 import * as ui_report from "./ui_report";
 import * as util from "./util";
 
+export function set_right_panel_title(sub) {
+    $("#subscription_overlay .stream-info-title").html(render_selected_stream_title(sub));
+}
+
 export const show_subs_pane = {
     nothing_selected() {
         $(".settings, #stream-creation").hide();
         $(".nothing-selected").show();
         $("#subscription_overlay .stream-info-title").text($t({defaultMessage: "Stream settings"}));
     },
-    settings(stream_name, invite_only, is_web_public) {
+    settings(sub) {
         $(".settings, #stream-creation").hide();
         $(".settings").show();
-        $("#subscription_overlay .stream-info-title").html(
-            render_selected_stream_title({
-                stream_name,
-                invite_only,
-                is_web_public,
-            }),
-        );
+        set_right_panel_title(sub);
     },
     create_stream() {
         $(".nothing-selected, .settings, #stream-creation").hide();
@@ -213,6 +211,11 @@ export function update_stream_privacy(slim_sub, values) {
     stream_ui_updates.update_settings_button_for_sub(sub);
     stream_ui_updates.update_add_subscriptions_elements(sub);
     stream_list.redraw_stream_privacy(sub);
+
+    const active_data = get_active_data();
+    if (active_data.id === sub.stream_id) {
+        set_right_panel_title(sub);
+    }
 
     // Update navbar if needed
     message_view_header.maybe_rerender_title_area_for_stream(sub);

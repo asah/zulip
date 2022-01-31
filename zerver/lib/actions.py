@@ -843,6 +843,7 @@ def active_humans_in_realm(realm: Realm) -> Sequence[UserProfile]:
     return UserProfile.objects.filter(realm=realm, is_active=True, is_bot=False)
 
 
+@transaction.atomic(savepoint=False)
 def do_set_realm_property(
     realm: Realm, name: str, value: Any, *, acting_user: Optional[UserProfile]
 ) -> None:
@@ -864,7 +865,7 @@ def do_set_realm_property(
         property=name,
         value=value,
     )
-    send_event(realm, event, active_user_ids(realm.id))
+    transaction.on_commit(lambda: send_event(realm, event, active_user_ids(realm.id)))
 
     event_time = timezone_now()
     RealmAuditLog.objects.create(
@@ -892,12 +893,14 @@ def do_set_realm_property(
         user_profiles = UserProfile.objects.filter(realm=realm, is_bot=False)
         for user_profile in user_profiles:
             user_profile.email = get_display_email_address(user_profile)
-            # TODO: Design a bulk event for this or force-reload all clients
-            send_user_email_update_event(user_profile)
         UserProfile.objects.bulk_update(user_profiles, ["email"])
 
         for user_profile in user_profiles:
-            flush_user_profile(sender=UserProfile, instance=user_profile)
+            transaction.on_commit(
+                lambda: flush_user_profile(sender=UserProfile, instance=user_profile)
+            )
+            # TODO: Design a bulk event for this or force-reload all clients
+            send_user_email_update_event(user_profile)
 
 
 def do_set_realm_authentication_methods(
@@ -1366,6 +1369,7 @@ def do_deactivate_user(
         send_event(user_profile.realm, event, bot_owner_user_ids(user_profile))
 
 
+@transaction.atomic(savepoint=False)
 def do_deactivate_stream(
     stream: Stream, log: bool = True, *, acting_user: Optional[UserProfile]
 ) -> None:
@@ -1378,7 +1382,7 @@ def do_deactivate_stream(
         "type": "mark_stream_messages_as_read_for_everyone",
         "stream_recipient_id": stream.recipient_id,
     }
-    queue_json_publish("deferred_work", deferred_work_event)
+    transaction.on_commit(lambda: queue_json_publish("deferred_work", deferred_work_event))
 
     # Get the affected user ids *before* we deactivate everybody.
     affected_user_ids = can_access_stream_user_ids(stream)
@@ -1421,7 +1425,7 @@ def do_deactivate_stream(
     stream_dict = stream.to_dict()
     stream_dict.update(dict(name=old_name, invite_only=was_invite_only))
     event = dict(type="stream", op="delete", streams=[stream_dict])
-    send_event(stream.realm, event, affected_user_ids)
+    transaction.on_commit(lambda: send_event(stream.realm, event, affected_user_ids))
 
     event_time = timezone_now()
     RealmAuditLog.objects.create(
@@ -3759,7 +3763,7 @@ def validate_user_access_to_subscribers_helper(
     if stream_dict["is_web_public"]:
         return
 
-    # With the exception of web public streams, a guest must
+    # With the exception of web-public streams, a guest must
     # be subscribed to a stream (even a public one) in order
     # to see subscribers.
     if user_profile.is_guest:
@@ -4065,7 +4069,7 @@ def bulk_add_subscriptions(
 # subscribing users to streams; we use a transaction to ensure that
 # the RealmAuditLog entries are created atomically with the
 # Subscription object creation (and updates).
-@transaction.atomic
+@transaction.atomic(savepoint=False)
 def bulk_add_subs_to_db_with_logging(
     realm: Realm,
     acting_user: Optional[UserProfile],
@@ -4972,7 +4976,7 @@ def do_change_default_all_public_streams(
         )
 
 
-@transaction.atomic
+@transaction.atomic(durable=True)
 def do_change_user_role(
     user_profile: UserProfile, value: int, *, acting_user: Optional[UserProfile]
 ) -> None:
@@ -5759,7 +5763,7 @@ def notify_default_streams(realm: Realm) -> None:
         type="default_streams",
         default_streams=streams_to_dicts_sorted(get_default_streams_for_realm(realm.id)),
     )
-    send_event(realm, event, active_non_guest_user_ids(realm.id))
+    transaction.on_commit(lambda: send_event(realm, event, active_non_guest_user_ids(realm.id)))
 
 
 def notify_default_stream_groups(realm: Realm) -> None:
@@ -5769,7 +5773,7 @@ def notify_default_stream_groups(realm: Realm) -> None:
             get_default_stream_groups(realm)
         ),
     )
-    send_event(realm, event, active_non_guest_user_ids(realm.id))
+    transaction.on_commit(lambda: send_event(realm, event, active_non_guest_user_ids(realm.id)))
 
 
 def do_add_default_stream(stream: Stream) -> None:
@@ -5780,6 +5784,7 @@ def do_add_default_stream(stream: Stream) -> None:
         notify_default_streams(stream.realm)
 
 
+@transaction.atomic(savepoint=False)
 def do_remove_default_stream(stream: Stream) -> None:
     realm_id = stream.realm_id
     stream_id = stream.id
@@ -6616,7 +6621,7 @@ class DeleteMessagesEvent(TypedDict, total=False):
 
 
 # We use transaction.atomic to support select_for_update in the attachment codepath.
-@transaction.atomic
+@transaction.atomic(savepoint=False)
 def do_update_message(
     user_profile: UserProfile,
     target_message: Message,

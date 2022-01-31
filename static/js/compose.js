@@ -1,21 +1,17 @@
 import $ from "jquery";
 import _ from "lodash";
 
-import render_compose from "../templates/compose.hbs";
-
 import * as blueslip from "./blueslip";
 import * as channel from "./channel";
 import {prefix_with_inquiry} from "./common";
-import * as common from "./common";
 import * as compose_actions from "./compose_actions";
 import * as compose_error from "./compose_error";
 import * as compose_fade from "./compose_fade";
 import * as compose_state from "./compose_state";
 import * as compose_ui from "./compose_ui";
 import * as compose_validate from "./compose_validate";
-import * as composebox_typeahead from "./composebox_typeahead";
 import * as echo from "./echo";
-import * as giphy from "./giphy";
+import * as flatpickr from "./flatpickr";
 import {$t, $t_html} from "./i18n";
 import * as loading from "./loading";
 import * as markdown from "./markdown";
@@ -388,21 +384,7 @@ export function render_and_show_preview(preview_spinner, preview_content_box, co
     }
 }
 
-export function render_compose_box() {
-    $("#compose-container").append(
-        render_compose({
-            embedded: $("#compose").attr("data-embedded") === "",
-            file_upload_enabled: page_params.max_file_upload_size_mib > 0,
-            giphy_enabled: giphy.is_giphy_enabled(),
-        }),
-    );
-    $(`.enter_sends_${user_settings.enter_sends}`).show();
-    common.adjust_mac_shortcuts(".enter_sends kbd");
-}
-
 export function initialize() {
-    render_compose_box();
-
     $("#below-compose-content .video_link").toggle(compute_show_video_chat_button());
     $(
         "#stream_message_recipient_stream,#stream_message_recipient_topic,#private_message_recipient",
@@ -647,7 +629,7 @@ export function initialize() {
                 compose_ui.insert_syntax_and_focus(timestr, target_textarea);
             };
 
-            composebox_typeahead.show_flatpickr(
+            flatpickr.show_flatpickr(
                 $(compose_click_target)[0],
                 on_timestamp_selection,
                 new Date(),

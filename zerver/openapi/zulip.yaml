@@ -2216,14 +2216,14 @@ paths:
 
                                     [status-messages]: /help/format-your-message-using-markdown#status-messages
                               required:
-                                - "type"
-                                - "id"
-                                - "user_id"
-                                - "message_id"
-                                - "message_ids"
-                                - "flags"
-                                - "edit_timestamp"
-                                - "rendering_only"
+                                - type
+                                - id
+                                - user_id
+                                - message_id
+                                - message_ids
+                                - flags
+                                - edit_timestamp
+                                - rendering_only
                               example:
                                 {
                                   "type": "update_message",
@@ -3605,7 +3605,7 @@ paths:
                                     enable_spectator_access:
                                       type: boolean
                                       description: |
-                                        Whether web public streams are enabled in this organization.
+                                        Whether web-public streams are enabled in this organization.
 
                                         Can only be enabled if the `WEB_PUBLIC_STREAMS_ENABLED`
                                         [server setting][server-settings] is enabled on the Zulip
@@ -3894,11 +3894,11 @@ paths:
                                   allOf:
                                     - $ref: "#/components/schemas/EventTypeSchema"
                                     - enum:
-                                        - "drafts"
+                                        - drafts
                                 op:
                                   type: string
                                   enum:
-                                    - "add"
+                                    - add
                                 drafts:
                                   type: array
                                   description: |
@@ -3932,11 +3932,11 @@ paths:
                                   allOf:
                                     - $ref: "#/components/schemas/EventTypeSchema"
                                     - enum:
-                                        - "drafts"
+                                        - drafts
                                 op:
                                   type: string
                                   enum:
-                                    - "update"
+                                    - update
                                 draft:
                                   $ref: "#/components/schemas/Draft"
                               example:
@@ -3964,11 +3964,11 @@ paths:
                                   allOf:
                                     - $ref: "#/components/schemas/EventTypeSchema"
                                     - enum:
-                                        - "drafts"
+                                        - drafts
                                 op:
                                   type: string
                                   enum:
-                                    - "remove"
+                                    - remove
                                 draft_id:
                                   type: integer
                                   description: |
@@ -6732,9 +6732,9 @@ paths:
           in: query
           description: |
             This parameter determines whether any newly created streams will be
-            web public streams.
+            web-public streams.
 
-            Note that creating web public streams requires the
+            Note that creating web-public streams requires the
             `WEB_PUBLIC_STREAMS_ENABLED` [server setting][server-settings]
             to be enabled on the Zulip server in question, the organization
             to have enabled the `enable_spectator_access` realm setting, and
@@ -7624,15 +7624,13 @@ paths:
 
             Automatic detection is implementing using the standard `prefers-color-scheme`
             media query.
-          content:
-            application/json:
-              schema:
-                type: integer
-                enum:
-                  - 1
-                  - 2
-                  - 3
-              example: 1
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+          example: 1
         - name: enable_drafts_synchronization
           in: query
           description: |
@@ -7704,15 +7702,13 @@ paths:
             - 1 - Automatic
             - 2 - Always
             - 3 - Never
-          content:
-            application/json:
-              schema:
-                type: integer
-                enum:
-                  - 1
-                  - 2
-                  - 3
-              example: 1
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+          example: 1
         - name: enable_stream_desktop_notifications
           in: query
           description: |
@@ -7832,15 +7828,13 @@ paths:
             - 1 - All unreads
             - 2 - Private messages and mentions
             - 3 - None
-          content:
-            application/json:
-              schema:
-                type: integer
-                enum:
-                  - 1
-                  - 2
-                  - 3
-              example: 1
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+          example: 1
         - name: realm_name_in_notifications
           in: query
           description: |
@@ -7966,15 +7960,15 @@ paths:
                     property:
                       type: string
                       enum:
-                        - "color"
-                        - "is_muted"
-                        - "in_home_view"
-                        - "pin_to_top"
-                        - "desktop_notifications"
-                        - "audible_notifications"
-                        - "push_notifications"
-                        - "email_notifications"
-                        - "wildcard_mentions_notify"
+                        - color
+                        - is_muted
+                        - in_home_view
+                        - pin_to_top
+                        - desktop_notifications
+                        - audible_notifications
+                        - push_notifications
+                        - email_notifications
+                        - wildcard_mentions_notify
                       description: |
                         One of the stream properties described below:
 
@@ -10669,7 +10663,7 @@ paths:
                         description: |
                           Present if `realm` is present in `fetch_event_types`.
 
-                          Whether web public streams and related anonymous access APIs/features
+                          Whether web-public streams and related anonymous access APIs/features
                           are enabled in this organization.
 
                           Can only be enabled if the `WEB_PUBLIC_STREAMS_ENABLED`
@@ -12171,16 +12165,13 @@ paths:
             media query.
 
             **Changes**: Before Zulip 5.0 (feature level 80), this setting was managed by
-            the `PATCH /settings/display` endpoint.
-          content:
-            application/json:
-              schema:
-                type: integer
-                enum:
-                  - 1
-                  - 2
-                  - 3
-              example: 1
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+          example: 1
         - name: enable_drafts_synchronization
           in: query
           description: |
@@ -12290,15 +12281,13 @@ paths:
 
             **Changes**: Before Zulip 5.0 (feature level 80), this setting was managed by
             the `PATCH /settings/display` endpoint.
-          content:
-            application/json:
-              schema:
-                type: integer
-                enum:
-                  - 1
-                  - 2
-                  - 3
-              example: 1
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+          example: 1
         - name: timezone
           in: query
           description: |
@@ -12502,15 +12491,13 @@ paths:
 
             **Changes**: Before Zulip 5.0 (feature level 80), this setting was managed by
             the `PATCH /settings/notifications` endpoint.
-          content:
-            application/json:
-              schema:
-                type: integer
-                enum:
-                  - 1
-                  - 2
-                  - 3
-              example: 1
+          schema:
+            type: integer
+            enum:
+              - 1
+              - 2
+              - 3
+          example: 1
         - name: realm_name_in_notifications
           in: query
           description: |
@@ -12676,7 +12663,7 @@ paths:
         - name: include_web_public
           in: query
           description: |
-            Include all web public streams.
+            Include all web-public streams.
           schema:
             type: boolean
             default: false
@@ -12927,7 +12914,7 @@ paths:
           description: |
             Change whether the stream is a web-public stream.
 
-            Note that creating web public streams requires the
+            Note that creating web-public streams requires the
             `WEB_PUBLIC_STREAMS_ENABLED` [server setting][server-settings]
             to be enabled on the Zulip server in question, the organization
             to have enabled the `enable_spectator_access` realm setting, and
@@ -14815,8 +14802,8 @@ components:
             or "private" (for PMs and private group messages).
           enum:
             - ""
-            - "stream"
-            - "private"
+            - stream
+            - private
         to:
           type: array
           description: |
