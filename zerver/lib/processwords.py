@@ -22,13 +22,12 @@ with open('zerver/lib/stopwords.txt') as fh:
         stopword = stopword.lower().strip()
         sw[ps.stem(stopword)] = True
 sw.update({ps.stem(word):True for word in '''
-don't we've can't who've it's hasn't won't i'm what's we're pls there's
-you're isn't that's doesn't
+we've who've it's hasn't i'm what's we're there's you're isn't that's
 mon tue tues wed weds thu thur thurs fri sat sun
 monday tuesday wednesday thursday friday saturday sunday
 jan feb mar apr may jun jul aug sep oct nov dec
 sorry nit said yet would
-lol lolz fyi ha haha hah ah
+pls lol lolz fyi ha haha hah ah
 image image.png image.jpg twitter.com
 png jpg mp3 see top
 2^22
@@ -54,12 +53,17 @@ def processwords(text):
     for word in re.split(r'[\s/\\]', text):
         word = word.lower()
         word = word.strip()
-        #word = re.sub(r'[“”"‘’]', '', word)
-        # skip @mentions, #mentions and URLs
-        if re.search(r'^(@|#|https?://)', word):
+        # skip @mentions and #mentions
+        if re.search(r'^(@|#)', word):
             continue
         word = re.sub(r'[^a-z0-9]+$', '', word)
         word = re.sub(r'^[^a-z0-9]+', '', word)
+        # skip URLs
+        if re.search(r'^https?://', word):
+            continue
+        # skip wasn't etc.
+        if re.search(r'^[a-z]{2,6}n\'t$', word):
+            continue
         word = aliases.get(word, word)
         stem = ps.stem(word)
         if stem in sw:
