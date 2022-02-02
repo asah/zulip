@@ -311,15 +311,15 @@ export class MessageListView {
 
         if (!last_subscribed && first_subscribed) {
             group.bookend_top = true;
-            group.subscribed = stream;
-            group.bookend_content = this.list.subscribed_bookend_content(stream);
+            group.subscribed = true;
+            group.stream_name = stream;
             return;
         }
 
         if (last_subscribed && !first_subscribed) {
             group.bookend_top = true;
-            group.unsubscribed = stream;
-            group.bookend_content = this.list.unsubscribed_bookend_content(stream);
+            group.just_unsubscribed = true;
+            group.stream_name = stream;
             return;
         }
     }
@@ -469,7 +469,6 @@ export class MessageListView {
             this.list !== message_lists.home &&
             last_msg_container.msg.historical !== first_msg_container.msg.historical
         ) {
-            second_group.bookend_top = true;
             this.add_subscription_marker(second_group, last_msg_container, first_msg_container);
         }
         return false;
@@ -848,7 +847,7 @@ export class MessageListView {
             // If user narrows to a stream, doesn't update
             // trailing bookend if user is subscribed.
             const sub = stream_data.get_sub(stream_name);
-            if (sub === undefined || !sub.subscribed) {
+            if (sub === undefined || !sub.subscribed || page_params.is_spectator) {
                 list.update_trailing_bookend();
             }
         }
@@ -1307,12 +1306,25 @@ export class MessageListView {
         trailing_bookend.remove();
     }
 
-    render_trailing_bookend(trailing_bookend_content, subscribed, show_button) {
+    render_trailing_bookend(
+        stream_name,
+        subscribed,
+        deactivated,
+        just_unsubscribed,
+        can_toggle_subscription,
+        is_spectator,
+    ) {
+        // This is not the only place we render bookends; see also the
+        // partial in message_group.hbs, which do not set is_trailing_bookend.
         const rendered_trailing_bookend = $(
             render_bookend({
-                bookend_content: trailing_bookend_content,
-                trailing: show_button,
+                stream_name,
+                can_toggle_subscription,
                 subscribed,
+                deactivated,
+                just_unsubscribed,
+                is_spectator,
+                is_trailing_bookend: true,
             }),
         );
         rows.get_table(this.table_name).append(rendered_trailing_bookend);
