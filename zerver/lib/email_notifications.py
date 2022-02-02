@@ -230,6 +230,7 @@ def build_message_list(
         return {"sender": sender, "content": [build_message_payload(message, sender)]}
 
     def message_header(message: Message) -> Dict[str, Any]:
+        stream_name = ""
         if message.recipient.type == Recipient.PERSONAL:
             narrow_link = get_narrow_url(user, message)
             header = f"You and {message.sender.full_name}"
@@ -252,9 +253,10 @@ def build_message_list(
             header = f"{stream.name} > {message.topic_name()}"
             stream_link = stream_narrow_url(user.realm, stream)
             header_html = f"<a href='{stream_link}'>{stream.name}</a> > <a href='{narrow_link}'>{message.topic_name()}</a>"
+            stream_name = stream.name
         return {
             "plain": header,
-            "stream": stream.name,
+            "stream": stream_name,
             "topic": message.topic_name(),
             "html": header_html,
             "stream_message": message.recipient.type_name() == "stream",
