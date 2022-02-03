@@ -12,7 +12,8 @@ with open('zerver/lib/google-10000-english-usa.txt') as fh:
         cw[ps.stem(commonword)] = True
 print(f"found {len(cw)} common words.")
 cw.update({ps.stem(word):True for word in '''
-unclear unhelpful anecdotally risky 
+unclear unhelpful anecdotally risky
+mattgroh zulip github.com
 '''.strip().split()})
 
 

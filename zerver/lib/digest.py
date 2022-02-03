@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 log_to_file(logger, settings.DIGEST_LOG_PATH)
 
 DIGEST_CUTOFF = 5
+HOTWORDS_CUTOFF = 3
 MAX_HOT_TOPICS_TO_BE_INCLUDED_IN_DIGEST = 4
 
 TopicKey = Tuple[int, str]
@@ -356,8 +357,10 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
 
     # Convert from epoch seconds to a datetime object.
     cutoff_date = datetime.datetime.fromtimestamp(int(cutoff), tz=datetime.timezone.utc)
+    hotwords_date = datetime.datetime.fromtimestamp(int(HOTWORDS_CUTOFF), tz=datetime.timezone.utc)
     if settings.DEVELOPMENT:
         cutoff_date = timezone_now() - datetime.timedelta(days = 365)
+        hotwords_date = timezone_now() - datetime.timedelta(days = 365)
     yesterday = timezone_now() - datetime.timedelta(hours = 24)
 
     result: Dict[int, Dict[str, Any]] = {}
@@ -381,7 +384,7 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
     # for each user, we filter to just the streams they care about.
     veryrecent_topics,_ = get_recent_topics(sorted(list(all_stream_ids)), yesterday, timezone_now())
     recent_topics,_ = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, yesterday)
-    _,veryrecent_phrases = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, timezone_now())
+    _,veryrecent_phrases = get_recent_topics(sorted(list(all_stream_ids)), hotwords_date, timezone_now())
     most_reacted_msgs_all = get_most_reacted_messages(yesterday,  timezone_now())
     #localdev dbg_longago = datetime.datetime.fromtimestamp(300, tz=datetime.timezone.utc)
     #localdev most_reacted_msgs_all = get_most_reacted_messages(dbg_longago,  timezone_now())
