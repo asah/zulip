@@ -90,6 +90,7 @@ beautifulsoup4==4.10.0 \
     # via
     #   -r requirements/common.in
     #   bs4
+    #   previewlink
     #   pyoembed
     #   zulip-bots
 black==21.12b0 \
@@ -1011,7 +1012,7 @@ natsort==8.0.2 \
 nltk==3.6.7 \
     --hash=sha256:22e97be5d6c784d93a52d17860515cc50c5cfcc620b1f5c3747765041255a01e \
     --hash=sha256:51bf1aef5304740a708be7c8e683f7798f03dc5c7a7e7feb758be9e95f4585e3
-    # via rake-nltk
+    # via -r requirements/common.in
 oauthlib==3.1.1 \
     --hash=sha256:42bf6354c2ed8c6acb54d971fce6f88193d97297e18602a3a886603f9d7730cc \
     --hash=sha256:8f0215fcc533dd8dd1bee6f4c412d4f0cd7297307d43ac61666389e3bc3198a3
@@ -1159,6 +1160,10 @@ polib==1.1.1 \
 premailer==3.10.0 \
     --hash=sha256:021b8196364d7df96d04f9ade51b794d0b77bcc19e998321c515633a2273be1a \
     --hash=sha256:d1875a8411f5dc92b53ef9f193db6c0f879dc378d618e0ad292723e388bfe4c2
+    # via -r requirements/common.in
+previewlink==0.0.1 \
+    --hash=sha256:4374daf1b865503297c042c4659cacaf11631e517295466948281be6512d06a6 \
+    --hash=sha256:d46e8bb7c07fb01591ec5a8b0261320f3f348bfe555bdc9fd8dfb17e9c152202
     # via -r requirements/common.in
 prompt-toolkit==3.0.24 \
     --hash=sha256:1bb05628c7d87b645974a1bad3f17612be0c29fa39af9f7688030163f680bad6 \
@@ -1504,10 +1509,6 @@ queuelib==1.6.2 \
     --hash=sha256:4b207267f2642a8699a1f806045c56eb7ad1a85a10c0e249884580d139c2fcd2 \
     --hash=sha256:4b96d48f650a814c6fb2fd11b968f9c46178b683aad96d68f930fe13a8574d19
     # via scrapy
-rake-nltk==1.0.6 \
-    --hash=sha256:1c1ffdb64cae8cb99d169d53a5ffa4635f1c4abd3a02c6e22d5d083136bdc5c1 \
-    --hash=sha256:7813d680b2ce77b51cdac1757f801a87ff47682c9dbd2982aea3b66730346122
-    # via -r requirements/common.in
 redis==4.1.1 \
     --hash=sha256:07420a3fbedd8e012c31d4fadac943fb81568946da202c5a5bc237774e5280a0 \
     --hash=sha256:bc97d18938ca18d66737d0ef88584a2073069589e4026813cfba9ad6df9a9f40
@@ -1598,6 +1599,7 @@ requests[security]==2.27.1 \
     #   matrix-client
     #   moto
     #   premailer
+    #   previewlink
     #   pyoembed
     #   python-digitalocean
     #   python-gcm
