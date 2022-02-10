@@ -1485,12 +1485,6 @@ div.focused_table {
     display: block;
     position: relative;
     overflow: hidden;
-    @media (width < $sm_min) {
-	width: 100%;
-    }
-    @media (width >= $sm_min) {
-	width: 105%;
-    }
 
     &:empty {
         display: none;
@@ -1662,7 +1656,8 @@ div.focused_table {
 }
 
 .messagebox-content {
-    padding: 4px 115px 1px 10px;
+/*    padding: 4px 115px 1px 10px; */
+    padding: 4px 15px 1px 10px;
 }
 
 .bookend {
@@ -3080,7 +3075,7 @@ select.inline_select_topic_edit {
     }
 
     .message_content {
-        padding-right: 50px;
+/*        padding-right: 50px; */
     }
 }
 
