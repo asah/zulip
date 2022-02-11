@@ -1659,8 +1659,8 @@ div.focused_table {
 }
 
 .messagebox-content {
-/*    padding: 4px 115px 1px 10px; */
-    padding: 4px 15px 1px 10px;
+    padding: 4px 115px 1px 10px; 
+/*    padding: 4px 15px 1px 10px; */
 }
 
 .bookend {
