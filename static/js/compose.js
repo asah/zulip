@@ -1,3 +1,4 @@
+import autosize from "autosize";
 import $ from "jquery";
 import _ from "lodash";
 
@@ -86,6 +87,7 @@ export function clear_preview_area() {
     $("#compose .preview_message_area").hide();
     $("#compose .preview_content").empty();
     $("#compose .markdown_preview").show();
+    autosize.update($("#compose-textarea"));
 }
 
 export function update_fade() {
@@ -655,7 +657,7 @@ export function initialize() {
                 on_timestamp_selection,
                 new Date(),
                 {
-                    // place the time picker above the icon and centerize it horizontally
+                    // place the time picker above the icon and center it horizontally
                     position: "above center",
                 },
             );
@@ -677,6 +679,7 @@ export function initialize() {
             $("#compose .preview_content"),
             content,
         );
+        resize.reset_compose_message_max_height();
     });
 
     $("#compose").on("click", ".undo_markdown_preview", (e) => {

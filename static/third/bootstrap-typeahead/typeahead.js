@@ -34,7 +34,7 @@
  *
  *   This adds support for completing a typeahead on custom keyup input. By
  *   default, we only support Tab and Enter to complete a typeahead, but we
- *   have usecases where we want to complete using custom characters like: >.
+ *   have use cases where we want to complete using custom characters like: >.
  *
  *   If `this.trigger_selection` returns true, we complete the typeahead and
  *   pass the keyup event to the updater.
@@ -376,6 +376,11 @@
     }
 
   , keydown: function (e) {
+    if (this.trigger_selection(e)) {
+      if (!this.shown) return;
+      e.preventDefault();
+      this.select(e);
+    }
       this.suppressKeyPressRepeat = !~$.inArray(e.keyCode, [40,38,9,13,27])
       this.move(e)
     }
@@ -406,10 +411,6 @@
           break
 
         default:
-          if (this.trigger_selection(e)) {
-            if (!this.shown) return;
-            this.select(e);
-          }
           var hideOnEmpty = false
           if (e.keyCode === 8 && this.options.helpOnEmptyStrings) { // backspace
             hideOnEmpty = true

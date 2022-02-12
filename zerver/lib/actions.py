@@ -105,6 +105,7 @@ from zerver.lib.message import (
     MessageDict,
     SendMessageRequest,
     access_message,
+    bulk_access_messages,
     get_last_message_id,
     normalize_body,
     render_markdown,
@@ -167,6 +168,7 @@ from zerver.lib.topic import (
     TOPIC_NAME,
     filter_by_exact_message_topic,
     filter_by_topic_name_via_message,
+    messages_for_topic,
     save_message_for_edit_use_case,
     update_edit_history,
     update_messages_for_topic_edit,
@@ -2547,7 +2549,7 @@ def check_add_reaction(
         # In this "voting for an existing reaction" case, we shouldn't
         # check whether the emoji code and emoji name match, since
         # it's possible that the (emoji_type, emoji_name, emoji_code)
-        # triple for this existing rection xmay not pass validation
+        # triple for this existing reaction may not pass validation
         # now (e.g. because it is for a realm emoji that has been
         # since deactivated).  We still want to allow users to add a
         # vote any old reaction they see in the UI even if that is a
@@ -3078,7 +3080,7 @@ def check_update_message(
     if not user_profile.realm.allow_message_editing:
         raise JsonableError(_("Your organization has turned off message editing"))
 
-    # The zerver/views/message_edit.py callpoint already strips this
+    # The zerver/views/message_edit.py call point already strips this
     # via REQ_topic; so we can delete this line if we arrange a
     # contract where future callers in the embedded bots system strip
     # use REQ_topic as well (or otherwise are guaranteed to strip input).
@@ -3423,6 +3425,9 @@ def check_message(
             # is security-sensitive code, it's beneficial to ensure nothing
             # else can sneak past the access check.
             assert sender.bot_type == sender.OUTGOING_WEBHOOK_BOT
+
+        if realm.mandatory_topics and topic_name == "(no topic)":
+            raise JsonableError(_("Topics are required in this organization"))
 
     elif addressee.is_private():
         user_profiles = addressee.user_profiles()
@@ -5092,7 +5097,7 @@ def do_change_stream_permission(
         stream.history_public_to_subscribers = True
     else:
         assert invite_only is not None
-        # is_web_public is Falsey
+        # is_web_public is falsey
         history_public_to_subscribers = get_default_value_for_history_public_to_subscribers(
             stream.realm,
             invite_only,
@@ -5655,6 +5660,7 @@ def do_change_user_setting(
 
     if setting_name == "timezone":
         assert isinstance(setting_value, str)
+        setting_value = canonicalize_timezone(setting_value)
     else:
         property_type = UserProfile.property_types[setting_name]
         assert isinstance(setting_value, property_type)
@@ -5705,7 +5711,7 @@ def do_change_user_setting(
     transaction.on_commit(lambda: send_event(user_profile.realm, event, [user_profile.id]))
 
     if setting_name in UserProfile.notification_settings_legacy:
-        # This legacy event format is for backwards-compatiblity with
+        # This legacy event format is for backwards-compatibility with
         # clients that don't support the new user_settings event type.
         # We only send this for settings added before Feature level 89.
         legacy_event = {
@@ -5719,7 +5725,7 @@ def do_change_user_setting(
         )
 
     if setting_name in UserProfile.display_settings_legacy or setting_name == "timezone":
-        # This legacy event format is for backwards-compatiblity with
+        # This legacy event format is for backwards-compatibility with
         # clients that don't support the new user_settings event type.
         # We only send this for settings added before Feature level 89.
         legacy_event = {
@@ -5915,7 +5921,7 @@ def get_default_subs(user_profile: UserProfile) -> List[Stream]:
     return get_default_streams_for_realm(user_profile.realm_id)
 
 
-# returns default streams in json serializeable format
+# returns default streams in JSON serializable format
 def streams_to_dicts_sorted(streams: List[Stream]) -> List[Dict[str, Any]]:
     return sorted((stream.to_dict() for stream in streams), key=lambda elt: elt["name"])
 
@@ -6485,6 +6491,7 @@ def send_message_moved_breadcrumbs(
     new_stream: Stream,
     new_topic: Optional[str],
     new_thread_notification_string: Optional[str],
+    changed_messages_count: int,
 ) -> None:
     # Since moving content between streams is highly disruptive,
     # it's worth adding a couple tombstone messages showing what
@@ -6507,6 +6514,7 @@ def send_message_moved_breadcrumbs(
                 new_thread_notification_string.format(
                     old_location=old_topic_link,
                     user=user_mention,
+                    changed_messages_count=changed_messages_count,
                 ),
             )
 
@@ -6520,6 +6528,7 @@ def send_message_moved_breadcrumbs(
                 old_thread_notification_string.format(
                     user=user_mention,
                     new_location=new_topic_link,
+                    changed_messages_count=changed_messages_count,
                 ),
             )
 
@@ -6990,7 +6999,7 @@ def do_update_message(
                 # TODO: Guest users don't see the new moved topic
                 # unless breadcrumb message for new stream is
                 # enabled. Excluding these users from receiving this
-                # event helps us avoid a error trackeback for our
+                # event helps us avoid a error traceback for our
                 # clients. We should figure out a way to inform the
                 # guest users of this new topic if sending a 'message'
                 # event for these messages is not an option.
@@ -7014,17 +7023,65 @@ def do_update_message(
 
     if len(changed_messages) > 0 and new_stream is not None and stream_being_edited is not None:
         # Notify users that the topic was moved.
+        changed_messages_count = len(changed_messages)
+
+        if propagate_mode == "change_all":
+            moved_all_visible_messages = True
+        else:
+            # With other propagate modes, if the user in fact moved
+            # all messages in the stream, we want to explain it was a
+            # full-topic move.
+            #
+            # For security model reasons, we don't want to allow a
+            # user to take any action that would leak information
+            # about older messages they cannot access (E.g. the only
+            # remaining messages are in a stream without shared
+            # history). The bulk_access_messages call below addresses
+            # that concern.
+            #
+            # bulk_access_messages is inefficient for this task, since
+            # we just want to do the exists() version of this
+            # query. But it's nice to reuse code, and this bulk
+            # operation is likely cheaper than a `GET /messages`
+            # unless the topic has thousands of messages of history.
+            unmoved_messages = messages_for_topic(
+                stream_being_edited.recipient_id,
+                orig_topic_name,
+            )
+            visible_unmoved_messages = bulk_access_messages(
+                user_profile, unmoved_messages, stream=stream_being_edited
+            )
+            moved_all_visible_messages = len(visible_unmoved_messages) == 0
+
         old_thread_notification_string = None
         if send_notification_to_old_thread:
-            old_thread_notification_string = gettext_lazy(
-                "This topic was moved by {user} to {new_location}"
-            )
+            if moved_all_visible_messages:
+                old_thread_notification_string = gettext_lazy(
+                    "This topic was moved to {new_location} by {user}."
+                )
+            elif changed_messages_count == 1:
+                old_thread_notification_string = gettext_lazy(
+                    "A message was moved from this topic to {new_location} by {user}."
+                )
+            else:
+                old_thread_notification_string = gettext_lazy(
+                    "{changed_messages_count} messages were moved from this topic to {new_location} by {user}."
+                )
 
         new_thread_notification_string = None
         if send_notification_to_new_thread:
-            new_thread_notification_string = gettext_lazy(
-                "This topic was moved here from {old_location} by {user}"
-            )
+            if moved_all_visible_messages:
+                new_thread_notification_string = gettext_lazy(
+                    "This topic was moved here from {old_location} by {user}."
+                )
+            elif changed_messages_count == 1:
+                new_thread_notification_string = gettext_lazy(
+                    "A message was moved here from {old_location} by {user}."
+                )
+            else:
+                new_thread_notification_string = gettext_lazy(
+                    "{changed_messages_count} messages were moved here from {old_location} by {user}."
+                )
 
         send_message_moved_breadcrumbs(
             user_profile,
@@ -7034,6 +7091,7 @@ def do_update_message(
             new_stream,
             topic_name,
             new_thread_notification_string,
+            changed_messages_count,
         )
 
     if (

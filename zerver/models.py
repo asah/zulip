@@ -546,7 +546,7 @@ class Realm(models.Model):
         choices=[(t["id"], t["name"]) for t in ORG_TYPES.values()],
     )
 
-    UPGRADE_TEXT_STANDARD = gettext_lazy("Available on Zulip Standard. Upgrade to access.")
+    UPGRADE_TEXT_STANDARD = gettext_lazy("Available on Zulip Cloud Standard. Upgrade to access.")
     # plan_type controls various features around resource/feature
     # limitations for a Zulip organization on multi-tenant installations
     # like Zulip Cloud.
@@ -4215,7 +4215,7 @@ class Service(models.Model):
     id: int = models.AutoField(auto_created=True, primary_key=True, verbose_name="ID")
     name: str = models.CharField(max_length=UserProfile.MAX_NAME_LENGTH)
     # Bot user corresponding to the Service.  The bot_type of this user
-    # deterines the type of service.  If non-bot services are added later,
+    # determines the type of service.  If non-bot services are added later,
     # user_profile can also represent the owner of the Service.
     user_profile: UserProfile = models.ForeignKey(UserProfile, on_delete=CASCADE)
     base_url: str = models.TextField()

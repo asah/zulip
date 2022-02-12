@@ -64,6 +64,7 @@ from zerver.lib.streams import (
 )
 from zerver.lib.test_classes import ZulipTestCase
 from zerver.lib.test_helpers import (
+    HostRequestMock,
     cache_tries_captured,
     get_subscription,
     most_recent_message,
@@ -1851,7 +1852,7 @@ class StreamAdminTest(ZulipTestCase):
         result = self.client_patch(
             f"/json/streams/{stream.id}", {"message_retention_days": orjson.dumps(2).decode()}
         )
-        self.assert_json_error(result, "Available on Zulip Standard. Upgrade to access.")
+        self.assert_json_error(result, "Available on Zulip Cloud Standard. Upgrade to access.")
 
         do_change_realm_plan_type(realm, Realm.PLAN_TYPE_SELF_HOSTED, acting_user=None)
         events: List[Mapping[str, Any]] = []
@@ -2021,7 +2022,7 @@ class StreamAdminTest(ZulipTestCase):
 
         do_change_realm_plan_type(realm, Realm.PLAN_TYPE_LIMITED, acting_user=admin)
         with self.assertRaisesRegex(
-            JsonableError, "Available on Zulip Standard. Upgrade to access."
+            JsonableError, "Available on Zulip Cloud Standard. Upgrade to access."
         ):
             list_to_streams(streams_raw, owner, autocreate=True)
 
@@ -2474,14 +2475,14 @@ class DefaultStreamTest(ZulipTestCase):
         new_stream_names = self.get_default_stream_names(realm)
         added_stream_names = new_stream_names - orig_stream_names
         self.assertEqual(added_stream_names, {"Added stream"})
-        # idempotentcy--2nd call to add_default_stream should be a noop
+        # idempotency--2nd call to add_default_stream should be a noop
         do_add_default_stream(stream)
         self.assertEqual(self.get_default_stream_names(realm), new_stream_names)
 
         # start removing
         do_remove_default_stream(stream)
         self.assertEqual(self.get_default_stream_names(realm), orig_stream_names)
-        # idempotentcy--2nd call to remove_default_stream should be a noop
+        # idempotency--2nd call to remove_default_stream should be a noop
         do_remove_default_stream(stream)
         self.assertEqual(self.get_default_stream_names(realm), orig_stream_names)
 
@@ -3512,11 +3513,12 @@ class SubscriptionRestApiTest(ZulipTestCase):
         user_profile = self.example_user("hamlet")
         user_profile.full_name = "Hamlet"
         user_profile.save()
+        request = HostRequestMock(user_profile=user_profile)
 
         def thunk1() -> HttpResponse:
             user_profile.full_name = "Should not be committed"
             user_profile.save()
-            return json_success()
+            return json_success(request)
 
         def thunk2() -> HttpResponse:
             raise JsonableError("random failure")

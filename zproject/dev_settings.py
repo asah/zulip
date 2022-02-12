@@ -80,11 +80,12 @@ INVITES_MIN_USER_AGE_DAYS = 0
 # For development convenience, configure the ToS/Privacy Policies
 POLICIES_DIRECTORY = "corporate/policies"
 TERMS_OF_SERVICE_VERSION = "1.0"
+TERMS_OF_SERVICE_MESSAGE: Optional[str] = "Description of changes to the ToS!"
 
 EMBEDDED_BOTS_ENABLED = True
 
 SYSTEM_ONLY_REALMS: Set[str] = set()
-USING_PGROONGA = True
+USING_PGROONGA = False
 # Flush cache after migration.
 POST_MIGRATION_CACHE_FLUSHING = True
 
