@@ -3164,3 +3164,9 @@ select.inline_select_topic_edit {
     display: inline-block;
     vertical-align: top;
 }
+
+.fc_compose_emoji {
+    width: 20px;
+    height: 20px;
+    margin-top: -5px;
+}

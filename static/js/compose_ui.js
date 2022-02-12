@@ -205,6 +205,8 @@ export function handle_keydown(event, textarea) {
         type = "bold";
     } else if (key === "i" && !event.shiftKey) {
         type = "italic";
+    } else if (key === "k" && event.shiftKey) {
+        type = "link";
     } else if (key === "l" && event.shiftKey) {
         type = "link";
     } else if (key === "u" && event.shiftKey) {

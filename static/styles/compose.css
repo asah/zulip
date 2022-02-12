@@ -576,6 +576,7 @@ input.recipient_box {
     }
 
     .compose_help_button,
+    .compose_preview_button,
     .compose_draft_button {
         font-size: 15px;
         font-weight: 600;
