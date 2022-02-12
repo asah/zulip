@@ -207,6 +207,12 @@ export function handle_keydown(event, textarea) {
         type = "italic";
     } else if (key === "l" && event.shiftKey) {
         type = "link";
+    } else if (key === "u" && event.shiftKey) {
+        type = "link";
+/* forecast WIP:
+    } else if (key === "t" && event.shiftKey) {
+        textarea.insert("<time:YYYY-MM-DDTHH:MM:SS-TZ:TZ>");
+*/
     }
 
     // detect Cmd and Ctrl key
@@ -423,7 +429,7 @@ export function format_text(textarea, type) {
             wrapSelection(field, italic_syntax);
             break;
         case "link": {
-            // Ctrl + L: Insert a link to selected text
+            // Ctrl + L/U: Insert a link to selected text
             wrapSelection(field, "[", "](url)");
 
             // Change selected text to `url` part of the syntax.

@@ -177,7 +177,7 @@ export function initialize() {
         }
 
         message_lists.current.select_id(id);
-        compose_actions.respond_to_message({trigger: "message click"});
+        compose_actions.quote_and_reply({trigger: "message click"});
         e.stopPropagation();
         popovers.hide_all();
     };
