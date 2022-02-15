@@ -1,5 +1,5 @@
 #compose_buttons {
-    text-align: right;
+    text-align: left;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -28,7 +28,7 @@
         margin-left: 0;
 
         .compose_reply_button {
-            width: 100%;
+/*            width: 100%; */
             text-align: left;
             overflow: hidden;
             white-space: nowrap;

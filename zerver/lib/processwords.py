@@ -3,26 +3,31 @@
 from nltk.stem import PorterStemmer
 import re
 
-ps = PorterStemmer()
+ps = cw = sw = aliases = None
+pwloaded = False
 
-cw = {}
-with open('zerver/lib/google-10000-english-usa.txt') as fh:
-    while commonword := fh.readline():
-        commonword = commonword.lower().strip()
-        cw[ps.stem(commonword)] = True
-print(f"found {len(cw)} common words.")
-cw.update({ps.stem(word):True for word in '''
+def processwords(text):
+    global pwloaded, ps, cw, sw, aliases
+    if not pwloaded:
+        ps = PorterStemmer()
+
+        cw = {}
+        with open('zerver/lib/google-10000-english-usa.txt') as fh:
+            while commonword := fh.readline():
+                commonword = commonword.lower().strip()
+                cw[ps.stem(commonword)] = True
+        print(f"found {len(cw)} common words.")
+        cw.update({ps.stem(word):True for word in '''
 unclear unhelpful anecdotally risky
 mattgroh zulip github.com
 '''.strip().split()})
 
-
-sw = {}
-with open('zerver/lib/stopwords.txt') as fh:
-    while stopword := fh.readline():
-        stopword = stopword.lower().strip()
-        sw[ps.stem(stopword)] = True
-sw.update({ps.stem(word):True for word in '''
+        sw = {}
+        with open('zerver/lib/stopwords.txt') as fh:
+            while stopword := fh.readline():
+                stopword = stopword.lower().strip()
+                sw[ps.stem(stopword)] = True
+        sw.update({ps.stem(word):True for word in '''
     i'm     i'll     i'd    i've
  you're   you'll   you'd  you've
            he'll    he'd            he's
@@ -56,17 +61,17 @@ png jpg mp3 see top
 threadgill sah ghausi dekorte
 discussion forecast.chat
 '''.strip().split()})
-print(f"found {len(sw)} stopwords.")
+        print(f"found {len(sw)} stopwords.")
 
-aliases = dict(item.split() for item in '''
+        aliases = dict(item.split() for item in '''
 u.s US
 u.s.a US
 covid-19 covid
 covid19 covid
 '''.strip().split("\n"))
-print(aliases)
+        print(aliases)
+        pwloaded = True
 
-def processwords(text):
     text = text.replace("\n", "").replace("\r", "")
     singlewords = []
     bigrams = []
