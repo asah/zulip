@@ -278,18 +278,22 @@ export function condense_and_collapse(elems) {
         // specified whether this message should be expanded or condensed.
         if (message.condensed === true) {
             condense_row($(elem));
+	    console.log("message.condensed");
             continue;
         }
 
         if (message.condensed === false) {
             uncondense_row($(elem));
+	    console.log("!message.condensed");
             continue;
         }
 
         if (long_message) {
             // By default, condense a long message.
+	    console.log("long msg = condense?");
             condense_row($(elem));
         } else {
+	    console.log("short msg = uncondense");
             content.removeClass("condensed");
             $(elem).find(".message_expander").hide();
         }

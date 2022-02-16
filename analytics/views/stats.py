@@ -386,7 +386,7 @@ def get_chart_data(
             #"sender__email", "cnt"
             "sender__delivery_email"
         )]
-        return json_success(data={'data': data, 'datastr':','.join(data)})
+        return json_success(request, data={'data': data, 'datastr':','.join(data)})
         
     assert len({stat.frequency for stat in stats}) == 1
     end_times = time_range(start, end, stats[0].frequency, min_length)
