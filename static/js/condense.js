@@ -256,17 +256,37 @@ export function condense_and_collapse(elems) {
             continue;
         }
 
+        const message_height = get_message_height(elem, message.id);
+        const long_message = message_height > height_cutoff;
+
+	// ******* collapsed aka [+] button ********
+
         // Completely hide the message and replace it with a [+]
         // link if the user has collapsed it.
 	// do this early, since it speeds up rendering
+	if (message.collapsed && message.force_uncollapsed) {
+//	    console.log("fc: uncollapse (force)");
+	    fc_uncollapse($(elem), message, datestr_cutoff);
+	} else
+	if (message.collapsed && message.unread) {
+//	    console.log("fc: uncollapse (unread)");
+	    fc_uncollapse($(elem), message, datestr_cutoff);
+	} else
+	if (message.collapsed && long_message) {
+//	    console.log("fc: uncollapse (is_thoughtful)");
+	    fc_uncollapse($(elem), message, datestr_cutoff);
+	} else
         if (message.collapsed || (!message.unread && !message.force_uncollapsed)) {
+//	    console.log("fc: collapsed");
 	    fc_collapse($(elem), message, datestr_cutoff);
             content.addClass("collapsed");
             $(elem).find(".message_expander").show();
-        }
+//        } else {
+//	    console.log("fc: uncollapse (default)");
+	}
 
-        const message_height = get_message_height(elem, message.id);
-        const long_message = message_height > height_cutoff;
+	// ******* condensed ********
+
         if (long_message) {
             // All long messages are flagged as such.
             content.addClass("could-be-condensed");
@@ -278,24 +298,19 @@ export function condense_and_collapse(elems) {
         // specified whether this message should be expanded or condensed.
         if (message.condensed === true) {
             condense_row($(elem));
-	    console.log("message.condensed");
             continue;
         }
 
         if (message.condensed === false) {
             uncondense_row($(elem));
-	    console.log("!message.condensed");
             continue;
         }
 
         if (long_message) {
             // By default, condense a long message.
-	    console.log("long msg = condense?");
             condense_row($(elem));
         } else {
-	    console.log("short msg = uncondense");
-            content.removeClass("condensed");
-            $(elem).find(".message_expander").hide();
+            uncondense_row($(elem));
         }
     }
 }
