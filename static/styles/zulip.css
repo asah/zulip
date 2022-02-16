@@ -889,6 +889,7 @@ td.pointer {
         visibility: hidden;
         transition: all 0.2s ease;
         width: 16px;
+        margin-left: 4px;
         text-align: center;
         display: inline-block;
         position: relative;

@@ -337,6 +337,13 @@ export function initialize() {
         e.preventDefault();
     });
 
+    $("#message_feed_container").on("click", ".fc_message_collapser", function (e) {
+        const row = $(this).closest(".message_row");
+        collapse(row);
+        e.stopPropagation();
+        e.preventDefault();
+    });
+
     $("#message_feed_container").on("click", ".message_condenser", function (e) {
         const row = $(this).closest(".message_row");
         message_lists.current.get(rows.id(row)).condensed = true;

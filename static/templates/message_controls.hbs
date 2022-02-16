@@ -5,15 +5,17 @@
 
     {{#unless msg/sent_by_me}}
     <div class="reaction_button message_control_button hidden-for-spectators" data-tippy-content="{{t 'Add emoji reaction' }} (:)">
-        <i class="fa fa-smile-o" aria-label="{{#tr}}Add emoji reaction{{/tr}} (:)" role="button" aria-haspopup="true" tabindex="0"></i>
+        <span aria-label="{{#tr}}Add emoji reaction{{/tr}} (:)" role="button" aria-haspopup="true" tabindex="0">😎</span>
     </div>
     {{/unless}}
 
     {{#unless msg/locally_echoed}}
     <div class="actions_hover message_control_button" data-tippy-content="{{#tr}}Message actions{{/tr}} (i)" >
-        <i class="zulip-icon zulip-icon-ellipsis-v-solid" role="button" aria-haspopup="true" tabindex="0" aria-label="{{#tr}}Message actions{{/tr}}"></i>
+        <i class="fa fa-bars" role="button" aria-haspopup="true" tabindex="1" aria-label="{{#tr}}Message actions{{/tr}}"></i>
     </div>
     {{/unless}}
+
+    <div class="fc_misc message_control_button"><a href="#" class="fc_message_collapser fa fa-minus-square" tabindex="2"></a></div>
 
     <div class="message_failed {{#unless msg.failed_request}}notvisible{{/unless}}">
         <div class="message_control_button failed_message_action" data-tippy-content="{{t 'Retry' }}">
