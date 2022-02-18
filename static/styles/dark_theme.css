@@ -83,7 +83,7 @@ body.dark-theme {
     table.table-striped thead.table-sticky-headers th {
         background-color: hsl(0, 0%, 0%);
 
-        &:hover {
+        &:hover:not(.actions) {
             background-color: hsl(211, 29%, 14%);
         }
     }
@@ -463,6 +463,16 @@ body.dark-theme {
         .white_zulip_icon_without_text {
             filter: invert(10%) sepia(16%) saturate(175%) hue-rotate(194deg)
                 brightness(99%) contrast(89%);
+        }
+    }
+
+    #gear-menu {
+        .dark-theme {
+            display: none;
+        }
+
+        .light-theme {
+            display: block;
         }
     }
 

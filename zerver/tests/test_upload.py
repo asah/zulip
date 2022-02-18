@@ -1343,6 +1343,14 @@ class EmojiTest(UploadSerializeMixin, ZulipTestCase):
             still_image = Image.open(io.BytesIO(still_img_data))
             self.assertEqual((50, 50), still_image.size)
 
+        # Test a non-animated image which does need to be resized
+        still_large_img_data = read_test_image_file("still_large_img.gif")
+        resized_img_data, is_animated, no_still_data = resize_emoji(still_large_img_data, size=50)
+        im = Image.open(io.BytesIO(resized_img_data))
+        self.assertEqual((50, 50), im.size)
+        self.assertFalse(is_animated)
+        assert no_still_data is None
+
     def tearDown(self) -> None:
         destroy_uploads()
         super().tearDown()
@@ -2280,17 +2288,17 @@ class UploadSpaceTests(UploadSerializeMixin, ZulipTestCase):
 class DecompressionBombTests(ZulipTestCase):
     def setUp(self) -> None:
         super().setUp()
-        self.test_urls = {
-            "/json/users/me/avatar": "Image size exceeds limit.",
-            "/json/realm/logo": "Image size exceeds limit.",
-            "/json/realm/icon": "Image size exceeds limit.",
-            "/json/realm/emoji/bomb_emoji": "Image file upload failed.",
-        }
+        self.test_urls = [
+            "/json/users/me/avatar",
+            "/json/realm/logo",
+            "/json/realm/icon",
+            "/json/realm/emoji/bomb_emoji",
+        ]
 
     def test_decompression_bomb(self) -> None:
         self.login("iago")
         with get_test_image_file("bomb.png") as fp:
-            for url, error_string in self.test_urls.items():
+            for url in self.test_urls:
                 fp.seek(0, 0)
                 if url == "/json/realm/logo":
                     result = self.client_post(
@@ -2298,4 +2306,4 @@ class DecompressionBombTests(ZulipTestCase):
                     )
                 else:
                     result = self.client_post(url, {"f1": fp})
-                self.assert_json_error(result, error_string)
+                self.assert_json_error(result, "Image size exceeds limit.")

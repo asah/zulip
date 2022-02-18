@@ -15,7 +15,6 @@ RUN echo locales locales/default_environment_locale select C.UTF-8 | debconf-set
 	   wget2 \
 	   rustc cargo \
            locales \
-           lsb-release \
            openssh-server \
            python3 \
 	   python-is-python3 \

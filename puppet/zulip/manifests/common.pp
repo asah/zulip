@@ -1,7 +1,7 @@
 class zulip::common {
   # Common parameters
-  case $::osfamily {
-    'debian': {
+  case $::os['family'] {
+    'Debian': {
       $nagios_plugins = 'monitoring-plugins-basic'
       $nagios_plugins_dir = '/usr/lib/nagios/plugins'
       $nginx = 'nginx-full'
@@ -14,7 +14,7 @@ class zulip::common {
       $supervisor_reload = '/etc/init.d/supervisor restart && (/etc/init.d/supervisor start || /bin/true) && /etc/init.d/supervisor status'
       $supervisor_status = '/etc/init.d/supervisor status'
     }
-    'redhat': {
+    'RedHat': {
       $nagios_plugins = 'nagios-plugins'
       $nagios_plugins_dir = '/usr/lib64/nagios/plugins'
       $nginx = 'nginx'
@@ -31,7 +31,13 @@ class zulip::common {
   }
   $supervisor_conf_dir = "${supervisor_system_conf_dir}/zulip"
 
-  $total_memory_mb = Integer($::memorysize_mb)
+  $total_memory_bytes = $::memory['system']['total_bytes']
+  $total_memory_mb = $total_memory_bytes / 1024 / 1024
+
+  $goarch = $::os['architecture'] ? {
+    'amd64'   => 'amd64',
+    'aarch64' => 'arm64',
+  }
 
   $versions = {
     # https://github.com/cactus/go-camo/releases

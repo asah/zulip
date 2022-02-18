@@ -31,7 +31,7 @@ import * as unread_ops from "./unread_ops";
 import * as unread_ui from "./unread_ui";
 import * as util from "./util";
 
-function maybe_add_narrowed_messages(messages, msg_list) {
+function maybe_add_narrowed_messages(messages, msg_list, callback) {
     const ids = [];
 
     for (const elem of messages) {
@@ -73,7 +73,7 @@ function maybe_add_narrowed_messages(messages, msg_list) {
                 message_helper.process_new_message(message),
             );
 
-            message_util.add_new_messages(new_messages, msg_list);
+            callback(new_messages, msg_list);
             unread_ops.process_visible();
             notifications.notify_messages_outside_current_search(elsewhere_messages);
         },
@@ -83,7 +83,7 @@ function maybe_add_narrowed_messages(messages, msg_list) {
                 if (msg_list === message_lists.current) {
                     // Don't actually try again if we unnarrowed
                     // while waiting
-                    maybe_add_narrowed_messages(messages, msg_list);
+                    maybe_add_narrowed_messages(messages, msg_list, callback);
                 }
             }, 5000);
         },
@@ -111,7 +111,11 @@ export function insert_new_messages(messages, sent_by_this_client) {
             render_info = message_util.add_new_messages(messages, message_list.narrowed);
         } else {
             // if we cannot apply locally, we have to wait for this callback to happen to notify
-            maybe_add_narrowed_messages(messages, message_list.narrowed);
+            maybe_add_narrowed_messages(
+                messages,
+                message_list.narrowed,
+                message_util.add_new_messages,
+            );
         }
     } else {
         // we're in the home view, so update its list
@@ -351,19 +355,37 @@ export function update_messages(events) {
             // this should be a loop over all valid message_list_data
             // objects, without the rerender (which will naturally
             // happen in the following code).
-            if (!changed_narrow) {
+            if (!changed_narrow && current_filter) {
                 let message_ids_to_remove = [];
-                if (current_filter && current_filter.can_apply_locally()) {
+                if (current_filter.can_apply_locally()) {
                     const predicate = current_filter.predicate();
                     message_ids_to_remove = event_messages.filter((msg) => !predicate(msg));
                     message_ids_to_remove = message_ids_to_remove.map((msg) => msg.id);
+                    // We filter out messages that do not belong to the message
+                    // list and then pass these to the remove messages codepath.
+                    // While we can pass all our messages to the add messages
+                    // codepath as the filtering is done within the method.
+                    message_lists.current.remove_and_rerender(message_ids_to_remove);
+                    message_lists.current.add_messages(event_messages);
+                } else {
+                    // Remove existing message that were updated, since
+                    // they may not be a part of the filter now. Also,
+                    // this will help us rerender them via
+                    // maybe_add_narrowed_messages, if they were
+                    // simply updated.
+                    const updated_messages = event_messages.filter(
+                        (msg) => message_lists.current.data.get(msg.id) !== undefined,
+                    );
+                    message_lists.current.remove_and_rerender(
+                        updated_messages.map((msg) => msg.id),
+                    );
+                    // For filters that cannot be processed locally, ask server.
+                    maybe_add_narrowed_messages(
+                        event_messages,
+                        message_lists.current,
+                        message_util.add_messages,
+                    );
                 }
-                // We filter out messages that do not belong to the message
-                // list and then pass these to the remove messages codepath.
-                // While we can pass all our messages to the add messages
-                // codepath as the filtering is done within the method.
-                message_lists.current.remove_and_rerender(message_ids_to_remove);
-                message_lists.current.add_messages(event_messages);
             }
         }
 

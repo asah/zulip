@@ -5429,25 +5429,29 @@ def send_change_stream_message_retention_days_notification(
 
     with override_language(stream.realm.default_language):
         if old_value == Stream.MESSAGE_RETENTION_SPECIAL_VALUES_MAP["unlimited"]:
-            notification_string = _(
-                "{user} has changed the [message retention period](/help/message-retention-policy) for this stream from "
-                "**Forever** to **{new_value} days**. Messages will be automatically deleted after {new_value} days."
-            )
-            notification_string = notification_string.format(user=user_mention, new_value=new_value)
+            old_retention_period = _("Forever")
+            new_retention_period = f"{new_value} days"
+            summary_line = f"Messages in this stream will now be automatically deleted {new_value} days after they are sent."
         elif new_value == Stream.MESSAGE_RETENTION_SPECIAL_VALUES_MAP["unlimited"]:
-            notification_string = _(
-                "{user} has changed the [message retention period](/help/message-retention-policy) for this stream from "
-                "**{old_value} days** to **Forever**."
-            )
-            notification_string = notification_string.format(user=user_mention, old_value=old_value)
+            old_retention_period = f"{old_value} days"
+            new_retention_period = _("Forever")
+            summary_line = _("Messages in this stream will now be retained forever.")
         else:
-            notification_string = _(
-                "{user} has changed the [message retention period](/help/message-retention-policy) for this stream from "
-                "**{old_value} days** to **{new_value} days**. Messages will be automatically deleted after {new_value} days."
-            )
-            notification_string = notification_string.format(
-                user=user_mention, old_value=old_value, new_value=new_value
-            )
+            old_retention_period = f"{old_value} days"
+            new_retention_period = f"{new_value} days"
+            summary_line = f"Messages in this stream will now be automatically deleted {new_value} days after they are sent."
+        notification_string = _(
+            "{user} has changed the [message retention period](/help/message-retention-policy) for this stream:\n"
+            "* **Old retention period**: {old_retention_period}\n"
+            "* **New retention period**: {new_retention_period}\n\n"
+            "{summary_line}"
+        )
+        notification_string = notification_string.format(
+            user=user_mention,
+            old_retention_period=old_retention_period,
+            new_retention_period=new_retention_period,
+            summary_line=summary_line,
+        )
         internal_send_stream_message(
             sender, stream, Realm.STREAM_EVENTS_NOTIFICATION_TOPIC, notification_string
         )
@@ -7908,7 +7912,7 @@ def notify_realm_emoji(realm: Realm) -> None:
 
 def check_add_realm_emoji(
     realm: Realm, name: str, author: UserProfile, image_file: IO[bytes]
-) -> Optional[RealmEmoji]:
+) -> RealmEmoji:
     try:
         realm_emoji = RealmEmoji(realm=realm, name=name, author=author)
         realm_emoji.full_clean()
@@ -7931,12 +7935,10 @@ def check_add_realm_emoji(
     finally:
         if not emoji_uploaded_successfully:
             realm_emoji.delete()
-            return None
-        else:
-            realm_emoji.file_name = emoji_file_name
-            realm_emoji.is_animated = is_animated
-            realm_emoji.save(update_fields=["file_name", "is_animated"])
-            notify_realm_emoji(realm_emoji.realm)
+    realm_emoji.file_name = emoji_file_name
+    realm_emoji.is_animated = is_animated
+    realm_emoji.save(update_fields=["file_name", "is_animated"])
+    notify_realm_emoji(realm_emoji.realm)
     return realm_emoji
 
 
