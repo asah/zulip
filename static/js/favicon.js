@@ -39,7 +39,7 @@ export function update_favicon(new_message_count, pm_count) {
         }
 
         if (new_message_count === 0 && pm_count === 0) {
-            $("#favicon").attr("href", "/static/images/favicon.svg?v=4");
+            $("#favicon").attr("href", "/static/images/favicon.svg?v=5");
             return;
         }
 
@@ -52,11 +52,18 @@ export function update_favicon(new_message_count, pm_count) {
                 ? `${Math.floor(new_message_count / 1e3 ** pow)}${suffix}`
                 : "∞";
         const count_long = count.length > 2;
+	const count_to12 = Math.min(12,Math.floor(new_message_count/3));
+	const hex_color = "cba9876543210"[count_to12];
+	const icon_color = "#f" + hex_color + hex_color;
         const rendered_favicon = render_favicon_svg({
             count,
             count_long,
             have_pm: pm_count !== 0,
             favicon_font_url,
+            use_icon_count: true,
+            icon_color: icon_color,
+            count_to12: 6+Math.floor(count_to12/2),
+            count_from16: 16 - 6-Math.floor(count_to12/2),
         });
 
         load_and_set_favicon(rendered_favicon);

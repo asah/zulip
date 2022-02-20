@@ -1,8 +1,10 @@
 import $ from "jquery";
 
+import { format, getUnixTime, startOfToday, fromUnixTime } from "date-fns";
 import * as message_flags from "./message_flags";
 import * as message_lists from "./message_lists";
 import * as message_viewport from "./message_viewport";
+import * as popovers from "./popovers";
 import * as recent_topics_util from "./recent_topics_util";
 import * as rows from "./rows";
 
@@ -19,6 +21,37 @@ This library implements two related, similar concepts:
 */
 
 const _message_content_height_cache = new Map();
+
+export function fc_uncollapse(row, message) {
+    const mbox = row.find(".messagebox");
+    mbox.css("height", "");
+    mbox.find(".messagebox-content").show();
+    mbox.find(".message_fc_collapsed_line").hide();
+    row.closest(".message_row").find(".date_row").show();
+    if (row.hasClass("fc_mention_collapse")) {
+	row.removeClass("fc_mention_collapse");
+	row.addClass("mention");
+    }
+}
+
+export function fc_collapse(row, message, datestr_cutoff) {
+    // todo: performance on initial rendering - static rendering?
+    // also, I left in a lot of old code for preparing content
+    // which is ultimate hidden (left to avoid merge conflicts)
+    row.children(".date_row").hide();
+    const mbox = row.find(".messagebox").css("height", "20px");
+    if (row.hasClass("mention")) {
+	row.removeClass("mention");
+	row.addClass("fc_mention_collapse");
+    }
+    const mc = mbox.children(".messagebox-content").hide();
+    const fc = mbox.find(".message_fc_collapsed_line > .fc_summary");
+    fc.text(message.fc_summary).parent().show();
+    if (message.timestamp < datestr_cutoff) {
+	const datestr = format(fromUnixTime(message.timestamp), "MMM d");
+	mbox.find(".fc_message_time").text(datestr);
+    }
+}
 
 function show_more_link(row) {
     row.find(".message_condenser").hide();
@@ -46,8 +79,10 @@ export function uncollapse(row) {
     // Uncollapse a message, restoring the condensed message [More] or
     // [Show less] link if necessary.
     const message = message_lists.current.get(rows.id(row));
+    fc_uncollapse(row, message);
     message.collapsed = false;
-    message_flags.save_uncollapsed(message);
+    message.unread = false;
+    message_flags.save_force_uncollapsed(message);
 
     const process_row = function process_row(row) {
         const content = row.find(".message_content");
@@ -81,7 +116,10 @@ export function collapse(row) {
     // Collapse a message, hiding the condensed message [More] or
     // [Show less] link if necessary.
     const message = message_lists.current.get(rows.id(row));
+    message.unread = false;
     message.collapsed = true;
+    const datestr_cutoff = getUnixTime(startOfToday());
+    fc_collapse(row, message, datestr_cutoff);
 
     if (message.locally_echoed) {
         // Trying to collapse a locally echoed message is
@@ -91,7 +129,7 @@ export function collapse(row) {
         return;
     }
 
-    message_flags.save_collapsed(message);
+    message_flags.save_force_collapsed(message);
 
     const process_row = function process_row(row) {
         row.find(".message_content").addClass("collapsed");
@@ -106,6 +144,7 @@ export function collapse(row) {
 }
 
 export function toggle_collapse(message) {
+    popovers.hide_all();
     if (message.is_me_message) {
         // Disabled temporarily because /me messages don't have a
         // styling for collapsing /me messages (they only recently
@@ -196,7 +235,7 @@ export function show_message_condenser(row) {
 
 export function condense_and_collapse(elems) {
     const height_cutoff = message_viewport.height() * 0.65;
-
+    const datestr_cutoff = getUnixTime(startOfToday());
     for (const elem of elems) {
         const content = $(elem).find(".message_content");
 
@@ -219,6 +258,35 @@ export function condense_and_collapse(elems) {
 
         const message_height = get_message_height(elem, message.id);
         const long_message = message_height > height_cutoff;
+
+	// ******* collapsed aka [+] button ********
+
+        // Completely hide the message and replace it with a [+]
+        // link if the user has collapsed it.
+	// do this early, since it speeds up rendering
+	if (message.collapsed && message.force_uncollapsed) {
+//	    console.log("fc: uncollapse (force)");
+	    fc_uncollapse($(elem), message, datestr_cutoff);
+	} else
+	if (message.collapsed && message.unread) {
+//	    console.log("fc: uncollapse (unread)");
+	    fc_uncollapse($(elem), message, datestr_cutoff);
+	} else
+	if (message.collapsed && long_message) {
+//	    console.log("fc: uncollapse (is_thoughtful)");
+	    fc_uncollapse($(elem), message, datestr_cutoff);
+	} else
+        if (message.collapsed || (!message.unread && !message.force_uncollapsed)) {
+//	    console.log("fc: collapsed");
+	    fc_collapse($(elem), message, datestr_cutoff);
+            content.addClass("collapsed");
+            $(elem).find(".message_expander").show();
+//        } else {
+//	    console.log("fc: uncollapse (default)");
+	}
+
+	// ******* condensed ********
+
         if (long_message) {
             // All long messages are flagged as such.
             content.addClass("could-be-condensed");
@@ -242,29 +310,22 @@ export function condense_and_collapse(elems) {
             // By default, condense a long message.
             condense_row($(elem));
         } else {
-            content.removeClass("condensed");
-            $(elem).find(".message_expander").hide();
-        }
-
-        // Completely hide the message and replace it with a [More]
-        // link if the user has collapsed it.
-        if (message.collapsed) {
-            content.addClass("collapsed");
-            $(elem).find(".message_expander").show();
+            uncondense_row($(elem));
         }
     }
 }
 
 export function initialize() {
-    $("#message_feed_container").on("click", ".message_expander", function (e) {
+    $("#message_feed_container").on("click", ".message_expander,.fc_message_expander,.fc_summary", function (e) {	
         // Expanding a message can mean either uncollapsing or
         // uncondensing it.
         const row = $(this).closest(".message_row");
         const message = message_lists.current.get(rows.id(row));
         const content = row.find(".message_content");
-        if (message.collapsed) {
+	const is_fc = ($(this).hasClass("fc_message_expander") || $(this).hasClass("fc_summary"));
+        if (message.collapsed || is_fc) {
             // Uncollapse.
-            uncollapse(row);
+	    uncollapse(row);
         } else if (content.hasClass("condensed")) {
             // Uncondense (show the full long message).
             message.condensed = false;
@@ -272,6 +333,13 @@ export function initialize() {
             $(this).hide();
             row.find(".message_condenser").show();
         }
+        e.stopPropagation();
+        e.preventDefault();
+    });
+
+    $("#message_feed_container").on("click", ".fc_message_collapser", function (e) {
+        const row = $(this).closest(".message_row");
+        collapse(row);
         e.stopPropagation();
         e.preventDefault();
     });

@@ -313,6 +313,20 @@
         border: none !important;
     }
 
+    .message_inline_image_with_transcript {
+        position: relative;
+        margin-bottom: 5px;
+        margin-left: 5px;
+        display: inline !important;
+	float:left;
+	margin-right:15px;
+        border: none !important;
+    }
+
+    a.youtube-video-link {
+        height: unset;
+    }
+
     &.rtl .twitter-image,
     &.rtl .message_inline_image {
         margin-left: unset;
@@ -378,6 +392,7 @@
         float: none;
     }
 
+    .fa-play::before,
     .youtube-video .fa-play::before,
     .embed-video .fa-play::before {
         position: absolute;
@@ -626,4 +641,21 @@ a:hover code {
 /* Search highlight used in both topics and rendered_markdown */
 .highlight {
     background-color: hsl(51, 94%, 74%);
+}
+
+div.yt-transcript {
+    display: inline !important;
+}
+
+.ytsecs {
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.ythl {
+    color: hsl(51, 94%, 74%);
+}
+
+.ytbk {
+    display: none; /* not ready to release yet */
 }

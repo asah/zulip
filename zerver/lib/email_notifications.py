@@ -122,7 +122,7 @@ def fix_emojis(fragment: lxml.html.HtmlElement, base_url: str, emojiset: str) ->
 
 def fix_spoilers_in_html(fragment: lxml.html.HtmlElement, language: str) -> None:
     with override_language(language):
-        spoiler_title: str = _("Open Zulip to see the spoiler content")
+        spoiler_title: str = _("Open forecast.chat to see the spoiler content")
     spoilers = fragment.find_class("spoiler-block")
     for spoiler in spoilers:
         header = spoiler.find_class("spoiler-header")[0]
@@ -144,7 +144,7 @@ def fix_spoilers_in_html(fragment: lxml.html.HtmlElement, language: str) -> None
 
 def fix_spoilers_in_text(content: str, language: str) -> str:
     with override_language(language):
-        spoiler_title: str = _("Open Zulip to see the spoiler content")
+        spoiler_title: str = _("Open forecast.chat to see the spoiler content")
     lines = content.split("\n")
     output = []
     open_fence = None
@@ -230,6 +230,7 @@ def build_message_list(
         return {"sender": sender, "content": [build_message_payload(message, sender)]}
 
     def message_header(message: Message) -> Dict[str, Any]:
+        stream_name = ""
         if message.recipient.type == Recipient.PERSONAL:
             narrow_link = get_narrow_url(user, message)
             header = f"You and {message.sender.full_name}"
@@ -252,8 +253,11 @@ def build_message_list(
             header = f"{stream.name} > {message.topic_name()}"
             stream_link = stream_narrow_url(user.realm, stream)
             header_html = f"<a href='{stream_link}'>{stream.name}</a> > <a href='{narrow_link}'>{message.topic_name()}</a>"
+            stream_name = stream.name
         return {
             "plain": header,
+            "stream": stream_name,
+            "topic": message.topic_name(),
             "html": header_html,
             "stream_message": message.recipient.type_name() == "stream",
         }
@@ -456,7 +460,7 @@ def do_send_missedmessage_events_reply_in_zulip(
     if reply_to_address == FromAddress.NOREPLY:
         reply_to_name = ""
     else:
-        reply_to_name = "Zulip"
+        reply_to_name = "forecast.chat"
 
     narrow_url = get_narrow_url(user_profile, missed_messages[0]["message"])
     context.update(
@@ -530,7 +534,7 @@ def do_send_missedmessage_events_reply_in_zulip(
         )
 
     with override_language(user_profile.default_language):
-        from_name: str = _("Zulip notifications")
+        from_name: str = _("forecast.chat notifications")
     from_address = FromAddress.NOREPLY
     if len(senders) == 1 and settings.SEND_MISSED_MESSAGE_EMAILS_AS_USER:
         # If this setting is enabled, you can reply to the Zulip

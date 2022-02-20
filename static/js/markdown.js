@@ -405,6 +405,10 @@ function handleTex(tex, fullmatch) {
     }
 }
 
+export function compute_fc_summary(content) {
+    return content.replace(/(<([^>]+)>)/gi, "").substr(0,120);
+}
+
 export function initialize(helper_config) {
     helpers = helper_config;
 
@@ -452,6 +456,9 @@ export function initialize(helper_config) {
 
     // Disable __strong__ (keeping **strong**)
     marked.InlineLexer.rules.zulip.strong = /^\*\*([\S\s]+?)\*\*(?!\*)/;
+
+    // Disable ___weak___ (keeping *~*weak*~*)
+    marked.InlineLexer.rules.zulip.weak = /^\*~\*([\S\s]+?)\*~\*(?!\*)/;
 
     // Make sure <del> syntax matches the backend processor
     marked.InlineLexer.rules.zulip.del = /^(?!<~)~~([^~]+)~~(?!~)/;

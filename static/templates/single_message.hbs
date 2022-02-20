@@ -3,10 +3,18 @@
   role="listitem">
     <div class="unread_marker"><div class="unread-marker-fill"></div></div>
     {{#if want_date_divider}}
-    <div class="date_row no-select" {{#if msg/is_stream}}style="box-shadow: inset 2px 0px 0px 0px {{background_color}}, -1px 0px 0px 0px {{background_color}};"{{/if}}>{{{date_divider_html}}}</div>
+    <!-- div class="date_row no-select" {{#if msg/is_stream}}style="box-shadow: inset 2px 0px 0px 0px {{background_color}}, -1px 0px 0px 0px {{background_color}};"{{/if}}>{{{date_divider_html}}}</div> -->
+    <div class="date_row no-select" >{{{date_divider_html}}}</div>
     {{/if}}
-    <div class="messagebox {{#if next_is_same_sender}}next_is_same_sender{{/if}}"
-      {{#if msg/is_stream}}style="box-shadow: inset 2px 0px 0px 0px {{background_color}}, -1px 0px 0px 0px {{background_color}};"{{/if}}>
+    <!-- div class="messagebox {{#if next_is_same_sender}}next_is_same_sender{{/if}}"
+      {{#if msg/is_stream}}style="box-shadow: inset 2px 0px 0px 0px {{background_color}}, -1px 0px 0px 0px {{background_color}};"{{/if}}> -->
+    <div class="messagebox {{#if next_is_same_sender}}next_is_same_sender{{/if}}">
+        <div class="message_fc_collapsed_line">
+           <div class="fc_sender_name auto-select" role="button" tabindex="0">{{msg/sender_full_name}}</div>
+           <div class="fc_summary" tabindex="1"></div>
+           <div class="fc_misc"><a href="#" class="fc_message_expander fa fa-plus-square" tabindex="2"></a></div>
+           <div class="fc_misc"><a href="{{ msg/url }}" class="fc_message_time">{{timestr}}</a></div>
+        </div>
         <div class="messagebox-content">
             {{> message_body}}
         </div>

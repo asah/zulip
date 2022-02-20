@@ -76,6 +76,7 @@ python-debian
 semgrep
 
 # Contains Pysa, a security-focused static analyzer
+#pyre-check==0.9.3  # https://github.com/facebook/pyre-check/issues/560
 pyre-check
 libcst<0.4.0 # https://github.com/Instagram/LibCST/pull/604
 

@@ -27,6 +27,7 @@ from typing import (
 from urllib.parse import urlencode, urljoin, urlsplit
 from xml.etree import ElementTree as etree
 from xml.etree.ElementTree import Element, SubElement
+from xml.sax.saxutils import escape as xml_escape
 
 import ahocorasick
 import dateutil.parser
@@ -46,6 +47,7 @@ from markdown.extensions import codehilite, nl2br, sane_lists, tables
 from soupsieve import escape as css_escape
 from tlds import tld_set
 from typing_extensions import TypedDict
+from youtube_transcript_api import YouTubeTranscriptApi as yt_ts_api
 
 from zerver.lib import mention as mention
 from zerver.lib.cache import NotFoundInCache, cache_with_key
@@ -636,6 +638,7 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         data_id: Optional[str] = None,
         insertion_index: Optional[int] = None,
         already_thumbnailed: bool = False,
+        a_class_attr: Optional[str] = None,
     ) -> None:
         desc = desc if desc is not None else ""
 
@@ -656,6 +659,8 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             a.set("title", title)
         if data_id is not None:
             a.set("data-id", data_id)
+        if a_class_attr is not None:
+            a.set("class", a_class_attr)
         img = SubElement(a, "img")
         if (
             settings.THUMBNAIL_IMAGES
@@ -1179,16 +1184,75 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         info = self.get_inlining_information(root, found_url)
         (url, text) = found_url.result
         yt_id = self.youtube_id(url)
+
+        if info["index"] is None:
+            transcript = SubElement(info["parent"], "div")
+        else:
+            transcript = Element("div")
+            info["parent"].insert(info["index"], transcript)
+        transcript.set("class", "yt-transcript");
+        ytspans = []
+        try:
+            def secs_to_mmss(secs):
+                sec = secs % 60
+                sec = 0 if sec <= 6 else sec
+                return f"{int(secs / 60)}:{sec:02} "
+            last = -59 # just in case it doesn't start at 0:00
+            recs = [r for r in yt_ts_api.get_transcript(yt_id)]
+            last_ytspn = None
+            for r in recs:
+                text = r['text']
+                if text in ["[Music]", "[Applause]"]:
+                    continue
+                text = text.replace('>', '')
+                text = re.sub(r'\s(um|uh)\s', ' - ', text)
+                start = int(float(r["start"]))
+                if start % 30 == 0 or start >= last + 30:
+                    display_secs = secs_to_mmss(start)
+                    bookmark = SubElement(transcript, "a")
+                    bookmark.set("class", f"fa fa-bookmark-o ytsecs ytbk")
+                    bookmark.set("ts", str(start))
+                    link = SubElement(transcript, "a")
+                    link.set("class", "ytsecs")
+                    link.set("href", f'https://youtu.be/{yt_id}?t={start}')
+                    link.set("target", "_blank")
+                    link.text = str(secs_to_mmss(start))
+                    last = start
+                    last_ytspn = None
+                if last_ytspn is None:
+                    last_ytspn = SubElement(transcript, "span")
+                    last_ytspn.set("class", "ytspn")
+                    last_ytspn.text = ""
+                    ytspans.append(last_ytspn)
+                last_ytspn.text = last_ytspn.text + text + " "
+            has_transcript = True
+            for ytspn in ytspans:
+                ytspn.text = re.sub(r'\s{2,}', ' ', ytspn.text.strip()) + " "
+            # I looked into real capitalizers ("truecase") but they changed
+            # the length, which is a no-go for us, because we have to keep
+            # text in chunks and match up the strings.
+            capstxt = re.sub(r'([\.\?!]"?\s+)([a-z])', lambda r:
+                             r.group(1) + r.group(2).upper(),
+                             ''.join([ytspn.text for ytspn in ytspans]).lower())
+            capstxt_idx = 0
+            for ytspn in ytspans:
+                ytspn.text = capstxt[capstxt_idx:capstxt_idx+len(ytspn.text)]
+                capstxt_idx += len(ytspn.text)
+        except Exception as exc:
+            has_transcript = False
+            transcript.text = "sorry, couldn't insert a YT transcript for this video."
         self.add_a(
             info["parent"],
             yt_image,
             url,
             None,
             None,
-            "youtube-video message_inline_image",
+            "youtube-video " + ("message_inline_image_with_transcript"
+                                if has_transcript else "message_inline_image"),
             yt_id,
             insertion_index=info["index"],
             already_thumbnailed=True,
+            a_class_attr="youtube-video-link",
         )
 
     def find_proper_insertion_index(
@@ -1402,6 +1466,14 @@ class Timestamp(markdown.inlinepatterns.Pattern):
         # HTML to text will at least display something.
         time_element.text = markdown.util.AtomicString(time_input_string)
         return time_element
+
+class YoutubeBookmark(markdown.inlinepatterns.Pattern):
+    def handleMatch(self, match: Match[str]) -> Optional[Element]:
+        ytbk_input_string = match.group("ytbk")
+        ytbk_element = Element("ytbk")
+        ytbk_element.set("ts", ytbk_input_string)
+        ytbk_element.text = ""
+        return ytbk_element
 
 
 # All of our emojis(non ZWJ sequences) belong to one of these Unicode blocks:
@@ -2226,8 +2298,10 @@ class Markdown(markdown.Markdown):
         EMPHASIS_RE = r"(\*)(?!\s+)([^\*^\n]+)(?<!\s)\*"
         STRONG_RE = r"(\*\*)([^\n]+?)\2"
         STRONG_EM_RE = r"(\*\*\*)(?!\s+)([^\*^\n]+)(?<!\s)\*\*\*"
+        WEAK_RE = r"(\*~\*)([^\n]+?)\2"
         TEX_RE = r"\B(?<!\$)\$\$(?P<body>[^\n_$](\\\$|[^$\n])*)\$\$(?!\$)\B"
         TIMESTAMP_RE = r"<time:(?P<time>[^>]*?)>"
+        YTBK_RE = r"<ytbk:(?P<ytbk>[0-9]+)>"
 
         # Add inline patterns.  We use a custom numbering of the
         # rules, that preserves the order from upstream but leaves
@@ -2242,6 +2316,7 @@ class Markdown(markdown.Markdown):
         reg.register(StreamTopicPattern(get_compiled_stream_topic_link_regex(), self), "topic", 87)
         reg.register(StreamPattern(get_compiled_stream_link_regex(), self), "stream", 85)
         reg.register(Timestamp(TIMESTAMP_RE), "timestamp", 75)
+        reg.register(YoutubeBookmark(YTBK_RE), "ytbk", 20)
         reg.register(
             UserGroupMentionPattern(mention.USER_GROUP_MENTIONS_RE, self), "usergroupmention", 65
         )
@@ -2254,8 +2329,9 @@ class Markdown(markdown.Markdown):
             "entity",
             40,
         )
-        reg.register(markdown.inlinepatterns.SimpleTagPattern(STRONG_RE, "strong"), "strong", 35)
-        reg.register(markdown.inlinepatterns.SimpleTagPattern(EMPHASIS_RE, "em"), "emphasis", 30)
+        reg.register(markdown.inlinepatterns.SimpleTagPattern(WEAK_RE, "small"), "weak", 60)
+        reg.register(markdown.inlinepatterns.SimpleTagPattern(STRONG_RE, "strong"), "strong", 60)
+        reg.register(markdown.inlinepatterns.SimpleTagPattern(EMPHASIS_RE, "em"), "emphasis", 60)
         reg.register(markdown.inlinepatterns.SimpleTagPattern(DEL_RE, "del"), "del", 25)
         reg.register(
             markdown.inlinepatterns.SimpleTextInlineProcessor(

@@ -19,7 +19,7 @@ Form is validated both client-side using jquery-validate (see signup.js) and ser
             {% endif %}
 
             {% trans %}
-            <p>You&rsquo;re almost there! We just need you to do one last thing.</p>
+            <p>Pinky promise! this is the only step: no BS "surveys" about your interests or whatnot.</p>
             {% endtrans %}
         </div>
 
@@ -153,6 +153,12 @@ Form is validated both client-side using jquery-validate (see signup.js) and ser
                             <p class="help-inline text-error">{{ error }}</p>
                             {% endfor %}
                         {% endif %}
+{#
+                        <input id="id_linkedin_url" class="required" type="text" name="linkedin_url"
+                          value="{% if linkedin_url %}{{ full_name }}{% elif form.full_name.value() %}{{ form.full_name.value() }}{% endif %}"
+                          maxlength="{{ MAX_NAME_LENGTH }}" placeholder="{% trans %}Full name or 名前{% endtrans %}" required />
+                        <label for="id_full_name" class="inline-block label-title">{{ _('LinkedIn URL (helps connect with people)') }}</label>
+#}
                     {% endif %}
                 </div>
 

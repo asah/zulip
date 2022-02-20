@@ -7,16 +7,16 @@
         <meta charset="UTF-8" />
         {% block title %}
             {% if user_profile and user_profile.realm.name %}
-                <title>{{user_profile.realm.name}} - Zulip</title>
+                <title>{{user_profile.realm.name}}</title>
             {% else %}
                 {% if OPEN_GRAPH_TITLE %}
                 <title>{{ OPEN_GRAPH_TITLE }}</title>
                 {% else %}
-                <title>Zulip</title>
+                <title>forecast.chat</title>
                 {% endif %}
             {% endif %}
         {% endblock %}
-        <link id="favicon" rel="icon" href="/static/images/favicon.svg?v=4" />
+        <link id="favicon" rel="icon" href="/static/images/favicon.svg?v=5" />
         <link rel="alternate icon" href="/static/images/favicon.png?v=4" />
         {% block meta_viewport %}
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />

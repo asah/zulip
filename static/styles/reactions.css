@@ -4,6 +4,13 @@
 
     user-select: none;
 
+    &.side_thumbs_up {
+	position: absolute;
+	margin-top: 37px;
+	margin-left:-6px;
+	padding:0;
+    }
+
     .message_reaction {
         float: left;
         margin: 0.15em;
@@ -39,7 +46,7 @@
             display: inline-block;
             vertical-align: top;
             top: 0;
-            margin: 1px 3px;
+            margin: 1px 2px; /* forecast: shrink a little to make room for thumbs-up */
 
             height: 17px;
             width: 17px;
@@ -54,7 +61,7 @@
         display: inline-block;
         vertical-align: top;
         color: hsl(200, 100%, 40%);
-        margin: 0 1px 0 0;
+        margin: 0 1px 0 -4px;
         line-height: 1em;
     }
 

@@ -115,7 +115,7 @@ function show_emoji_catalog() {
 
 export function rebuild_catalog() {
     const realm_emojis = emoji.active_realm_emojis;
-
+    const thumbs_up_name = "+1";
     const catalog = new Map();
     catalog.set(
         "Custom",
@@ -141,7 +141,7 @@ export function rebuild_catalog() {
     const popular = [];
     for (const codepoint of typeahead.popular_emojis) {
         const name = emoji.get_emoji_name(codepoint);
-        if (name !== undefined) {
+        if (name !== undefined && name !== thumbs_up_name) {
             const emoji_dict = emoji.emojis_by_name.get(name);
             if (emoji_dict !== undefined) {
                 popular.push(emoji_dict);

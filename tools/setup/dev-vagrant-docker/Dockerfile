@@ -1,4 +1,4 @@
-FROM debian:10
+FROM ubuntu:20.04
 
 ARG DEBIAN_MIRROR
 
@@ -10,9 +10,14 @@ RUN echo locales locales/default_environment_locale select C.UTF-8 | debconf-set
     && apt-get install --no-install-recommends -y \
            ca-certificates \
            curl \
+	   less \
+	   emacs \
+	   wget2 \
+	   rustc cargo \
            locales \
            openssh-server \
            python3 \
+	   python-is-python3 \
            sudo \
            systemd \
     && rm -rf /var/lib/apt/lists/*

@@ -2,9 +2,9 @@
     <div class="admin-table-wrapper">
         <p>
             {{#tr}}
-                Configure external code playgrounds for your Zulip organization. Code playgrounds are interactive in-browser development
+                Configure external code playgrounds. Code playgrounds are interactive in-browser development
                 environments, such as <z-link-repl>replit</z-link-repl>, that are designed to make it convenient to edit and debug
-                code. Zulip code blocks that are <z-link-markdown-help>tagged with a programming language</z-link-markdown-help> will have
+                code. Code blocks that are <z-link-markdown-help>tagged with a programming language</z-link-markdown-help> will have
                 a button visible on hover that allows you to open the code block in the code playground site.
                 {{#*inline "z-link-repl"}}<a href="https://replit.com/" target="_blank" rel="noopener noreferrer">{{> @partial-block}}</a>{{/inline}}
                 {{#*inline "z-link-markdown-help"}}<a href="/help/code-blocks" target="_blank" rel="noopener noreferrer">{{> @partial-block}}</a>{{/inline}}

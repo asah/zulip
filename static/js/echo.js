@@ -306,6 +306,7 @@ export function edit_locally(message, request) {
             // is important in case
             // markdown.contains_backend_only_syntax(message) is true.
             message.content = request.content;
+            message.fc_summary = markdown.compute_fc_summary(request.content);
             message.mentioned = request.mentioned;
             message.mentioned_me_directly = request.mentioned_me_directly;
             message.alerted = request.alerted;
@@ -324,6 +325,7 @@ export function edit_locally(message, request) {
             if (request.collapsed !== undefined) {
                 message.collapsed = request.collapsed;
             }
+            message.fc_summary = markdown.compute_fc_summary(message.content);
         }
     }
 

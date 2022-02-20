@@ -94,7 +94,7 @@ export function update_reply_recipient_label(message) {
     const recipient_label = get_recipient_label(message);
     if (recipient_label) {
         set_reply_button_label(
-            $t({defaultMessage: "Message {recipient_label}"}, {recipient_label}),
+            $t({defaultMessage: "Post in {recipient_label}"}, {recipient_label}),
         );
     } else {
         set_standard_text_for_reply_button();

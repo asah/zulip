@@ -90,6 +90,7 @@ def start(io_loop=None, check_time=500):
     io_loop = io_loop or ioloop.IOLoop.current()
     if io_loop in _io_loops:
         return
+    io_loop.set_blocking_signal_threshold(10.0, None)
     _io_loops[io_loop] = True
     if len(_io_loops) > 1:
         gen_log.warning("tornado.autoreload started more than once in the same process")

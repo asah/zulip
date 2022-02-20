@@ -472,6 +472,7 @@ var inline = {
   link: /^!?\[(inside)\]\(href\)/,
   reflink: /^!?\[(inside)\]\s*\[([^\]]*)\]/,
   nolink: /^!?\[((?:\[[^\]]*\]|[^\[\]])*)\]/,
+  weak: /^___([\s\S]+?)___(?!_)|^\*\*\*([\s\S]+?)\*\*\*(?!\*)/,
   strong: /^__([\s\S]+?)__(?!_)|^\*\*([\s\S]+?)\*\*(?!\*)/,
   em: /^\b_((?:[^_]|__)+?)_\b|^\*((?:\*\*|[\s\S])+?)\*(?!\*)/,
   code: /^(`+)(\s*[\s\S]*?[^`]\s*)\1(?!`)/,
@@ -511,6 +512,7 @@ inline.normal = merge({}, inline);
  */
 
 inline.pedantic = merge({}, inline.normal, {
+  weak: /^___(?=\S)([\s\S]*?\S)___(?!_)|^\*\*\*(?=\S)([\s\S]*?\S)\*\*\*(?!\*)/,
   strong: /^__(?=\S)([\s\S]*?\S)__(?!_)|^\*\*(?=\S)([\s\S]*?\S)\*\*(?!\*)/,
   em: /^_(?=\S)([\s\S]*?\S)_(?!_)|^\*(?=\S)([\s\S]*?\S)\*(?!\*)/
 });
@@ -765,6 +767,13 @@ InlineLexer.prototype.output = function(src) {
     if (cap = this.rules.stream.exec(src)) {
       src = src.substring(cap[0].length);
       out += this.stream(unescape(cap[1]), cap[0]);
+      continue;
+    }
+
+    // weak
+    if (cap = this.rules.weak.exec(src)) {
+      src = src.substring(cap[0].length);
+      out += this.renderer.weak(this.output(cap[2] || cap[1]));
       continue;
     }
 
@@ -1082,6 +1091,10 @@ Renderer.prototype.tablecell = function(content, flags) {
 };
 
 // span level renderer
+Renderer.prototype.weak = function(text) {
+  return '<small>' + text + '</small>';
+};
+
 Renderer.prototype.strong = function(text) {
   return '<strong>' + text + '</strong>';
 };

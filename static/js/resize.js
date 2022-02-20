@@ -53,7 +53,8 @@ function get_new_heights() {
         Number.parseInt($("#left-sidebar").css("marginTop"), 10) -
         Number.parseInt($(".narrows_panel").css("marginTop"), 10) -
         Number.parseInt($(".narrows_panel").css("marginBottom"), 10) -
-        $("#global_filters").safeOuterHeight(true) -
+// forecast hides the global filters
+//       $("#global_filters").safeOuterHeight(true) -
         $("#streams_header").safeOuterHeight(true);
 
     // Don't let us crush the stream sidebar completely out of view
@@ -236,7 +237,12 @@ export function resize_sidebars() {
             $("#invite-user-link").show();
         }
     }
-
+    if (message_viewport.is_narrow()) {
+	$("#left-userlist-toggle-button").show();
+    } else {
+        $("#left-userlist-toggle-button").hide();
+    }
+    
     const h = narrow_window ? left_userlist_get_new_heights() : get_new_heights();
 
     $("#buddy_list_wrapper").css("max-height", h.buddy_list_wrapper_max_height);

@@ -41,6 +41,7 @@ from zerver.models import (
     get_stream_by_id_in_realm,
     get_system_bot,
     get_user,
+    get_user_by_delivery_email,
 )
 from zproject.backends import is_user_active
 
@@ -422,8 +423,31 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
     if "include_quotes" not in options:
         options["include_quotes"] = is_forwarded(subject_header)
 
+    from_header = message.get("From", "")
+    try:
+        from_header = re.sub(r'^.*<(.+?)>', r'\1', from_header.strip())
+        userprofile = get_user_by_delivery_email(from_header, stream.realm)
+        options['show_sender'] = False
+    except Exception as exc:
+        userprofile = None
     body = construct_zulip_body(message, stream.realm, **options)
-    send_zulip(get_system_bot(settings.EMAIL_GATEWAY_BOT, stream.realm_id), stream, subject, body)
+    if userprofile is None:
+        print(f"couldn't find user matching delivery_address {from_header}, " +
+              "using the system_bot userprofile instead")
+        userprofile = get_system_bot(settings.EMAIL_GATEWAY_BOT, stream.realm_id)
+        body = f"From: {from_header}\n{body}"
+    else:
+        body = f"(via email) {body}"
+
+    # forecast.chat hack to redirect misc@ message to various other forums aka streams
+    if re.search(r'^(zulipinbox.)?development-internal', to):
+        if re.search('crypto|bitcoin', body):
+            return process_stream_message('zulipinbox+discussion-crypto.010159f6013837128ddf58e7cfb89e72.show-sender@forecast.chat', message);
+    if re.search(r'^discussion-misc', to):
+        if re.search('crypto|bitcoin', body):
+            return process_stream_message('zulipinbox+discussion-crypto.010159f6013837128ddf58e7cfb89e72.show-sender@forecast.chat', message);
+
+    send_zulip(userprofile, stream, subject, body)
     logger.info(
         "Successfully processed email to %s (%s)",
         stream.name,

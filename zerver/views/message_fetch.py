@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
@@ -33,6 +34,7 @@ from sqlalchemy.types import ARRAY, Boolean, Integer, Text
 from zerver.context_processors import get_valid_realm_from_request
 from zerver.lib.actions import recipient_for_user_profiles
 from zerver.lib.addressee import get_user_profiles, get_user_profiles_by_ids
+from zerver.lib.cache import cache_with_key
 from zerver.lib.exceptions import ErrorCode, JsonableError, MissingAuthenticationError
 from zerver.lib.message import get_first_visible_message_id, messages_for_ids
 from zerver.lib.narrow import is_spectator_compatible, is_web_public_narrow
@@ -55,6 +57,7 @@ from zerver.lib.topic import (
 )
 from zerver.lib.topic_mutes import exclude_topic_mutes
 from zerver.lib.types import Validator
+from zerver.lib.url_encoding import hash_util_encode
 from zerver.lib.utils import statsd
 from zerver.lib.validator import (
     check_bool,
@@ -68,13 +71,16 @@ from zerver.lib.validator import (
     to_non_negative_int,
 )
 from zerver.models import (
+    Message,
     Realm,
     Recipient,
     Stream,
+    SubMessage,
     Subscription,
     UserMessage,
     UserProfile,
     get_active_streams,
+    get_stream,
     get_user_by_id_in_realm_including_cross_realm,
     get_user_including_cross_realm,
 )
@@ -949,6 +955,7 @@ def get_messages_backend(
     client_gravatar: bool = REQ(json_validator=check_bool, default=True),
     apply_markdown: bool = REQ(json_validator=check_bool, default=True),
 ) -> HttpResponse:
+
     anchor = parse_anchor_value(anchor_val, use_first_unread_anchor_val)
     if num_before + num_after > MAX_MESSAGES_PER_FETCH:
         raise JsonableError(
@@ -1148,6 +1155,74 @@ def get_messages_backend(
                 # impossible, and we plan to remove it once we've
                 # debugged the case that makes it happen.
                 raise Exception(str(err), message_id, narrow)
+
+    # insert poll promo only when browsing on a linked-topic
+    @cache_with_key(lambda stream_id, topic:
+                    re.sub(r'[^a-zA-Z0-9]', '_', f"poll-msg-for-{stream_id}-{topic}"),
+                    timeout=10) # 3600 * 24 * 7
+    def get_poll_msg(stream_id: int, topic: str) -> Optional["Message"]:
+        promo_rx = r"promo: (?:.*)?(#narrow/)?stream/%d-?[^/]*/topic/%s" % (
+            stream_id, hash_util_encode(topic))
+        try:
+            polls_stream = get_stream("polls", realm)
+        except Exception:
+            return None
+        if polls_stream is None:
+            return None
+        msgs = Message.objects.filter(
+            recipient__type=Recipient.STREAM,
+            recipient__type_id=polls_stream.id
+        ).filter(
+            content__regex=promo_rx
+        )
+        return msgs[0] if len(msgs) > 0 else None
+
+    @cache_with_key(lambda stream_id, topic:
+                    re.sub(r'[^a-zA-Z0-9]', '_', f"poll-msg-for-{stream_id}-{topic}"),
+                    timeout=10) # 3600 * 24 * 7
+    def get_poll_promo_msg_id(stream_id: int, topic: str) -> Optional[int]:
+        poll_msg = get_poll_msg(stream_id, topic)
+        if poll_msg is None:
+            return None
+        sender_id = None
+        for submsg in SubMessage.objects.filter(message_id=poll_msg.id):
+            if 'promo_msg_id' not in submsg.content:
+                continue
+            try:
+                data = orjson.loads(submsg.content)
+                return data["extra_data"]['promo_msg_id']
+            except Exception:
+                logging.error("submsg %d: corrupt poll_promo_id", submsg.id)
+        return None
+
+    if len(message_ids) > 0 and narrow is not None and len(narrow) > 0:
+        # [..., {'operator': 'topic', 'operand': 'new streams', 'negated': False}]
+        stream_id = topic = None
+        for op in narrow:
+            if op['operator'] == 'stream' and op['negated'] == False:
+                if type(op['operand']) is int:
+                    stream_id = op['operand']
+                else:
+                    if re.search(r'^[0-9]+$', op['operand']):
+                        stream_id = int(op['operand'])
+                    else:
+                        try:
+                            stream = get_stream_by_narrow_operand_access_unchecked(op['operand'], realm)
+                            stream_id = stream.id
+                        except:
+                            print(f"get_messages_backend: couldn't parse stream op '{op['operand']}'")
+                            stream_id = None
+            if op['operator'] == 'topic' and op['negated'] == False:
+                topic = op['operand']
+        # locate the promo msg and change its order to be second in the display
+        if stream_id is not None and topic is not None:
+            poll_promo_msgid = get_poll_promo_msg_id(stream_id, topic)
+            if poll_promo_msgid is not None:
+                if poll_promo_msgid in message_ids:
+                    message_ids.remove(poll_promo_msgid)
+                    message_ids.insert(len(message_ids)-1, poll_promo_msgid)
+                if poll_promo_msgid not in user_message_flags:
+                    user_message_flags[poll_promo_msgid] = "read"
 
     message_list = messages_for_ids(
         message_ids=message_ids,

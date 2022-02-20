@@ -169,6 +169,10 @@ export function initialize() {
 
         const row = $(this).closest(".message_row");
         const id = rows.id(row);
+        const message = message_store.get(id);
+	if (message.collapsed) {
+	    return;
+	}
 
         if (message_edit.is_editing(id)) {
             // Clicks on a message being edited shouldn't trigger a reply.
@@ -180,7 +184,8 @@ export function initialize() {
         if (page_params.is_spectator) {
             return;
         }
-        compose_actions.respond_to_message({trigger: "message click"});
+        compose_actions.quote_and_reply({trigger: "message click"});
+
         e.stopPropagation();
         popovers.hide_all();
     };
@@ -256,7 +261,31 @@ export function initialize() {
         message_lists.current.select_id(rows.id(row));
         message_edit.start(row);
         e.stopPropagation();
+        e.preventDefault();
         popovers.hide_all();
+    });
+    $("body").on("click", ".ytbk", function (e) {
+        const row = message_lists.current.get_row(rows.id($(this).closest(".message_row")));
+	let message_id = rows.id(row);
+	const message = message_lists.current.get(message_id);
+	// toggle content and save
+	const msg_list = message_lists.current;
+	$(this).parent().children().toggleClass("ythl");
+	$(this).toggleClass("fa-bookmark").toggleClass("fa-bookmark-o");
+	const secs = $(this).attr("ts");
+	let content = message.raw_content + "<ytbk:" + secs + ">";
+	console.log(content)
+	const request = { message_id: message.id, content: content };
+	channel.patch({
+	    url: "/json/messages/" + message.id,
+	    data: request,
+	    success() {
+	    },
+	    error(xhr) {
+		alert("backend error: bookmark change not saved")
+	    }
+	});
+        e.stopPropagation();
     });
     $("body").on("click", ".always_visible_topic_edit,.on_hover_topic_edit", function (e) {
         const recipient_row = $(this).closest(".recipient_row");
@@ -501,13 +530,14 @@ export function initialize() {
 
     // SIDEBARS
 
-    $("#userlist-toggle-button").on("click", (e) => {
+    $("#userlist-toggle-button,#left-userlist-toggle-button").on("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
 
         const sidebarHidden = !$(".app-main .column-right").hasClass("expanded");
         popovers.hide_all();
         if (sidebarHidden) {
+	    $(".app-main .column-right .right-sidebar").css('left', '100px');
             popovers.show_userlist_sidebar();
         }
     });

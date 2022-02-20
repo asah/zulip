@@ -1,5 +1,14 @@
 {{! Contents of the "message actions" popup }}
 <ul class="nav nav-list actions_popover">
+    {{#if should_display_collapse}}
+    <li>
+        <a class="popover_toggle_collapse" data-message-id="{{message_id}}">
+            <i class="fa fa-minus" aria-hidden="true"></i>
+            {{t "Collapse" }} <span class="hotkey-hint">(–)</span>
+        </a>
+    </li>
+    {{/if}}
+
     {{#if should_display_hide_option}}
     <li>
         <a class="rehide_muted_user_message" data-message-id="{{message_id}}" tabindex="0">

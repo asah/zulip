@@ -1,1 +1,1 @@
-{% trans %}Zulip digest for {{ realm_name }}{% endtrans %}
+{% trans %}{{ realm_name }} daily digest{% endtrans %}

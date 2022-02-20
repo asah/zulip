@@ -18,9 +18,10 @@ function compare_function(a, b) {
     const stream_a = sub_store.get(a);
     const stream_b = sub_store.get(b);
 
-    const stream_name_a = stream_a ? stream_a.name : "";
-    const stream_name_b = stream_b ? stream_b.name : "";
-
+    let stream_name_a = stream_a ? stream_a.name : "";
+    let stream_name_b = stream_b ? stream_b.name : "";
+    stream_name_a = stream_name_a.startsWith("forecast.chat") ? " "+stream_name_a : stream_name_a;
+    stream_name_b = stream_name_b.startsWith("forecast.chat") ? " "+stream_name_b : stream_name_b;
     return util.strcmp(stream_name_a, stream_name_b);
 }
 

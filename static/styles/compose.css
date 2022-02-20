@@ -1,5 +1,5 @@
 #compose_buttons {
-    text-align: right;
+    text-align: left;
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -28,7 +28,7 @@
         margin-left: 0;
 
         .compose_reply_button {
-            width: 100%;
+/*            width: 100%; */
             text-align: left;
             overflow: hidden;
             white-space: nowrap;
@@ -366,8 +366,8 @@ textarea.new_message_textarea {
     display: table-cell;
     width: calc(100% - 12px);
     padding: 5px;
-    height: 1.5em;
-    max-height: 22em;
+    height: 400px;
+    max-height: 400px;
     margin-bottom: 0;
     resize: vertical !important;
     margin-top: 5px;
@@ -575,16 +575,13 @@ input.recipient_box {
         margin: 0 3px;
     }
 
+    .compose_help_button,
+    .compose_preview_button,
     .compose_draft_button {
         font-size: 15px;
         font-weight: 600;
         font-family: "Source Sans 3", sans-serif;
         padding: 0 5px;
-    }
-
-    .compose_help_button {
-        font-size: 20px;
-        line-height: 17px;
     }
 }
 
@@ -654,6 +651,8 @@ a.compose_control_button.hide {
 
 .dropdown-menu {
     ul {
+	max-height: 150px; /* unlimited list + scroll */
+	overflow-y: auto; /* unlimited list + scroll */
         list-style: none;
         margin: 0;
         background: hsl(0, 0%, 100%);

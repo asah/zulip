@@ -1421,7 +1421,7 @@ class UserBaseSettings(models.Model):
     COLOR_SCHEME_NIGHT = 2
     COLOR_SCHEME_LIGHT = 3
     COLOR_SCHEME_CHOICES = [COLOR_SCHEME_AUTOMATIC, COLOR_SCHEME_NIGHT, COLOR_SCHEME_LIGHT]
-    color_scheme: int = models.PositiveSmallIntegerField(default=COLOR_SCHEME_AUTOMATIC)
+    color_scheme: int = models.PositiveSmallIntegerField(default=COLOR_SCHEME_NIGHT)
 
     # UI setting controlling Zulip's behavior of demoting in the sort
     # order and graying out streams with no recent traffic.  The
@@ -3021,8 +3021,8 @@ class AbstractUserMessage(models.Model):
         "wildcard_mentioned",
         "historical",
         # Unused flags can't be edited.
-        "force_expand",
-        "force_collapse",
+        #"force_expand",  
+        #"force_collapse",
         "summarize_in_home",
         "summarize_in_stream",
     }

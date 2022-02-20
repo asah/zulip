@@ -72,6 +72,7 @@ export function set_message_booleans(message) {
     message.mentioned_me_directly = convert_flag("mentioned");
     message.collapsed = convert_flag("collapsed");
     message.alerted = convert_flag("has_alert_word");
+    message.force_uncollapsed = convert_flag("force_expand");
 
     // Once we have set boolean flags here, the `flags` attribute is
     // just a distraction, so we delete it.  (All the downstream code
@@ -91,6 +92,7 @@ export function init_booleans(message) {
     message.mentioned_me_directly = false;
     message.collapsed = false;
     message.alerted = false;
+    message.force_uncollapsed = false;
 }
 
 export function update_booleans(message, flags) {

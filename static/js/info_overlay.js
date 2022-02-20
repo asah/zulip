@@ -30,11 +30,15 @@ const markdown_help_rows = [
         usage_html: "(or <kbd>Ctrl</kbd>+<kbd>B</kbd>)",
     },
     {
+        markdown: "*~*light*~*",
+        usage_html: "(or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>)",
+    },
+    {
         markdown: "~~strikethrough~~",
     },
     {
-        markdown: "[Zulip website](https://zulip.org)",
-        usage_html: "(or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd>)",
+        markdown: "[forecast website](https://forecast.chat)",
+        usage_html: "(or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd><br></br> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd> <br></br> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>U</kbd>)",
     },
     {
         markdown: `\
@@ -88,19 +92,19 @@ const markdown_help_rows = [
     {
         markdown: `\
 \`\`\`
-def zulip():
-    print "Zulip"
+def forecast():
+    print "Forecast"
 \`\`\``,
     },
     {
         markdown: `\
 \`\`\`python
-def zulip():
-    print "Zulip"
+def forecast():
+    print "Forecast"
 \`\`\``,
         output_html: `\
-<div class="codehilite"><pre><span class="k">def</span> <span class="nf">zulip</span><span class="p">():</span>
-    <span class="k">print</span> <span class="s">"Zulip"</span></pre></div>`,
+<div class="codehilite"><pre><span class="k">def</span> <span class="nf">forecast</span><span class="p">():</span>
+    <span class="k">print</span> <span class="s">"Forecast"</span></pre></div>`,
     },
     {
         note_html: $t_html(
@@ -137,6 +141,10 @@ This text won't be visible until the user clicks.
 \`\`\`math
 \\int_{0}^{1} f(x) dx
 \`\`\``,
+    },
+    {
+        markdown: "<time:2022-02-24T08:36:00-05:00>",
+        usage_html: "(or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd>) inserts 'local time' in each user's timezone, e.g. for scheduling",
     },
     {
         note_html: $t_html(

@@ -16,6 +16,22 @@ import {user_settings} from "./user_settings";
 
 export const view = {}; // function namespace
 
+export const thumbs_up_emoji_code = "1f44d";
+export const thumbs_up_emoji_name = "+1";
+export const thumbs_up_reaction_type = "unicode_emoji";
+export const thumbs_up_local_id = thumbs_up_reaction_type + "," + thumbs_up_emoji_code;
+export const thumbs_up_reaction_info = {
+    local_id: thumbs_up_local_id,
+    user_ids: [],
+    reaction_type: thumbs_up_reaction_type,
+    emoji_name: thumbs_up_emoji_name,
+    emoji_code: thumbs_up_emoji_code
+};
+
+export function thumbs_up_css_width(count) {
+    return ((count < 10) ? "6" : (count < 100) ? "3" : "0")+"px";
+}
+
 export function get_local_reaction_id(reaction_info) {
     return [reaction_info.reaction_type, reaction_info.emoji_code].join(",");
 }
@@ -193,8 +209,10 @@ function generate_title(emoji_name, user_ids) {
 
 // Add a tooltip showing who reacted to a message.
 export function get_reaction_title_data(message_id, local_id) {
+    if (local_id == "") {
+	return "no reactions yet - be the first!";
+    }
     const message = get_message(message_id);
-
     const r = message.clean_reactions.get(local_id);
     const user_list = r.user_ids;
     const emoji_name = r.emoji_name;
@@ -210,6 +228,10 @@ export function get_reaction_section(message_id) {
 }
 
 export function find_reaction(message_id, local_id) {
+    if (local_id == thumbs_up_local_id) {
+	const message_element = $(".message_table").find(`[zid='${CSS.escape(message_id)}']`);
+	return message_element.find(".side_thumbs_up").find("div");
+    }
     const reaction_section = get_reaction_section(message_id);
     const reaction = reaction_section.find(`[data-reaction-id='${CSS.escape(local_id)}']`);
     return reaction;
@@ -223,6 +245,7 @@ export function get_add_reaction_button(message_id) {
 
 export function set_reaction_count(reaction, count) {
     const count_element = reaction.find(".message_reaction_count");
+    count_element.parent().css("margin-left", thumbs_up_css_width(count));
     count_element.text(count);
 }
 
@@ -368,7 +391,7 @@ export function remove_reaction(event) {
     }
 
     r.user_ids = r.user_ids.filter((id) => id !== user_id);
-    if (r.user_ids.length > 0) {
+    if (r.user_ids.length > 0 || local_id === thumbs_up_local_id) {
         update_user_fields(r);
     } else {
         message.clean_reactions.delete(local_id);
@@ -395,7 +418,7 @@ view.remove_reaction = function ({
     const local_id = get_local_reaction_id({reaction_type, emoji_code});
     const reaction = find_reaction(message_id, local_id);
 
-    if (user_list.length === 0) {
+    if (user_list.length === 0 && local_id !== thumbs_up_local_id) {
         // If this user was the only one reacting for this emoji, we simply
         // remove the reaction and exit.
         reaction.remove();
@@ -494,16 +517,27 @@ export function set_clean_reactions(message) {
         the server's latest copy of the reactions.
     */
     message.clean_reactions = new Map();
+    message.thumbs_up_found = false;
 
     for (const local_id of distinct_reactions.keys()) {
         const reaction = distinct_reactions.get(local_id);
         const user_ids = user_map.get(local_id);
-
+	if (reaction.emoji_code == thumbs_up_emoji_code) {
+	    message.thumbs_up_found = true;
+	}
         message.clean_reactions.set(
             local_id,
             make_clean_reaction({local_id, user_ids, ...reaction}),
         );
     }
+    if (message.thumbs_up_found === false) {
+        const thumbs_up_user_ids = [];
+        message.clean_reactions.set(
+	    thumbs_up_local_id,
+            make_clean_reaction(thumbs_up_reaction_info)
+        );
+    }
+
 }
 
 function make_clean_reaction({local_id, user_ids, emoji_name, emoji_code, reaction_type}) {
@@ -517,12 +551,14 @@ function make_clean_reaction({local_id, user_ids, emoji_name, emoji_code, reacti
 
     r.emoji_alt_code = user_settings.emojiset === "text";
     r.is_realm_emoji = r.reaction_type === "realm_emoji" || r.reaction_type === "zulip_extra_emoji";
+    r.is_emoji_thumbs_up = emoji_code == thumbs_up_emoji_code;
 
     return r;
 }
 
 export function update_user_fields(r) {
     r.count = r.user_ids.length;
+    r.extra_style = "margin-left:" + thumbs_up_css_width(r.count);
     r.label = generate_title(r.emoji_name, r.user_ids);
     if (r.user_ids.includes(page_params.user_id)) {
         r.class = "message_reaction reacted";

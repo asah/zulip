@@ -57,6 +57,7 @@
                     {{/if}}
                 {{/if}}
 
+<!--
                 {{#if user_can_resolve_topic}}
                     {{#if topic_is_resolved}}
                         <i class="fa fa-check on_hover_topic_unresolve recipient_bar_icon hidden-for-spectators" data-topic-name="{{topic}}" data-tippy-content="{{t 'Mark as unresolved' }}" role="button" tabindex="0" aria-label="{{t 'Mark as unresolved' }}"></i>
@@ -64,6 +65,7 @@
                         <i class="fa fa-check on_hover_topic_resolve recipient_bar_icon hidden-for-spectators" data-topic-name="{{topic}}" data-tippy-content="{{t 'Mark as resolved' }}" role="button" tabindex="0" aria-label="{{t 'Mark as resolved' }}"></i>
                     {{/if}}
                 {{/if}}
+-->
 
                 {{#if topic_muted}}
                     <i class="fa fa-bell-slash on_hover_topic_unmute recipient_bar_icon" data-stream-id="{{stream_id}}" data-topic-name="{{topic}}" data-tippy-content="{{t 'Unmute topic' }} (M)" role="button" tabindex="0" aria-label="{{t 'Unmute topic' }}"></i>
@@ -79,14 +81,16 @@
 <div class="message_header message_header_private_message dark_background">
     <div class="message-header-wrapper">
         <div class="message-header-contents">
+	<!--
             <a class="message_label_clickable narrows_by_recipient stream_label"
               href="{{pm_with_url}}"
               title="{{#tr}}Narrow to your private messages with {display_reply_to}{{/tr}}">
                 {{#tr}}You and {display_reply_to}{{/tr}}
             </a>
-
+-->
             <span class="recipient_row_date {{#if group_date_divider_html}}{{else}}hide-date{{/if}}">{{{date}}}</span>
         </div>
     </div>
 </div>
 {{/if}}
+

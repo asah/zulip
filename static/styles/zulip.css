@@ -37,7 +37,7 @@ html {
 }
 
 body {
-    font-size: 14px;
+    font-size: 16px;
     line-height: calc(20 / 14);
     font-family: "Source Sans 3", sans-serif;
 }
@@ -71,6 +71,12 @@ a {
         cursor: pointer;
         color: hsl(200, 100%, 40%);
     }
+}
+
+small {
+    font-weight: 400;
+    font-size: 80%;
+    color: #aaa;
 }
 
 code,
@@ -910,9 +916,10 @@ td.pointer {
     position: absolute;
     top: -1px;
     right: -56px;
-    width: 54px;
+    width: 250px;
     height: 22px;
     z-index: 1;
+    text-align: right;
 
     /* This is a bit tricky; we need to reserve space for the message
        controls even when the message isn't hovered, so that hover
@@ -924,13 +931,14 @@ td.pointer {
         visibility: hidden;
         transition: all 0.2s ease;
         width: 16px;
+        margin-left: 4px;
         text-align: center;
         display: inline-block;
         position: relative;
         color: hsl(0, 0%, 73%);
 
         > i {
-            vertical-align: middle;
+/*            vertical-align: middle; */
         }
     }
 
@@ -947,7 +955,9 @@ td.pointer {
     }
 
     .edit_content {
-        width: 12px;
+        width: 75%;
+	text-align: right;
+	padding-right: 5px;
 
         &:hover {
             cursor: pointer;
@@ -1046,7 +1056,7 @@ td.pointer {
 .message_list {
     .recipient_row {
         border-bottom: 1px solid hsl(0, 0%, 88%);
-        margin-bottom: 10px;
+/*        margin-bottom: 10px; */
     }
 }
 
@@ -1079,6 +1089,7 @@ td.pointer {
     font-weight: normal;
     height: 17px;
     line-height: 17px;
+    /* Forecast.chat: consider deleting border-color and background-color */
     border-color: hsla(0, 0%, 0%, 0) hsla(0, 0%, 0%, 0) hsla(0, 0%, 0%, 0)
         hsl(0, 0%, 88%);
     background-color: hsl(0, 0%, 88%);
@@ -1314,9 +1325,10 @@ td.pointer {
     }
 
     .messagebox-content {
-        box-shadow: inset 0 0 0 2px hsl(215, 47%, 50%),
+/*        box-shadow: inset 0 0 0 2px hsl(215, 47%, 50%),
             -1px -1px 0 0 hsl(215, 47%, 50%), 1px 1px 0 0 hsl(215, 47%, 50%),
             -1px 1px 0 0 hsl(215, 47%, 50%), 1px -1px 0 0 hsl(215, 47%, 50%);
+*/
     }
 }
 
@@ -1335,6 +1347,48 @@ td.pointer {
     font-weight: 700;
     vertical-align: top;
     line-height: 12px;
+}
+
+.sender_prediction {
+    display: inline-block;
+    vertical-align: top;
+    line-height: 12px;
+    margin-left: 5px;
+}
+
+.prediction_box1 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#f00;
+}
+
+.prediction_box2 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#ffb347;
+}
+
+.prediction_box3 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#ffff31;
+}
+
+.prediction_box4 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#7FFF00;
+}
+
+.prediction_box5 {
+    display:inline-block;
+    vertical-align: bottom;
+    margin-bottom:5px;
+    background-color:#00FF00;
 }
 
 .sender_name-in-status {
@@ -1471,11 +1525,14 @@ div.focused_table {
 
 .message_content {
     line-height: 1.214;
-    min-height: 17px;
+    min-height: 50px;
     margin-left: 46px;
     display: block;
     position: relative;
     overflow: hidden;
+    @media (width >= $sm_min) {
+	width: 105%;
+    }
 
     &:empty {
         display: none;
@@ -1647,7 +1704,8 @@ div.focused_table {
 }
 
 .messagebox-content {
-    padding: 4px 115px 1px 10px;
+    padding: 4px 115px 1px 10px; 
+/*    padding: 4px 15px 1px 10px; */
 }
 
 .bookend {
@@ -1726,11 +1784,11 @@ div.focused_table {
     white-space: nowrap;
     cursor: default;
 
+    .sub_count,
     .hidden {
         display: none;
     }
 
-    .sub_count,
     .stream,
     & > span {
         white-space: nowrap;
@@ -1742,7 +1800,7 @@ div.focused_table {
         font-size: 16px;
         line-height: 16px;
         margin: 0 -4px 0 0;
-        padding: 12px 6px;
+        padding: 12px 3px;
         overflow: hidden;
         text-overflow: ellipsis;
         @media (width < $sm_min) {
@@ -1775,6 +1833,19 @@ div.focused_table {
         text-decoration: none;
         /* The first ~3px of padding here overlaps with the left padding from sub_count for some reason. */
         padding-right: calc(3px + 10px);
+
+        &::after {
+	    margin-left: 3px;
+            content: "|";
+            position: absolute;
+            top: 30%;
+            height: 50%;
+            color: hsl(0, 0%, 30%);
+            font-size: 20px;
+            @media (width < $sm_min) {
+                top: 10%;
+            }
+        }
     }
 
     .sub_count,
@@ -1835,7 +1906,7 @@ div.focused_table {
         white-space: nowrap;
         margin: 0;
         padding: 12px 0;
-        padding-left: 10px;
+        padding-left: 3px;
 
         @media (width < $sm_min) {
             padding: 7px 0;
@@ -2791,6 +2862,7 @@ select.inline_select_topic_edit {
     }
 }
 
+
 /* This max-width must be synced with message_viewport.is_narrow */
 @media (width < $xl_min) {
     .app-main,
@@ -2829,9 +2901,11 @@ select.inline_select_topic_edit {
         width: 30px;
     }
 
+/*
     #top_navbar.rightside-userlist #navbar-buttons {
         margin-right: 41px;
     }
+*/
 
     .nav .dropdown-menu {
         min-width: 180px;
@@ -2849,11 +2923,11 @@ select.inline_select_topic_edit {
     .top-navbar-container,
     #searchbox_legacy .navbar-search.expanded,
     #searchbox .navbar-search.expanded {
-        width: calc(100% - 84px);
+        width: calc(100% - 44px);
     }
 
     .search_closed .fa-search {
-        right: 115px;
+        right: 75px;
     }
 
     #top_navbar:not(.rightside-userlist) {
@@ -2939,7 +3013,7 @@ select.inline_select_topic_edit {
 
     .top-navbar-border {
         margin-left: 40px;
-        width: calc(100% - 108px);
+        width: calc(100% - 68px);
     }
     /* todo: Figure out why this has to be different
        from above at this width and resolve it */
@@ -2949,7 +3023,7 @@ select.inline_select_topic_edit {
     }
 
     .search_closed .fa-search {
-        right: 115px;
+        right: 75px;
     }
 
     #top_navbar:not(.rightside-userlist) {
@@ -3065,7 +3139,7 @@ select.inline_select_topic_edit {
     }
 
     .message_content {
-        padding-right: 50px;
+/*        padding-right: 50px; */
     }
 }
 
@@ -3094,4 +3168,49 @@ select.inline_select_topic_edit {
     .modal__content p {
         margin: 0;
     }
+}
+
+.message_fc_collapsed_line {
+    display: none;
+    width: calc(100% - 0px);
+    text-overflow: ellipsis;
+    height: 30px;
+}
+
+.fc_sender_name {
+    display: inline-block;
+    font-size:12px;
+    width: 80px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    margin-top: 5px;
+}
+
+.fc_summary {
+    display: inline-block;
+    font-size: 14px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    width: calc(100% - 160px);
+    vertical-align: top;
+    margin-top: 3px;
+}
+.fc_message_expander {
+}
+.fc_message_time {
+    font-size: 12px;
+    text-align: right;
+    margin-left: 7px; /* line up with non-collapsed */
+}
+.fc_misc {
+    display: inline-block;
+    vertical-align: top;
+}
+
+.fc_compose_emoji {
+    width: 20px;
+    height: 20px;
+    margin-top: -5px;
 }

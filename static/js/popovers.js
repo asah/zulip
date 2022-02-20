@@ -689,6 +689,7 @@ export function hide_user_info_popover() {
 
 export function hide_userlist_sidebar() {
     $(".app-main .column-right").removeClass("expanded");
+    $(".app-main .column-right .right-sidebar").css('left', '');
 }
 
 export function hide_pm_list_sidebar() {

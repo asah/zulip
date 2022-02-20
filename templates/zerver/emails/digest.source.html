@@ -1,7 +1,82 @@
 {% extends "zerver/emails/email_base_messages.html" %}
 
 {% block content %}
+    <div style="width:100%">
+      {% if veryrecent_phrases %}
+      <!-- keywords at top for gmail one line preview -->
+      <div style="font-size:6px">
+        {% for phrase in veryrecent_phrases %}
+	{% if loop.index > 1 %} | {% endif %}
+	{{ phrase.phrase }}
+        {% endfor %}
+      </div>
+      {% endif %}
+      <div style="float:left;padding-right:5px"><img height="60" width="60" src="https://forecast.chat/user_avatars/2/realm/night_logo.png?version=2" alt="forecast.chat logo"></div>
+      <div style="float:left;text-align:left">
+        <div style="font-size:18px;margin-top:8px"><b><a href="https://forecast.chat/">forecast.chat</a></b></div>
+        <div style="font-size:13px;margin-top:-7px">prognostications about the future</div>
+      </div>
+      <div style="clear:both"></div>
+    </div>
+    <div>
+    {% if veryrecent_phrases %}
+    <div style="font-size:14px">
+      <p style="font-family:sans-serif; font-size:14px; font-weight:normal; margin: 10px 0 -5px 0"><b>Hot Topics</b></p>
+      <div>
+	{% for phrase in veryrecent_phrases %}
+	{% if loop.index > 1 %} | {% endif %}
+	<a href="https://forecast.chat/#narrow/search/{{ phrase.encoded_phrase }}">{{ phrase.phrase }}</a>
+	{% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% if top_reacted_msgs %}
+    <p style="font-family:sans-serif; font-size:14px; font-weight:normal; margin:10px 0"><b>Most-reacted messages</b></p>
+        <div class='messages'>
+            {% for msg in top_reacted_msgs %}
+            <div class='hot_convo_recipient_block'>
+                <!-- SC: {{ msg.num_reactions }} / {{ msg.weighted_num_reactions }} / {{ msg.lnlen }} / {{ msg.score }} -->
+                <div class='hot_convo_recipient_header'>
+                    {{ msg.stream_name }} | 
+                    <a href="{{ msg.near_message_url }}">{{ msg.subject }}</a>
+                </div>
+                <div class='hot_convo_message_content_block'>
+                    {{ msg.rendered_content_truncated|replace('<div>', '<div style="margin-top:-10px">')|safe }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    {% if veryhot_conversations %}
+    <hr/>
+        <p style="font-family:sans-serif; font-size:14px; font-weight:normal; margin:10px 0"><b>New in the past day</b></p>
+        {% for convo in veryhot_conversations %}
+        <div class='messages'>
+            {% for recipient_block in convo.first_few_messages %}
+                <div class='hot_convo_recipient_block'>
+                    <div class='hot_convo_recipient_header'>{{ recipient_block.header.html|safe }}</div>
+                    <div class='hot_convo_message_content'>
+                        {% for sender_block in recipient_block.senders %}
+                            {% for message_block in sender_block.content %}
+                            <div class='hot_convo_message_content_block'>
+                                {{ message_block.html|replace('<div>', '<div style="margin-top:-10px">')|safe }}
+                            </div>
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+                </div>
+                {% if convo.count > 0 %}<p class="moremessages"><a href="{{ realm_uri }}"> + {{ convo.count }} more message{{ convo.count|pluralize }} by {{ convo.participants|display_list(4) }}.</a></p>{% endif %}
+            {% endfor %}
+        </div>
+        {% endfor %}
+    {% endif %}
+
     {% if hot_conversations %}
+    {% if veryhot_conversations %}
+        <hr/>
+        <p style="font-family:sans-serif; font-size:14px; font-weight:normal; margin:10px 0"><b>Older messages</b></p>
+        {% endif %}
+
         {% for convo in hot_conversations %}
         <div class='messages'>
             {% for recipient_block in convo.first_few_messages %}
@@ -11,13 +86,13 @@
                         {% for sender_block in recipient_block.senders %}
                             {% for message_block in sender_block.content %}
                             <div class='hot_convo_message_content_block'>
-                                {{ message_block.html|safe }}
+                                {{ message_block.html|replace('<div>', '<div style="margin-top:-10px">')|safe }}
                             </div>
                             {% endfor %}
                         {% endfor %}
                     </div>
                 </div>
-                {% if convo.count > 0 %}<p>+ {{ convo.count }} more message{{ convo.count|pluralize }} by {{ convo.participants|display_list(4) }}.</p>{% endif %}
+                {% if convo.count > 0 %}<p class="moremessages"><a href="{{ realm_uri }}"> + {{ convo.count }} more message{{ convo.count|pluralize }} by {{ convo.participants|display_list(4) }}.</a></p>{% endif %}
             {% endfor %}
         </div>
         {% endfor %}
@@ -31,7 +106,7 @@
 
     <br />
 
-    <p><a href="{{ realm_uri }}">{% trans %}Click here to log in to Zulip and catch up.{% endtrans %}</a></p>
+    <p><a href="{{ realm_uri }}">{% trans %}Catch up by visiting Forecast.chat!{% endtrans %}</a></p>
 {% endblock %}
 
 {% block manage_preferences %}
@@ -40,3 +115,4 @@
     <a href="{{ unsubscribe_link }}">{% trans %}Unsubscribe from digest emails{% endtrans %}</a>
 </p>
 {% endblock %}
+

@@ -76,6 +76,18 @@ export function save_uncollapsed(message) {
     send_flag_update_for_messages([message.id], "collapsed", "remove");
 }
 
+export function save_force_collapsed(message) {
+    send_flag_update_for_messages([message.id], "collapsed", "add");
+    send_flag_update_for_messages([message.id], "force_expand", "remove");
+    unread_ops.notify_server_message_read(message);
+}
+
+export function save_force_uncollapsed(message) {
+    send_flag_update_for_messages([message.id], "collapsed", "remove");
+    send_flag_update_for_messages([message.id], "force_expand", "add");
+    unread_ops.notify_server_message_read(message);
+}
+
 // This updates the state of the starred flag in local data
 // structures, and triggers a UI rerender.
 export function update_starred_flag(message_id, new_value) {

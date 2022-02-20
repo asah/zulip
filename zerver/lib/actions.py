@@ -2092,7 +2092,7 @@ def do_send_messages(
         bulk_insert_ums(ums)
 
         for send_request in send_message_requests:
-            do_widget_post_save_actions(send_request)
+            do_widget_post_save_actions(send_request, check_send_message)
 
     # This next loop is responsible for notifying other parts of the
     # Zulip system about the messages we just committed to the database:

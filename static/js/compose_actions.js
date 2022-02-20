@@ -93,8 +93,10 @@ function show_box(msg_type, opts) {
     $("#compose-send-status").removeClass(common.status_classes).hide();
     $("#compose").css({visibility: "visible"});
     // When changing this, edit the 42px in _maybe_autoscroll
-    $(".new_message_textarea").css("min-height", "3em");
-
+    $(".new_message_textarea").css("min-height", "3em"); // 200px ?
+    // forecast hack
+//    $("#message_feed_container").height(
+//	$("body").height() - $("#message_feed_container").position().top - 210);
     set_focus(msg_type, opts);
 }
 
@@ -214,6 +216,20 @@ export function update_placeholder_text() {
     };
 
     $("#compose-textarea").attr("placeholder", compose_ui.compute_placeholder_text(opts));
+    if (opts.topic.startsWith("inquiry:") && !$("#compose-textarea").val().startsWith(common.forecast_template)) {
+	if (!message_lists.current.empty() && // just in case...
+	    message_lists.current.first().content.match(/(<p>)?Q: /)) {
+	    //console.log(message_lists.current.first().content);
+	    var answers_list = Array.from(message_lists.current.first().content.matchAll(/<li>(A[0-9]:.*?)<\/li>/g), m => "* [NN%] "+m[1]);
+	    var answers = answers_list.join("\n").replaceAll("NN%", (100.0/answers_list.length).toFixed(0) + "%")
+	    answers += "\n\nmy thinking: ";
+	    //console.log(answers);
+	    $("#compose-textarea").val(common.forecast_template + answers + $("#compose-textarea").val());
+	    $("#compose-textarea").css("min-height", "10em");
+//	} else {
+//	    console.log(message_lists.current.first());
+	}
+    }
 }
 
 export function start(msg_type, opts) {
@@ -504,7 +520,7 @@ export function quote_and_reply(opts) {
         //     ```
         const prev_caret = textarea.caret();
         let content = $t(
-            {defaultMessage: "{username} [said]({link_to_message}):"},
+            {defaultMessage: "*~* {username} [said]({link_to_message}):*~*"},
             {
                 username: `@_**${message.sender_full_name}|${message.sender_id}**`,
                 link_to_message: `${hash_util.by_conversation_and_time_uri(message)}`,
