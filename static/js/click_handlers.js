@@ -261,6 +261,7 @@ export function initialize() {
         message_lists.current.select_id(rows.id(row));
         message_edit.start(row);
         e.stopPropagation();
+        e.preventDefault();
         popovers.hide_all();
     });
     $("body").on("click", ".ytbk", function (e) {

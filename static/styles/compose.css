@@ -583,11 +583,6 @@ input.recipient_box {
         font-family: "Source Sans 3", sans-serif;
         padding: 0 5px;
     }
-
-    .compose_help_button {
-        font-size: 20px;
-        line-height: 17px;
-    }
 }
 
 .compose_right_float_container {
