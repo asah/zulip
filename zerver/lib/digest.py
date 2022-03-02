@@ -22,7 +22,7 @@ from zerver.lib.message import get_last_message_id
 from zerver.lib.queue import queue_json_publish
 from zerver.lib.send_email import FromAddress, send_future_email
 from zerver.lib.url_encoding import encode_stream, near_message_url, hash_util_encode
-from zerver.lib.processwords import processwords
+from zerver.lib.processwords import processwords, wordbreak
 from zerver.models import (
     Message,
     Reaction,
@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 log_to_file(logger, settings.DIGEST_LOG_PATH)
 
 DIGEST_CUTOFF = 5
-HOTWORDS_CUTOFF = 3
+HOTWORDS_CUTOFF = 2
 MAX_HOT_TOPICS_TO_BE_INCLUDED_IN_DIGEST = 4
 
 TopicKey = Tuple[int, str]
@@ -244,17 +244,16 @@ def get_recent_topics(
     all_html = ""
     for message in messages:
         topic_key = (message.recipient.type_id, message.topic_name())
-
         if topic_key not in digest_topic_map:
             digest_topic_map[topic_key] = DigestTopic(topic_key)
-
         digest_topic_map[topic_key].add_message(message)
-        all_html += get_display_recipient(message.recipient) + " wordbreak "
-        all_html += message.topic_name() + " wordbreak "
-        all_html += message.rendered_content + " wordbreak "
+        all_html += " " + get_display_recipient(message.recipient) + " " + wordbreak
+        all_html += " " + message.topic_name() + " " + wordbreak
+        all_html += " " + message.rendered_content + " " + wordbreak
 
     topics = list(digest_topic_map.values())
 
+    all_html = "<html><body>"+all_html+"</body></html>"
     soup = BeautifulSoup(all_html, features='html.parser')
     for elem in soup.find_all('div', {"class": [
         'message_inline_image'
@@ -268,6 +267,7 @@ def get_recent_topics(
     open("/tmp/alltext.txt", "w").write(all_text) # for development
     freq = processwords(all_text)
     top100_phrases = sorted(freq.items(), key=lambda r:r[1], reverse=True)[0:100]
+    open("/tmp/top100.txt", "w").write(str(top100_phrases)) # for development
     return topics, top100_phrases
 
 
@@ -384,7 +384,7 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
     # for each user, we filter to just the streams they care about.
     veryrecent_topics,_ = get_recent_topics(sorted(list(all_stream_ids)), yesterday, timezone_now())
     recent_topics,_ = get_recent_topics(sorted(list(all_stream_ids)), cutoff_date, yesterday)
-    _,veryrecent_phrases = get_recent_topics(sorted(list(all_stream_ids)), hotwords_date, timezone_now())
+    _,hot_phrases = get_recent_topics(sorted(list(all_stream_ids)), hotwords_date, timezone_now())
     most_reacted_msgs_all = get_most_reacted_messages(yesterday,  timezone_now())
     #localdev dbg_longago = datetime.datetime.fromtimestamp(300, tz=datetime.timezone.utc)
     #localdev most_reacted_msgs_all = get_most_reacted_messages(dbg_longago,  timezone_now())
@@ -410,14 +410,14 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
         context.update(unsubscribe_link=unsubscribe_link)
 
         # Get context data for hot conversations.
-        context["veryrecent_phrases"] = []
+        context["hot_phrases"] = []
         total_phrase_len = 0
-        for phrase in veryrecent_phrases:
+        for phrase in hot_phrases:
             # break on N chars
             total_phrase_len += len(phrase[0])
             if total_phrase_len > 90:
                 break
-            context["veryrecent_phrases"].append({
+            context["hot_phrases"].append({
                 'score': phrase[1],
                 'phrase': phrase[0],
                 'encoded_phrase': hash_util_encode(phrase[0]),

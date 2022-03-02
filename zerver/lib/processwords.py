@@ -6,6 +6,8 @@ import re
 ps = cw = sw = aliases = None
 pwloaded = False
 
+wordbreak = "pwwdbk"
+
 cw_words = '''
 unclear unhelpful anecdotally risky
 mattgroh zulip github.com
@@ -101,7 +103,7 @@ def processwords(text):
         stem = ps.stem(word)
         if stem in sw:
             continue
-        if word == "wordbreak":
+        if word == wordbreak:
             lastword = ""
             continue
         if len(word) >= 4 and len([c for c in word if c.isalpha()]) > 2:
