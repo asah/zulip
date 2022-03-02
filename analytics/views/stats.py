@@ -35,7 +35,7 @@ from zerver.lib.request import REQ, has_request_variables
 from zerver.lib.response import json_success, json_response
 from zerver.lib.timestamp import convert_to_UTC
 from zerver.lib.validator import to_non_negative_int
-from zerver.models import Client, Message, Realm, UserProfile, get_realm
+from zerver.models import Client, Realm, UserProfile, get_realm, Message
 
 if settings.ZILENCER_ENABLED:
     from zilencer.models import RemoteInstallationCount, RemoteRealmCount, RemoteZulipServer
@@ -69,6 +69,7 @@ def render_stats(
     )
 
     page_params["translation_data"] = get_language_translation_data(request_language)
+
     return render(
         request,
         "analytics/stats.html",
@@ -76,6 +77,7 @@ def render_stats(
             target_name=target_name, page_params=page_params, analytics_ready=analytics_ready
         ),
     )
+
 
 @zulip_login_required
 def stats(request: HttpRequest) -> HttpResponse:
@@ -387,7 +389,7 @@ def get_chart_data(
             "sender__delivery_email"
         )]
         return json_success(request, data={'data': data, 'datastr':','.join(data)})
-        
+
     assert len({stat.frequency for stat in stats}) == 1
     end_times = time_range(start, end, stats[0].frequency, min_length)
     data: Dict[str, Any] = {
