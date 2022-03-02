@@ -213,12 +213,12 @@ def retry_send_email_failures(
 
 class QueueProcessingWorker(ABC):
     queue_name: str
-    MAX_CONSUME_SECONDS: Optional[int] = 30
+    MAX_CONSUME_SECONDS: Optional[int] = 60
     # The MAX_CONSUME_SECONDS timeout is only enabled when handling a
     # single queue at once, with no threads.
     ENABLE_TIMEOUTS = False
     CONSUME_ITERATIONS_BEFORE_UPDATE_STATS_NUM = 50
-    MAX_SECONDS_BEFORE_UPDATE_STATS = 30
+    MAX_SECONDS_BEFORE_UPDATE_STATS = 60
 
     # How many un-acknowledged events the worker should have on hand,
     # fetched from the rabbitmq server.  Larger values may be more

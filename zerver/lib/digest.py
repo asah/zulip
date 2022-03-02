@@ -162,7 +162,7 @@ def _enqueue_emails_for_realm(realm: Realm, cutoff: datetime.datetime) -> None:
     # We process batches of 30.  We want a big enough batch
     # to amortize work, but not so big that a single item
     # from the queue takes too long to process.
-    chunk_size = 30
+    chunk_size = 20
     for i in range(0, len(user_ids), chunk_size):
         chunk_user_ids = user_ids[i : i + chunk_size]
         queue_digest_user_ids(chunk_user_ids, cutoff)

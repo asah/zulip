@@ -38,13 +38,13 @@ states = {
 }
 
 MAX_SECONDS_TO_CLEAR: DefaultDict[str, int] = defaultdict(
-    lambda: 30,
+    lambda: 60,
     digest_emails=1200,
     missedmessage_mobile_notifications=120,
     embed_links=60,
 )
 CRITICAL_SECONDS_TO_CLEAR: DefaultDict[str, int] = defaultdict(
-    lambda: 60,
+    lambda: 120,
     missedmessage_mobile_notifications=180,
     digest_emails=1800,
     embed_links=90,
