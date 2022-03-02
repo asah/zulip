@@ -236,9 +236,9 @@ We also strongly recommend reviewers to go through the following resources.
   article by James J. Porter
 - [Zulip code of conduct](../code-of-conduct.md)
 
-[code-style]: ../contributing/code-style.md
-[commit-messages]: ../contributing/version-control.html#commit-messages
+[code-style]: code-style.md
+[commit-messages]: version-control.md#commit-messages
 [test-writing]: ../testing/testing.md
 [mypy]: ../testing/mypy.md
-[git tool]: ../git/zulip-tools.html#fetch-a-pull-request-and-rebase
+[git tool]: ../git/zulip-tools.md#fetch-a-pull-request-and-rebase
 [translation]: ../translating/translating.md
