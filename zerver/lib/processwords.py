@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from nltk.stem import PorterStemmer
+import math
 import re
 
 ps = cw = sw = aliases = None
@@ -77,7 +78,7 @@ def processwords(text):
         print(f"found {len(sw)} stopwords.")
 
         aliases = dict(item.split() for item in alias_words.strip().split("\n"))
-        print(aliases)
+        print(f"found {len(aliases)} aliases.")
         pwloaded = True
 
     text = text.replace("\n", "").replace("\r", "")
@@ -128,12 +129,11 @@ def processwords(text):
         singlewords.append(word)
 
     freq = {}
-    for word in singlewords:
+    for i, word in enumerate(singlewords):
         stem = ps.stem(word)
-        if stem in freq:
-            freq[stem] = freq.get(stem, 0) +1
-        else:
-            freq[word] = freq.get(word, 0) +1
+        key = stem if stem in freq else word
+        # penalize older posts / boost more recent posts
+        freq[key] = freq.get(key, 0.0) + math.log2(i+1) / math.log2(len(singlewords))
     
     top20 = dict(sorted(freq.items(), key=lambda r: r[1])[-100:])
     #print(top20)
