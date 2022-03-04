@@ -1710,6 +1710,7 @@ div.focused_table {
     display: none;
     text-align: center;
     color: hsl(200, 100%, 40%);
+    font-size: 14px;
 
     /* to match .message_content */
     margin-left: 5px;
