@@ -40,8 +40,8 @@ from zerver.models import (
 logger = logging.getLogger(__name__)
 log_to_file(logger, settings.DIGEST_LOG_PATH)
 
-DIGEST_CUTOFF = 5
-HOTWORDS_CUTOFF = 2
+DIGEST_CUTOFF = 7
+HOTWORDS_CUTOFF = 5
 MAX_HOT_TOPICS_TO_BE_INCLUDED_IN_DIGEST = 4
 
 TopicKey = Tuple[int, str]
@@ -356,11 +356,12 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
         assert user.realm_id == realm.id
 
     # Convert from epoch seconds to a datetime object.
-    cutoff_date = datetime.datetime.fromtimestamp(int(cutoff), tz=datetime.timezone.utc)
-    hotwords_date = datetime.datetime.fromtimestamp(int(HOTWORDS_CUTOFF), tz=datetime.timezone.utc)
     if settings.DEVELOPMENT:
         cutoff_date = timezone_now() - datetime.timedelta(days = 365)
         hotwords_date = timezone_now() - datetime.timedelta(days = 365)
+    else:
+        cutoff_date = timezone_now() - datetime.timedelta(days = int(cutoff))
+        hotwords_date = timezone_now() - datetime.timedelta(days = int(HOTWORDS_CUTOFF))
     yesterday = timezone_now() - datetime.timedelta(hours = 24)
 
     result: Dict[int, Dict[str, Any]] = {}
@@ -559,3 +560,4 @@ def get_modified_streams(
         result[user_id].add(stream_id)
 
     return result
+
