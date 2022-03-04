@@ -46,7 +46,7 @@ export function fc_collapse(row, message, datestr_cutoff) {
     }
     const mc = mbox.children(".messagebox-content").hide();
     const fc = mbox.find(".message_fc_collapsed_line > .fc_summary");
-    const fc_summary = mc.children(".rendered_markdown").text().replace(/[♪\s]*https?:\/\/[^ ]+[♪\s]*/, '').substr(0,100);
+    const fc_summary = mc.children(".rendered_markdown").text().replace(/\n/g, " ").replace(/^[♪\s-]*https?:\/\/[^ ]+[♪\s-]*/, '').substr(0,100);
     fc.text(fc_summary).parent().show();
     if (message.timestamp < datestr_cutoff) {
         const datestr = format(fromUnixTime(message.timestamp), "MMM d");
