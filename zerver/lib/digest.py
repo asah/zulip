@@ -360,7 +360,7 @@ def bulk_get_digest_context(users: List[UserProfile], cutoff: float) -> Dict[int
         cutoff_date = timezone_now() - datetime.timedelta(days = 365)
         hotwords_date = timezone_now() - datetime.timedelta(days = 365)
     else:
-        cutoff_date = int(cutoff)
+        cutoff_date = datetime.datetime.fromtimestamp(int(cutoff), tz=datetime.timezone.utc)
         hotwords_date = timezone_now() - datetime.timedelta(days = int(HOTWORDS_CUTOFF))
     yesterday = timezone_now() - datetime.timedelta(hours = 24)
 
