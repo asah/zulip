@@ -29,8 +29,8 @@ export function fc_uncollapse(row, message) {
     mbox.find(".message_fc_collapsed_line").hide();
     row.closest(".message_row").find(".date_row").show();
     if (row.hasClass("fc_mention_collapse")) {
-	row.removeClass("fc_mention_collapse");
-	row.addClass("mention");
+        row.removeClass("fc_mention_collapse");
+        row.addClass("mention");
     }
 }
 
@@ -41,16 +41,16 @@ export function fc_collapse(row, message, datestr_cutoff) {
     row.children(".date_row").hide();
     const mbox = row.find(".messagebox").css("height", "20px");
     if (row.hasClass("mention")) {
-	row.removeClass("mention");
-	row.addClass("fc_mention_collapse");
+        row.removeClass("mention");
+        row.addClass("fc_mention_collapse");
     }
     const mc = mbox.children(".messagebox-content").hide();
     const fc = mbox.find(".message_fc_collapsed_line > .fc_summary");
     const fc_summary = mc.children(".rendered_markdown").text().replace(/[♪\s]*https?:\/\/[^ ]+[♪\s]*/, '').substr(0,100);
     fc.text(fc_summary).parent().show();
     if (message.timestamp < datestr_cutoff) {
-	const datestr = format(fromUnixTime(message.timestamp), "MMM d");
-	mbox.find(".fc_message_time").text(datestr);
+        const datestr = format(fromUnixTime(message.timestamp), "MMM d");
+        mbox.find(".fc_message_time").text(datestr);
     }
 }
 
@@ -67,13 +67,17 @@ function show_condense_link(row) {
 function condense_row(row) {
     const content = row.find(".message_content");
     content.addClass("condensed");
-    show_more_link(row);
+    if (content.hasClass("could-be-condensed")) {
+        show_more_link(row);
+    }
 }
 
 function uncondense_row(row) {
     const content = row.find(".message_content");
     content.removeClass("condensed");
-    show_condense_link(row);
+    if (content.hasClass("could-be-condensed")) {
+        show_condense_link(row);
+    }
 }
 
 export function uncollapse(row) {
@@ -260,36 +264,35 @@ export function condense_and_collapse(elems) {
         const message_height = get_message_height(elem, message.id);
         const long_message = message_height > height_cutoff;
 
-	// ******* collapsed aka [+] button ********
+        // ******* collapsed aka [+] button ********
 
         // Completely hide the message and replace it with a [+]
         // link if the user has collapsed it.
-	// do this early, since it speeds up rendering
-	if (message.collapsed && message.force_uncollapsed) {
-//	    console.log("fc: uncollapse (force)");
-	    fc_uncollapse($(elem), message, datestr_cutoff);
-	} else
-	if (message.collapsed && message.unread) {
-//	    console.log("fc: uncollapse (unread)");
-	    fc_uncollapse($(elem), message, datestr_cutoff);
-	} else
-	if (message.collapsed && long_message) {
-//	    console.log("fc: uncollapse (is_thoughtful)");
-	    fc_uncollapse($(elem), message, datestr_cutoff);
-	} else
+        // do this early, since it speeds up rendering
+        if (message.collapsed && message.force_uncollapsed) {
+//            console.log("fc: uncollapse (force): " + message.content.substr(0,40));
+            fc_uncollapse($(elem), message, datestr_cutoff);
+        } else
+        if (message.collapsed && message.unread) {
+//            console.log("fc: uncollapse (unread): " + message.content.substr(0,40));
+            fc_uncollapse($(elem), message, datestr_cutoff);
+        } else
+        if (message.collapsed && long_message) {
+//            console.log("fc: uncollapse (is_thoughtful): " + message.content.substr(0,40));
+            fc_uncollapse($(elem), message, datestr_cutoff);
+        } else
         if (message.collapsed || (!message.unread && !message.force_uncollapsed)) {
-//	    console.log("fc: collapsed");
-	    fc_collapse($(elem), message, datestr_cutoff);
+//            console.log("fc: collapsed: " + message.content.substr(0,40));
+            fc_collapse($(elem), message, datestr_cutoff);
             content.addClass("collapsed");
             $(elem).find(".message_expander").show();
 //        } else {
-//	    console.log("fc: uncollapse (default)");
-	}
+//            console.log("fc: uncollapse (default): " + message.content.substr(0,40));
+        }
 
-	// ******* condensed ********
+        // ******* condensed ********
 
         if (long_message) {
-            // All long messages are flagged as such.
             content.addClass("could-be-condensed");
         } else {
             content.removeClass("could-be-condensed");
@@ -308,7 +311,6 @@ export function condense_and_collapse(elems) {
         }
 
         if (long_message) {
-            // By default, condense a long message.
             condense_row($(elem));
         } else {
             uncondense_row($(elem));
@@ -317,16 +319,16 @@ export function condense_and_collapse(elems) {
 }
 
 export function initialize() {
-    $("#message_feed_container").on("click", ".message_expander,.fc_message_expander,.fc_summary", function (e) {	
+    $("#message_feed_container").on("click", ".message_expander,.fc_message_expander,.fc_summary", function (e) {
         // Expanding a message can mean either uncollapsing or
         // uncondensing it.
         const row = $(this).closest(".message_row");
         const message = message_lists.current.get(rows.id(row));
         const content = row.find(".message_content");
-	const is_fc = ($(this).hasClass("fc_message_expander") || $(this).hasClass("fc_summary"));
+        const is_fc = ($(this).hasClass("fc_message_expander") || $(this).hasClass("fc_summary"));
         if (message.collapsed || is_fc) {
             // Uncollapse.
-	    uncollapse(row);
+            uncollapse(row);
         } else if (content.hasClass("condensed")) {
             // Uncondense (show the full long message).
             message.condensed = false;
