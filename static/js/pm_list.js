@@ -30,6 +30,8 @@ function get_filter_li() {
 
 function set_count(count) {
     ui_util.update_unread_count_in_dom(get_filter_li(), count);
+    ui_util.update_unread_count_in_dom(
+        $("#left-userlist-toggle-button"), count);
 }
 
 function remove_expanded_private_messages() {
