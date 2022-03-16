@@ -218,21 +218,16 @@ export function apply_markdown(message) {
         },
         silencedMentionHandler(quote) {
             // Silence quoted mentions.
-            const user_mention_re = /<span[^>]*user-mention[^>]*data-user-id="(\d+|\*)"[^>]*>@/gm;
-            quote = quote.replace(user_mention_re, (match) => {
-                match = match.replace(/"user-mention"/g, '"user-mention silent"');
-                match = match.replace(/>@/g, ">");
-                return match;
-            });
+            quote = quote.replace(
+                /(<span class="user-mention)(" data-user-id="(\d+|\*)">)@/g,
+                "$1 silent$2",
+            );
 
             // Silence quoted user group mentions.
-            const user_group_re =
-                /<span[^>]*user-group-mention[^>]*data-user-group-id="\d+"[^>]*>@/gm;
-            quote = quote.replace(user_group_re, (match) => {
-                match = match.replace(/"user-group-mention"/g, '"user-group-mention silent"');
-                match = match.replace(/>@/g, ">");
-                return match;
-            });
+            quote = quote.replace(
+                /(<span class="user-group-mention)(" data-user-group-id="\d+">)@/g,
+                "$1 silent$2",
+            );
 
             // In most cases, if you are being mentioned in the message you're quoting, you wouldn't
             // mention yourself outside of the blockquote (and, above it). If that you do that, the
@@ -309,7 +304,7 @@ function handleUnicodeEmoji(unicode_emoji) {
 
     if (emoji_name) {
         const alt_text = ":" + emoji_name + ":";
-        const title = emoji_name.split("_").join(" ");
+        const title = emoji_name.replace(/_/g, " ");
         return make_emoji_span(codepoint, title, alt_text);
     }
 
@@ -318,7 +313,7 @@ function handleUnicodeEmoji(unicode_emoji) {
 
 function handleEmoji(emoji_name) {
     const alt_text = ":" + emoji_name + ":";
-    const title = emoji_name.split("_").join(" ");
+    const title = emoji_name.replace(/_/g, " ");
 
     // Zulip supports both standard/Unicode emoji, served by a
     // spritesheet and custom realm-specific emoji (served by URL).

@@ -161,7 +161,6 @@ from zerver.lib.string_validation import check_stream_name, check_stream_topic
 from zerver.lib.timestamp import datetime_to_timestamp, timestamp_to_datetime
 from zerver.lib.timezone import canonicalize_timezone
 from zerver.lib.topic import (
-    LEGACY_PREV_TOPIC,
     ORIG_TOPIC,
     RESOLVED_TOPIC_PREFIX,
     TOPIC_LINKS,
@@ -174,7 +173,12 @@ from zerver.lib.topic import (
     update_messages_for_topic_edit,
 )
 from zerver.lib.topic_mutes import add_topic_mute, get_topic_mutes, remove_topic_mute
-from zerver.lib.types import ProfileDataElementValue, ProfileFieldData, UnspecifiedValue
+from zerver.lib.types import (
+    EditHistoryEvent,
+    ProfileDataElementValue,
+    ProfileFieldData,
+    UnspecifiedValue,
+)
 from zerver.lib.upload import (
     claim_attachment,
     delete_avatar_image,
@@ -248,6 +252,7 @@ from zerver.models import (
     get_huddle_user_ids,
     get_old_unclaimed_attachments,
     get_realm,
+    get_realm_domains,
     get_realm_playgrounds,
     get_stream,
     get_stream_by_id_in_realm,
@@ -311,6 +316,22 @@ STREAM_ASSIGNMENT_COLORS = [
     "#c8bebf",
     "#a47462",
 ]
+
+
+def create_historical_user_messages(*, user_id: int, message_ids: List[int]) -> None:
+    # Users can see and interact with messages sent to streams with
+    # public history for which they do not have a UserMessage because
+    # they were not a subscriber at the time the message was sent.
+    # In order to add emoji reactions or mutate message flags for
+    # those messages, we create UserMessage objects for those messages;
+    # these have the special historical flag which keeps track of the
+    # fact that the user did not receive the message at the time it was sent.
+    for message_id in message_ids:
+        UserMessage.objects.create(
+            user_profile_id=user_id,
+            message_id=message_id,
+            flags=UserMessage.flags.historical | UserMessage.flags.read,
+        )
 
 
 def subscriber_info(user_id: int) -> Dict[str, Any]:
@@ -2565,16 +2586,8 @@ def check_add_reaction(
         check_emoji_request(user_profile.realm, emoji_name, emoji_code, reaction_type)
 
     if user_message is None:
-        # Users can see and react to messages sent to streams they
-        # were not a subscriber to; in order to receive events for
-        # those, we give the user a `historical` UserMessage objects
-        # for the message.  This is the same trick we use for starring
-        # messages.
-        UserMessage.objects.create(
-            user_profile=user_profile,
-            message=message,
-            flags=UserMessage.flags.historical | UserMessage.flags.read,
-        )
+        # See called function for more context.
+        create_historical_user_messages(user_id=user_profile.id, message_ids=[message.id])
 
     do_add_reaction(user_profile, message, emoji_name, emoji_code, reaction_type)
 
@@ -5349,21 +5362,16 @@ def send_change_stream_description_notification(
     user_mention = silent_mention_syntax_for_user(acting_user)
 
     with override_language(stream.realm.default_language):
-        notification_string = _(
-            "{user} changed the description for this stream.\n\n"
-            "* **Old description:**\n"
-            "``` quote\n"
-            "{old_description}\n"
-            "```\n"
-            "* **New description:**\n"
-            "``` quote\n"
-            "{new_description}\n"
-            "```"
-        )
-        notification_string = notification_string.format(
-            user=user_mention,
-            old_description=old_description,
-            new_description=new_description,
+        notification_string = (
+            _("{user} changed the description for this stream.").format(user=user_mention)
+            + "\n\n* **"
+            + _("Old description")
+            + ":**"
+            + f"\n```` quote\n{old_description}\n````\n"
+            + "* **"
+            + _("New description")
+            + ":**"
+            + f"\n```` quote\n{new_description}\n````"
         )
 
         internal_send_stream_message(
@@ -6152,7 +6160,7 @@ class ReadMessagesEvent:
     flag: str = field(default="read", init=False)
 
 
-def do_mark_all_as_read(user_profile: UserProfile, client: Client) -> int:
+def do_mark_all_as_read(user_profile: UserProfile) -> int:
     log_statsd_event("bankruptcy")
 
     # First, we clear mobile push notifications.  This is safer in the
@@ -6347,7 +6355,7 @@ def do_clear_mobile_push_notifications_for_ids(
 
 
 def do_update_message_flags(
-    user_profile: UserProfile, client: Client, operation: str, flag: str, messages: List[int]
+    user_profile: UserProfile, operation: str, flag: str, messages: List[int]
 ) -> int:
     valid_flags = [item for item in UserMessage.flags if item not in UserMessage.NON_API_FLAGS]
     if flag not in valid_flags:
@@ -6359,31 +6367,16 @@ def do_update_message_flags(
     flagattr = getattr(UserMessage.flags, flag)
 
     msgs = UserMessage.objects.filter(user_profile=user_profile, message_id__in=messages)
-    # This next block allows you to star any message, even those you
-    # didn't receive (e.g. because you're looking at a public stream
-    # you're not subscribed to, etc.).  The problem is that starring
-    # is a flag boolean on UserMessage, and UserMessage rows are
-    # normally created only when you receive a message to support
-    # searching your personal history.  So we need to create one.  We
-    # add UserMessage.flags.historical, so that features that need
-    # "messages you actually received" can exclude these UserMessages.
-    if msgs.count() == 0:
-        if not len(messages) == 1:
-            raise JsonableError(_("Invalid message(s)"))
-        if flag != "starred":
-            raise JsonableError(_("Invalid message(s)"))
-        # Validate that the user could have read the relevant message
-        message = access_message(user_profile, messages[0])[0]
+    um_message_ids = {um.message_id for um in msgs}
+    historical_message_ids = list(set(messages) - um_message_ids)
 
-        # OK, this is a message that you legitimately have access
-        # to via narrowing to the stream it is on, even though you
-        # didn't actually receive it.  So we create a historical,
-        # read UserMessage message row for you to star.
-        UserMessage.objects.create(
-            user_profile=user_profile,
-            message=message,
-            flags=UserMessage.flags.historical | UserMessage.flags.read,
-        )
+    # Users can mutate flags for messages that don't have a UserMessage yet.
+    # First, validate that the user is even allowed to access these message_ids.
+    for message_id in historical_message_ids:
+        access_message(user_profile, message_id)
+
+    # And then create historical UserMessage records.  See the called function for more context.
+    create_historical_user_messages(user_id=user_profile.id, message_ids=historical_message_ids)
 
     if operation == "add":
         count = msgs.update(flags=F("flags").bitor(flagattr))
@@ -6679,7 +6672,9 @@ def do_update_message(
     * the message's content (in which case the caller will have
       set both content and rendered_content),
     * the topic, in which case the caller will have set topic_name
-    * or both
+    * or both message's content and the topic
+    * or stream and/or topic, in which case the caller will have set
+        new_stream and/or topic_name.
 
     With topic edits, propagate_mode determines whether other message
     also have their topics edited.
@@ -6695,7 +6690,7 @@ def do_update_message(
         "rendering_only": False,
     }
 
-    edit_history_event: Dict[str, Any] = {
+    edit_history_event: EditHistoryEvent = {
         "user_id": user_profile.id,
         "timestamp": event["edit_timestamp"],
     }
@@ -6811,6 +6806,7 @@ def do_update_message(
         assert stream_being_edited is not None
 
         edit_history_event["prev_stream"] = stream_being_edited.id
+        edit_history_event["stream"] = new_stream.id
         event[ORIG_TOPIC] = orig_topic_name
         target_message.recipient_id = new_stream.recipient_id
 
@@ -6869,7 +6865,8 @@ def do_update_message(
         event[ORIG_TOPIC] = orig_topic_name
         event[TOPIC_NAME] = topic_name
         event[TOPIC_LINKS] = topic_links(target_message.sender.realm_id, topic_name)
-        edit_history_event[LEGACY_PREV_TOPIC] = orig_topic_name
+        edit_history_event["prev_topic"] = orig_topic_name
+        edit_history_event["topic"] = topic_name
 
     update_edit_history(target_message, timestamp, edit_history_event)
 
@@ -6879,16 +6876,16 @@ def do_update_message(
         assert stream_being_edited is not None
 
         # Other messages should only get topic/stream fields in their edit history.
-        topic_only_edit_history_event = {
-            k: v
-            for (k, v) in edit_history_event.items()
-            if k
-            not in [
-                "prev_content",
-                "prev_rendered_content",
-                "prev_rendered_content_version",
-            ]
+        topic_only_edit_history_event: EditHistoryEvent = {
+            "user_id": edit_history_event["user_id"],
+            "timestamp": edit_history_event["timestamp"],
         }
+        if topic_name is not None:
+            topic_only_edit_history_event["prev_topic"] = edit_history_event["prev_topic"]
+            topic_only_edit_history_event["topic"] = edit_history_event["topic"]
+        if new_stream is not None:
+            topic_only_edit_history_event["prev_stream"] = edit_history_event["prev_stream"]
+            topic_only_edit_history_event["stream"] = edit_history_event["stream"]
 
         messages_list = update_messages_for_topic_edit(
             acting_user=user_profile,
@@ -8090,10 +8087,27 @@ def do_update_linkifier(realm: Realm, id: int, pattern: str, url_format_string: 
     notify_linkifiers(realm)
 
 
-def do_add_realm_domain(realm: Realm, domain: str, allow_subdomains: bool) -> (RealmDomain):
+@transaction.atomic(durable=True)
+def do_add_realm_domain(
+    realm: Realm, domain: str, allow_subdomains: bool, *, acting_user: Optional[UserProfile]
+) -> (RealmDomain):
     realm_domain = RealmDomain.objects.create(
         realm=realm, domain=domain, allow_subdomains=allow_subdomains
     )
+
+    RealmAuditLog.objects.create(
+        realm=realm,
+        acting_user=acting_user,
+        event_type=RealmAuditLog.REALM_DOMAIN_ADDED,
+        event_time=timezone_now(),
+        extra_data=orjson.dumps(
+            {
+                "realm_domains": get_realm_domains(realm),
+                "added_domain": {"domain": domain, "allow_subdomains": allow_subdomains},
+            }
+        ).decode(),
+    )
+
     event = dict(
         type="realm_domains",
         op="add",
@@ -8101,13 +8115,34 @@ def do_add_realm_domain(realm: Realm, domain: str, allow_subdomains: bool) -> (R
             domain=realm_domain.domain, allow_subdomains=realm_domain.allow_subdomains
         ),
     )
-    send_event(realm, event, active_user_ids(realm.id))
+    transaction.on_commit(lambda: send_event(realm, event, active_user_ids(realm.id)))
+
     return realm_domain
 
 
-def do_change_realm_domain(realm_domain: RealmDomain, allow_subdomains: bool) -> None:
+@transaction.atomic(durable=True)
+def do_change_realm_domain(
+    realm_domain: RealmDomain, allow_subdomains: bool, *, acting_user: Optional[UserProfile]
+) -> None:
     realm_domain.allow_subdomains = allow_subdomains
     realm_domain.save(update_fields=["allow_subdomains"])
+
+    RealmAuditLog.objects.create(
+        realm=realm_domain.realm,
+        acting_user=acting_user,
+        event_type=RealmAuditLog.REALM_DOMAIN_CHANGED,
+        event_time=timezone_now(),
+        extra_data=orjson.dumps(
+            {
+                "realm_domains": get_realm_domains(realm_domain.realm),
+                "changed_domain": {
+                    "domain": realm_domain.domain,
+                    "allow_subdomains": realm_domain.allow_subdomains,
+                },
+            }
+        ).decode(),
+    )
+
     event = dict(
         type="realm_domains",
         op="change",
@@ -8115,15 +8150,35 @@ def do_change_realm_domain(realm_domain: RealmDomain, allow_subdomains: bool) ->
             domain=realm_domain.domain, allow_subdomains=realm_domain.allow_subdomains
         ),
     )
-    send_event(realm_domain.realm, event, active_user_ids(realm_domain.realm_id))
+    transaction.on_commit(
+        lambda: send_event(realm_domain.realm, event, active_user_ids(realm_domain.realm_id))
+    )
 
 
+@transaction.atomic(durable=True)
 def do_remove_realm_domain(
     realm_domain: RealmDomain, *, acting_user: Optional[UserProfile]
 ) -> None:
     realm = realm_domain.realm
     domain = realm_domain.domain
     realm_domain.delete()
+
+    RealmAuditLog.objects.create(
+        realm=realm,
+        acting_user=acting_user,
+        event_type=RealmAuditLog.REALM_DOMAIN_REMOVED,
+        event_time=timezone_now(),
+        extra_data=orjson.dumps(
+            {
+                "realm_domains": get_realm_domains(realm),
+                "removed_domain": {
+                    "domain": realm_domain.domain,
+                    "allow_subdomains": realm_domain.allow_subdomains,
+                },
+            }
+        ).decode(),
+    )
+
     if RealmDomain.objects.filter(realm=realm).count() == 0 and realm.emails_restricted_to_domains:
         # If this was the last realm domain, we mark the realm as no
         # longer restricted to domain, because the feature doesn't do
@@ -8131,7 +8186,7 @@ def do_remove_realm_domain(
         # confusing than the alternative.
         do_set_realm_property(realm, "emails_restricted_to_domains", False, acting_user=acting_user)
     event = dict(type="realm_domains", op="remove", domain=domain)
-    send_event(realm, event, active_user_ids(realm.id))
+    transaction.on_commit(lambda: send_event(realm, event, active_user_ids(realm.id)))
 
 
 def notify_realm_playgrounds(realm: Realm) -> None:

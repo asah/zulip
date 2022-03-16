@@ -27,6 +27,7 @@ function format_member_list_elem(person) {
     return render_stream_member_list_entry({
         name: person.full_name,
         user_id: person.user_id,
+        is_current_user: person.user_id === page_params.user_id,
         email: settings_data.email_for_user_settings(person),
         displaying_for_admin: page_params.is_admin,
         show_email: settings_data.show_email(),
@@ -264,7 +265,7 @@ function remove_subscriber({stream_id, target_user_id, list_entry}) {
 }
 
 export function update_subscribers_list(sub) {
-    // This is for the "Stream membership" section of the right panel.
+    // This is for the "Subscribers" tab of the right panel.
     // Render subscriptions only if stream settings is open
     if (!hash_util.is_editing_stream(sub.stream_id)) {
         blueslip.info("ignoring subscription for stream that is no longer being edited");

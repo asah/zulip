@@ -43,6 +43,7 @@ import * as stream_list from "./stream_list";
 import * as stream_popover from "./stream_popover";
 import * as topic_list from "./topic_list";
 import * as ui_util from "./ui_util";
+import {parse_html} from "./ui_util";
 import * as unread_ops from "./unread_ops";
 import * as user_profile from "./user_profile";
 import * as util from "./util";
@@ -587,10 +588,9 @@ export function initialize() {
             // so that they don't stick and overlap with
             // each other.
             delay: 0,
-            content: render_buddy_list_tooltip_content(title_data),
+            content: () => parse_html(render_buddy_list_tooltip_content(title_data)),
             arrow: true,
             placement,
-            allowHTML: true,
             showOnCreate: true,
             onHidden: (instance) => {
                 instance.destroy();
@@ -814,11 +814,9 @@ export function initialize() {
         hotspots.close_hotspot_icon(this);
 
         // show popover
-        const hotspot_name = $(e.target)
-            .closest(".hotspot-icon")
-            .attr("id")
-            .replace("hotspot_", "")
-            .replace("_icon", "");
+        const [, hotspot_name] = /^hotspot_(.*)_icon$/.exec(
+            $(e.target).closest(".hotspot-icon").attr("id"),
+        );
         const overlay_name = "hotspot_" + hotspot_name + "_overlay";
 
         overlays.open_overlay({
@@ -847,7 +845,7 @@ export function initialize() {
 
         const overlay_name = $(this).closest(".hotspot.overlay").attr("id");
 
-        const hotspot_name = overlay_name.replace("hotspot_", "").replace("_overlay", "");
+        const [, hotspot_name] = /^hotspot_(.*)_overlay$/.exec(overlay_name);
 
         // Comment below to disable marking hotspots as read in production
         hotspots.post_hotspot_as_read(hotspot_name);

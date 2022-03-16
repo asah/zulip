@@ -712,7 +712,7 @@ class GetUnreadMsgsTest(ZulipTestCase):
 
         self.assertEqual(
             pm_dict[cordelia_pm_message_ids[0]],
-            dict(sender_id=cordelia.id),
+            dict(other_user_id=cordelia.id),
         )
 
     def test_raw_unread_personal_from_self(self) -> None:
@@ -756,12 +756,9 @@ class GetUnreadMsgsTest(ZulipTestCase):
 
         self.assertEqual(set(pm_dict.keys()), {othello_msg.id})
 
-        # For legacy reason we call the field `sender_id` here,
-        # but it really refers to the other user id in the conversation,
-        # which is Othello.
         self.assertEqual(
             pm_dict[othello_msg.id],
-            dict(sender_id=othello.id),
+            dict(other_user_id=othello.id),
         )
 
         cordelia = self.example_user("cordelia")
@@ -778,10 +775,9 @@ class GetUnreadMsgsTest(ZulipTestCase):
             {othello_msg.id, cordelia_msg.id},
         )
 
-        # Again, `sender_id` is misnamed here.
         self.assertEqual(
             pm_dict[cordelia_msg.id],
-            dict(sender_id=cordelia.id),
+            dict(other_user_id=cordelia.id),
         )
 
         # Send a message to ourself.
@@ -797,10 +793,9 @@ class GetUnreadMsgsTest(ZulipTestCase):
             {othello_msg.id, cordelia_msg.id, hamlet_msg.id},
         )
 
-        # Again, `sender_id` is misnamed here.
         self.assertEqual(
             pm_dict[hamlet_msg.id],
-            dict(sender_id=hamlet.id),
+            dict(other_user_id=hamlet.id),
         )
 
         # Call get_raw_unread_data again.
@@ -814,10 +809,9 @@ class GetUnreadMsgsTest(ZulipTestCase):
             {othello_msg.id, cordelia_msg.id, hamlet_msg.id},
         )
 
-        # Again, `sender_id` is misnamed here.
         self.assertEqual(
             pm_dict[hamlet_msg.id],
-            dict(sender_id=hamlet.id),
+            dict(other_user_id=hamlet.id),
         )
 
     def test_unread_msgs(self) -> None:
@@ -1060,6 +1054,26 @@ class MessageAccessTests(ZulipTestCase):
             if msg["id"] in message_ids:
                 check_flags(msg["flags"], set())
 
+    def test_change_collapsed_public_stream_historical(self) -> None:
+        hamlet = self.example_user("hamlet")
+        stream_name = "new_stream"
+        self.subscribe(hamlet, stream_name)
+        self.login_user(hamlet)
+        message_id = self.send_stream_message(hamlet, stream_name, "test")
+
+        # Now login as another user who wasn't on that stream
+        cordelia = self.example_user("cordelia")
+        self.login_user(cordelia)
+
+        result = self.client_post(
+            "/json/messages/flags",
+            dict(messages=orjson.dumps([message_id]).decode(), op="add", flag="collapsed"),
+        )
+        self.assert_json_success(result)
+
+        um = UserMessage.objects.get(user_profile_id=cordelia.id, message_id=message_id)
+        self.assertEqual(um.flags_list(), ["read", "collapsed", "historical"])
+
     def test_change_star_public_stream_historical(self) -> None:
         """
         You can set a message as starred/un-starred through
@@ -1097,17 +1111,6 @@ class MessageAccessTests(ZulipTestCase):
             "/json/messages/flags",
             {"messages": orjson.dumps(sent_message_ids).decode(), "op": "add", "flag": "read"},
         )
-
-        # We can't change flags other than "starred" on historical messages:
-        result = self.client_post(
-            "/json/messages/flags",
-            {"messages": orjson.dumps(message_ids).decode(), "op": "add", "flag": "read"},
-        )
-        self.assert_json_error(result, "Invalid message(s)")
-
-        # Trying to change a list of more than one historical message fails
-        result = self.change_star(message_ids * 2)
-        self.assert_json_error(result, "Invalid message(s)")
 
         # Confirm that one can change the historical flag now
         result = self.change_star(message_ids)

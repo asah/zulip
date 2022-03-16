@@ -289,6 +289,17 @@ export function setup_stream_settings(node) {
     show_settings_for(node);
 }
 
+export function update_muting_rendering(sub) {
+    const edit_container = stream_settings_containers.get_edit_container(sub);
+    const notification_checkboxes = edit_container.find(".sub_notification_setting");
+    const is_muted_checkbox = edit_container.find("#sub_is_muted_setting .sub_setting_control");
+
+    is_muted_checkbox.prop("checked", sub.is_muted);
+    edit_container.find(".mute-note").toggleClass("hide-mute-note", !sub.is_muted);
+    notification_checkboxes.toggleClass("muted-sub", sub.is_muted);
+    notification_checkboxes.find("input[type='checkbox']").prop("disabled", sub.is_muted);
+}
+
 function stream_is_muted_changed(e) {
     const sub = get_sub_for_target(e.target);
     if (!sub) {
@@ -296,17 +307,11 @@ function stream_is_muted_changed(e) {
         return;
     }
 
-    const edit_container = stream_settings_containers.get_edit_container(sub);
-    const notification_checkboxes = edit_container.find(".sub_notification_setting");
-
     stream_settings_ui.set_muted(
         sub,
         e.target.checked,
         `#stream_change_property_status${CSS.escape(sub.stream_id)}`,
     );
-    edit_container.find(".mute-note").toggleClass("hide-mute-note", !sub.is_muted);
-    notification_checkboxes.toggleClass("muted-sub", sub.is_muted);
-    notification_checkboxes.find("input[type='checkbox']").prop("disabled", sub.is_muted);
 }
 
 export function stream_setting_changed(e, from_notification_settings) {
@@ -374,7 +379,7 @@ function change_stream_privacy(e) {
 
     const privacy_setting = $("#stream_privacy_modal input[name=privacy]:checked").val();
     const stream_post_policy = Number.parseInt(
-        $("#stream_privacy_modal input[name=stream-post-policy]:checked").val(),
+        $("#stream_privacy_modal select[name=stream-post-policy]").val(),
         10,
     );
 
@@ -478,6 +483,7 @@ export function initialize() {
         const stream = sub_store.get(stream_id);
 
         const template_data = {
+            ask_to_announce_stream: false,
             stream_privacy_policy_values: stream_data.stream_privacy_policy_values,
             stream_privacy_policy: stream_data.get_stream_privacy_policy(stream_id),
             stream_post_policy_values: stream_data.stream_post_policy_values,

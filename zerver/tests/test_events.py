@@ -625,17 +625,13 @@ class NormalActionsTest(BaseAction):
         )
         user_profile = self.example_user("hamlet")
         events = self.verify_action(
-            lambda: do_update_message_flags(
-                user_profile, get_client("website"), "add", "starred", [message]
-            ),
+            lambda: do_update_message_flags(user_profile, "add", "starred", [message]),
             state_change_expected=True,
         )
         check_update_message_flags_add("events[0]", events[0])
 
         events = self.verify_action(
-            lambda: do_update_message_flags(
-                user_profile, get_client("website"), "remove", "starred", [message]
-            ),
+            lambda: do_update_message_flags(user_profile, "remove", "starred", [message]),
             state_change_expected=True,
         )
         check_update_message_flags_remove("events[0]", events[0])
@@ -653,9 +649,7 @@ class NormalActionsTest(BaseAction):
             )
 
             self.verify_action(
-                lambda: do_update_message_flags(
-                    user_profile, get_client("website"), "add", "read", [message]
-                ),
+                lambda: do_update_message_flags(user_profile, "add", "read", [message]),
                 state_change_expected=True,
             )
 
@@ -1692,7 +1686,9 @@ class NormalActionsTest(BaseAction):
 
     def test_realm_domain_events(self) -> None:
         events = self.verify_action(
-            lambda: do_add_realm_domain(self.user_profile.realm, "zulip.org", False)
+            lambda: do_add_realm_domain(
+                self.user_profile.realm, "zulip.org", False, acting_user=None
+            )
         )
 
         check_realm_domains_add("events[0]", events[0])
@@ -1700,7 +1696,9 @@ class NormalActionsTest(BaseAction):
         self.assertEqual(events[0]["realm_domain"]["allow_subdomains"], False)
 
         test_domain = RealmDomain.objects.get(realm=self.user_profile.realm, domain="zulip.org")
-        events = self.verify_action(lambda: do_change_realm_domain(test_domain, True))
+        events = self.verify_action(
+            lambda: do_change_realm_domain(test_domain, True, acting_user=None)
+        )
 
         check_realm_domains_change("events[0]", events[0])
         self.assertEqual(events[0]["realm_domain"]["domain"], "zulip.org")

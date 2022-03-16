@@ -923,11 +923,20 @@ class Realm(models.Model):
     def presence_disabled(self) -> bool:
         return self.is_zephyr_mirror_realm
 
-    def web_public_streams_enabled(self) -> bool:
+    def web_public_streams_available_for_realm(self) -> bool:
+        if self.string_id in settings.WEB_PUBLIC_STREAMS_BETA_SUBDOMAINS:
+            return True
+
         if not settings.WEB_PUBLIC_STREAMS_ENABLED:
             # To help protect against accidentally web-public streams in
             # self-hosted servers, we require the feature to be enabled at
             # the server level before it is available to users.
+            return False
+
+        return True
+
+    def web_public_streams_enabled(self) -> bool:
+        if not self.web_public_streams_available_for_realm():
             return False
 
         if self.plan_type == Realm.PLAN_TYPE_LIMITED:
@@ -1049,7 +1058,7 @@ class EmailContainsPlusError(Exception):
     pass
 
 
-def get_realm_domains(realm: Realm) -> List[Dict[str, str]]:
+def get_realm_domains(realm: Realm) -> List[Dict[str, Union[str, bool]]]:
     return list(realm.realmdomain_set.values("domain", "allow_subdomains"))
 
 
@@ -1604,7 +1613,7 @@ class RealmUserDefault(UserBaseSettings):
     """
 
     id: int = models.AutoField(auto_created=True, primary_key=True, verbose_name="ID")
-    realm: Realm = models.ForeignKey(Realm, on_delete=CASCADE)
+    realm: Realm = models.OneToOneField(Realm, on_delete=CASCADE)
 
 
 class UserProfile(AbstractBaseUser, PermissionsMixin, UserBaseSettings):
@@ -4062,6 +4071,9 @@ class AbstractRealmAuditLog(models.Model):
     REALM_CREATED = 215
     REALM_DEFAULT_USER_SETTINGS_CHANGED = 216
     REALM_ORG_TYPE_CHANGED = 217
+    REALM_DOMAIN_ADDED = 218
+    REALM_DOMAIN_CHANGED = 219
+    REALM_DOMAIN_REMOVED = 220
 
     SUBSCRIPTION_CREATED = 301
     SUBSCRIPTION_ACTIVATED = 302

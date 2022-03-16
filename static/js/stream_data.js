@@ -142,21 +142,21 @@ export const stream_post_policy_values = {
     // Stream.POST_POLICIES object in zerver/models.py.
     everyone: {
         code: 1,
-        description: $t({defaultMessage: "All stream members can post"}),
+        description: $t({defaultMessage: "Everyone"}),
     },
-    admins: {
-        code: 2,
-        description: $t({defaultMessage: "Only organization administrators can post"}),
+    non_new_members: {
+        code: 3,
+        description: $t({defaultMessage: "Admins, moderators and full members"}),
     },
     moderators: {
         code: 4,
         description: $t({
-            defaultMessage: "Only organization administrators and moderators can post",
+            defaultMessage: "Admins and moderators",
         }),
     },
-    non_new_members: {
-        code: 3,
-        description: $t({defaultMessage: "Only organization full members can post"}),
+    admins: {
+        code: 2,
+        description: $t({defaultMessage: "Admins only"}),
     },
 };
 
@@ -378,6 +378,12 @@ export function subscribed_streams() {
 
 export function subscribed_stream_ids() {
     return subscribed_subs().map((sub) => sub.stream_id);
+}
+
+export function muted_stream_ids() {
+    return subscribed_subs()
+        .filter((sub) => sub.is_muted)
+        .map((sub) => sub.stream_id);
 }
 
 export function get_subscribed_streams_for_user(user_id) {

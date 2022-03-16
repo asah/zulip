@@ -44,7 +44,7 @@ from zerver.lib.actions import (
     validate_user_access_to_subscribers_helper,
 )
 from zerver.lib.exceptions import JsonableError
-from zerver.lib.message import aggregate_unread_data, get_raw_unread_data
+from zerver.lib.message import UnreadStreamInfo, aggregate_unread_data, get_raw_unread_data
 from zerver.lib.response import json_success
 from zerver.lib.stream_subscription import (
     get_active_subscriptions_for_stream_id,
@@ -405,7 +405,7 @@ class TestCreateStreams(ZulipTestCase):
             final_usermessage_count - initial_usermessage_count, 4 + announce_stream_subs.count()
         )
 
-        def get_unread_stream_data(user: UserProfile) -> List[Dict[str, Any]]:
+        def get_unread_stream_data(user: UserProfile) -> List[UnreadStreamInfo]:
             raw_unread_data = get_raw_unread_data(user)
             aggregated_data = aggregate_unread_data(raw_unread_data)
             return aggregated_data["streams"]
@@ -1497,13 +1497,13 @@ class StreamAdminTest(ZulipTestCase):
         expected_notification = (
             f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n\n"
             "* **Old description:**\n"
-            "``` quote\n"
+            "```` quote\n"
             "Test description\n"
-            "```\n"
+            "````\n"
             "* **New description:**\n"
-            "``` quote\n"
+            "```` quote\n"
             "a multi line description\n"
-            "```"
+            "````"
         )
         self.assertEqual(messages[-1].content, expected_notification)
 
@@ -1559,13 +1559,13 @@ class StreamAdminTest(ZulipTestCase):
         expected_notification = (
             f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n\n"
             "* **Old description:**\n"
-            "``` quote\n"
+            "```` quote\n"
             "See https://zulip.com/team\n"
-            "```\n"
+            "````\n"
             "* **New description:**\n"
-            "``` quote\n"
+            "```` quote\n"
             "Test description\n"
-            "```"
+            "````"
         )
         self.assertEqual(messages[-1].content, expected_notification)
 
@@ -4127,6 +4127,7 @@ class SubscriptionAPITest(ZulipTestCase):
         invitee_data: Union[str, int],
         invitee_realm: Realm,
         streams: List[str],
+        policy_name: str,
         invite_only: bool = False,
     ) -> None:
         """
@@ -4162,7 +4163,9 @@ class SubscriptionAPITest(ZulipTestCase):
         self.assertEqual(msg.topic_name(), "stream events")
         self.assertEqual(msg.sender.email, settings.NOTIFICATION_BOT)
         self.assertIn(
-            f"Stream created by @_**{self.test_user.full_name}|{self.test_user.id}**", msg.content
+            f"**{policy_name}** stream created by @_**{self.test_user.full_name}|{self.test_user.id}**. **Description:**\n"
+            "```` quote",
+            msg.content,
         )
 
     def test_multi_user_subscription(self) -> None:
@@ -4604,13 +4607,17 @@ class SubscriptionAPITest(ZulipTestCase):
         invitee = self.example_user("iago")
         current_streams = self.get_streams(invitee)
         invite_streams = self.make_random_stream_names(current_streams)
-        self.assert_adding_subscriptions_for_principal(invitee.id, invitee.realm, invite_streams)
+        self.assert_adding_subscriptions_for_principal(
+            invitee.id, invitee.realm, invite_streams, policy_name="Public"
+        )
 
     def test_subscriptions_add_for_principal_legacy_emails(self) -> None:
         invitee = self.example_user("iago")
         current_streams = self.get_streams(invitee)
         invite_streams = self.make_random_stream_names(current_streams)
-        self.assert_adding_subscriptions_for_principal(invitee.email, invitee.realm, invite_streams)
+        self.assert_adding_subscriptions_for_principal(
+            invitee.email, invitee.realm, invite_streams, policy_name="Public"
+        )
 
     def test_subscriptions_add_for_principal_deactivated(self) -> None:
         """
@@ -4640,7 +4647,11 @@ class SubscriptionAPITest(ZulipTestCase):
         current_streams = self.get_streams(invitee)
         invite_streams = self.make_random_stream_names(current_streams)
         self.assert_adding_subscriptions_for_principal(
-            invitee.id, invitee.realm, invite_streams, invite_only=True
+            invitee.id,
+            invitee.realm,
+            invite_streams,
+            invite_only=True,
+            policy_name="Private, protected history",
         )
 
     def test_non_ascii_subscription_for_principal(self) -> None:
@@ -4649,7 +4660,9 @@ class SubscriptionAPITest(ZulipTestCase):
         non-ASCII characters.
         """
         iago = self.example_user("iago")
-        self.assert_adding_subscriptions_for_principal(iago.id, get_realm("zulip"), ["hümbüǵ"])
+        self.assert_adding_subscriptions_for_principal(
+            iago.id, get_realm("zulip"), ["hümbüǵ"], policy_name="Public"
+        )
 
     def test_subscription_add_invalid_principal_legacy_emails(self) -> None:
         """
@@ -4907,7 +4920,7 @@ class SubscriptionAPITest(ZulipTestCase):
         current_stream = self.get_streams(user_profile)[0]
         invite_streams = self.make_random_stream_names([current_stream])
         self.assert_adding_subscriptions_for_principal(
-            invitee_user_id, invitee_realm, invite_streams
+            invitee_user_id, invitee_realm, invite_streams, policy_name="Public"
         )
         subscription = self.get_subscription(user_profile, invite_streams[0])
 
@@ -4942,7 +4955,7 @@ class SubscriptionAPITest(ZulipTestCase):
         self.send_stream_message(random_user, "stream2", "test", "test")
         self.send_stream_message(random_user, "private_stream", "test", "test")
 
-        def get_unread_stream_data() -> List[Dict[str, Any]]:
+        def get_unread_stream_data() -> List[UnreadStreamInfo]:
             raw_unread_data = get_raw_unread_data(user)
             aggregated_data = aggregate_unread_data(raw_unread_data)
             return aggregated_data["streams"]

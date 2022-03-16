@@ -822,7 +822,7 @@ paths:
                                     - enum:
                                         - message
                                 message:
-                                  $ref: "#/components/schemas/Messages"
+                                  $ref: "#/components/schemas/MessagesEvent"
                                 flags:
                                   type: array
                                   description: |
@@ -4741,10 +4741,59 @@ paths:
                       messages:
                         type: array
                         description: |
-                          an array of `message` objects, each containing the following
+                          An array of `message` objects, each containing the following
                           fields:
                         items:
-                          $ref: "#/components/schemas/GetMessages"
+                          allOf:
+                            - $ref: "#/components/schemas/MessagesBase"
+                            - additionalProperties: false
+                              properties:
+                                avatar_url:
+                                  nullable: true
+                                client: {}
+                                content: {}
+                                content_type: {}
+                                display_recipient: {}
+                                edit_history: {}
+                                id: {}
+                                is_me_message: {}
+                                last_edit_timestamp: {}
+                                reactions: {}
+                                recipient_id: {}
+                                sender_email: {}
+                                sender_full_name: {}
+                                sender_id: {}
+                                sender_realm_str: {}
+                                stream_id: {}
+                                subject: {}
+                                submessages: {}
+                                timestamp: {}
+                                topic_links: {}
+                                type: {}
+                                flags:
+                                  type: array
+                                  description: |
+                                    The user's [message flags][message-flags] for the message.
+
+                                    [message-flags]: /api/update-message-flags#available-flags
+                                  items:
+                                    type: string
+                                match_content:
+                                  type: string
+                                  description: |
+                                    Only present if keyword search was included among the narrow parameters.
+
+                                    HTML content of a queried message that matches the narrow, with
+                                    `<span class="highlight">` elements wrapping the matches for the
+                                    search keywords.
+                                match_subject:
+                                  type: string
+                                  description: |
+                                    Only present if keyword search was included among the narrow parameters.
+
+                                    HTML-escaped topic of a queried message that matches the narrow, with
+                                    `<span class="highlight">` elements wrapping the matches for the
+                                    search keywords.
                     example:
                       {
                         "anchor": 21,
@@ -4963,9 +5012,8 @@ paths:
         `topic`, `content`, `rendered_content`, `timestamp` and `user_id`. This
         snapshot will be the only one present if the message has never been edited.
 
-        Also note that if a message's content was edited (but not the topic)
-        or the topic was edited (but not the content), the snapshot object
-        will only contain data for the modified fields (e.g. if only the topic
+        Also note that each snapshot object will only contain additional data for the
+        modified fields for that particular edit (e.g. if only the topic or stream
         was edited, `prev_content`, `prev_rendered_content`, and
         `content_html_diff` will not appear).
       responses:
@@ -4990,45 +5038,80 @@ paths:
                             topic:
                               type: string
                               description: |
-                                the topic for the message.
+                                The topic of the message immediately
+                                after this edit event.
                             prev_topic:
                               type: string
                               description: |
-                                the topic for the message before being edited.
+                                Only present if message's topic was edited.
+
+                                The topic of the message immediately
+                                prior to this edit event.
+                            stream:
+                              type: integer
+                              description: |
+                                Only present if message's stream was edited.
+
+                                The ID of the stream containing the message
+                                immediately after this edit event.
+
+                                **Changes**: New in Zulip 5.0 (feature level 118).
+                            prev_stream:
+                              type: integer
+                              description: |
+                                Only present if message's stream was edited.
+
+                                The ID of the stream containing the message immediately
+                                prior to this edit event.
                             content:
                               type: string
                               description: |
-                                the body of the message.
+                                The raw Markdown content of the message
+                                immediately after this edit event.
                             rendered_content:
                               type: string
                               description: |
-                                the already rendered, HTML version of `content`.
+                                The rendered HTML representation of `content`.
                             prev_content:
                               type: string
                               description: |
-                                the body of the message before being edited.
+                                Only present if message's content was edited.
+
+                                The raw Markdown content of the message immediately
+                                prior to this edit event.
                             prev_rendered_content:
                               type: string
                               description: |
-                                the already rendered, HTML version of
-                                `prev_content`.
+                                Only present if message's content was edited.
+
+                                The rendered HTML representation of `prev_content`.
                             user_id:
                               type: integer
+                              nullable: true
                               description: |
-                                the ID of the user that made the edit.
+                                The ID of the user that made the edit.
+
+                                Will be null only for edit history
+                                events predating March 2017.
+
+                                Clients can display edit history events where this
+                                is null as modified by either the sender (for content
+                                edits) or an unknown user (for topic edits).
                             content_html_diff:
                               type: string
                               description: |
-                                an HTML diff between this version of the message
+                                Only present if message's content was edited.
+
+                                An HTML diff between this version of the message
                                 and the previous one.
                             timestamp:
                               type: integer
                               description: |
-                                the UNIX timestamp for this edit.
+                                The UNIX timestamp for this edit.
                         description: |
-                          A chronologically sorted array of `snapshot`
-                          objects, each one with the values of the
-                          message after the edit.
+                          A chronologically sorted, oldest to newest, array
+                          of `snapshot` objects, each one with the values of
+                          the message after the edit.
                     example:
                       {
                         "message_history":
@@ -9303,14 +9386,29 @@ paths:
                             items:
                               type: object
                               description: |
-                                Object containing the details of a unread private
-                                message with a specific user.
+                                Object containing the details of a unread private message with
+                                a specific user. Note that in rare situations, it is possible
+                                for a message that you sent to another user to be marked as
+                                unread and thus appear here.
                               additionalProperties: false
                               properties:
-                                sender_id:
+                                other_user_id:
                                   type: integer
                                   description: |
-                                    The user id of the other participant in a PM conversation.
+                                    The user id of the other participant in this non-group private
+                                    message conversation. Will be your own user ID for messages
+                                    that you sent to only yourself.
+                                sender_id:
+                                  deprecated: true
+                                  type: integer
+                                  description: |
+                                    Old name for `other_user_id`. Clients should access this
+                                    field in Zulip server versions that do not yet support
+                                    `other_user_id`.
+
+                                    **Changes**: Deprecated in Zulip 5.0 (feature level 119).
+                                    We expect to provide a next version of the full `unread_msgs`
+                                    API before removing this legacy name.
                                 message_ids:
                                   type: array
                                   description: |
@@ -13505,7 +13603,7 @@ paths:
                       in the `zuliprc` file downloaded when creating the bot.
                   message:
                     description: |
-                      A dict containing details on the message that triggered the
+                      A dictionary containing details on the message that triggered the
                       outgoing webhook, in the format used by [`GET /messages`](/api/get-messages).
                     allOf:
                       - $ref: "#/components/schemas/MessagesBase"
@@ -13517,8 +13615,10 @@ paths:
                           content: {}
                           content_type: {}
                           display_recipient: {}
+                          edit_history: {}
                           id: {}
                           is_me_message: {}
+                          last_edit_timestamp: {}
                           reactions: {}
                           recipient_id: {}
                           sender_email: {}
@@ -13527,9 +13627,9 @@ paths:
                           sender_realm_str: {}
                           stream_id: {}
                           subject: {}
-                          topic_links: {}
                           submessages: {}
                           timestamp: {}
+                          topic_links: {}
                           type: {}
                           rendered_content:
                             type: string
@@ -14538,7 +14638,7 @@ components:
                   type: boolean
                   description: |
                     Whether the user is a mirror dummy.
-    Messages:
+    MessagesEvent:
       allOf:
         - $ref: "#/components/schemas/MessagesBase"
         - additionalProperties: false
@@ -14549,8 +14649,10 @@ components:
             content: {}
             content_type: {}
             display_recipient: {}
+            edit_history: {}
             id: {}
             is_me_message: {}
+            last_edit_timestamp: {}
             reactions: {}
             recipient_id: {}
             sender_email: {}
@@ -14559,9 +14661,9 @@ components:
             sender_realm_str: {}
             stream_id: {}
             subject: {}
-            topic_links: {}
             submessages: {}
             timestamp: {}
+            topic_links: {}
             type: {}
     MessagesBase:
       type: object
@@ -14619,6 +14721,106 @@ components:
             Data on the recipient of the message;
             either the name of a stream or a dictionary containing basic data on
             the users who received the message.
+        edit_history:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              prev_content:
+                type: string
+                description: |
+                  Only present if message's content was edited.
+
+                  The content of the message immediately prior to this
+                  edit event.
+              prev_rendered_content:
+                type: string
+                description: |
+                  Only present if message's content was edited.
+
+                  The rendered HTML representation of `prev_content`.
+              prev_rendered_content_version:
+                type: integer
+                description: |
+                  Only present if message's content was edited.
+
+                  The Markdown processor version number for the message
+                  immediately prior to this edit event.
+              prev_stream:
+                type: integer
+                description: |
+                  Only present if message's stream was edited.
+
+                  The stream ID of the message immediately prior to this
+                  edit event.
+              prev_topic:
+                type: string
+                description: |
+                  Only present if message's topic was edited.
+
+                  The topic of the message immediately prior to this
+                  edit event.
+
+                  **Changes**: New in Zulip 5.0 (feature level 118).
+                  Previously, this field was called `prev_subject`;
+                  clients are recommended to rename `prev_subject` to
+                  `prev_topic` if present for compatibility with
+                  older Zulip servers.
+              stream:
+                type: integer
+                description: |
+                  Only present if message's stream was edited.
+
+                  The ID of the stream containing the message
+                  immediately after this edit event.
+
+                  **Changes**: New in Zulip 5.0 (feature level 118).
+              timestamp:
+                type: integer
+                description: |
+                  The UNIX timestamp for the edit.
+              topic:
+                type: string
+                description: |
+                  Only present if message's topic was edited.
+
+                  The topic of the message immediately after this edit event.
+
+                  **Changes**: New in Zulip 5.0 (feature level 118).
+              user_id:
+                type: integer
+                nullable: true
+                description: |
+                  The ID of the user that made the edit.
+
+                  Will be null only for edit history
+                  events predating March 2017.
+
+                  Clients can display edit history events where this
+                  is null as modified by either the sender (for content
+                  edits) or an unknown user (for topic edits).
+            required:
+              - user_id
+              - timestamp
+          description: |
+            An array of objects, with each object documenting the
+            changes in a previous edit made to the the message,
+            ordered chronologically from most recent to least recent
+            edit.
+
+            Not present if the message has never been edited or if the realm has
+            [disabled viewing of message edit history][disable-edit-history].
+
+            Every object will contain `user_id` and `timestamp`.
+
+            The other fields are optional, and will be present or not
+            depending on whether the stream, topic, and/or message
+            content were modified in the edit event. For example, if
+            only the topic was edited, only `prev_topic` and `topic`
+            will be present in addition to `user_id` and `timestamp`.
+
+            [disable-edit-history]: /help/disable-message-edit-history
         id:
           type: integer
           description: |
@@ -14630,6 +14832,13 @@ components:
             Whether the message is a [/me status message][status-messages]
 
             [status-messages]: /help/format-your-message-using-markdown#status-messages
+        last_edit_timestamp:
+          type: integer
+          description: |
+            The UNIX timestamp for when the message was last edited,
+            in UTC seconds.
+
+            Not present if the message has never been edited.
         reactions:
           type: array
           description: |
@@ -14674,6 +14883,17 @@ components:
 
             The field name is a legacy holdover from when topics were
             called "subjects" and will eventually change.
+        submessages:
+          type: array
+          items:
+            type: string
+          description: |
+            Data used for certain experimental Zulip integrations.
+        timestamp:
+          type: integer
+          description: |
+            The UNIX timestamp for when the message was sent,
+            in UTC seconds.
         topic_links:
           type: array
           items:
@@ -14700,73 +14920,10 @@ components:
             New in Zulip 3.0 (feature level 1): Previously, this field was called
             `subject_links`; clients are recommended to rename `subject_links` to `topic_links`
             if present for compatibility with older Zulip servers.
-        submessages:
-          type: array
-          items:
-            type: string
-          description: |
-            Data used for certain experimental Zulip integrations.
-        timestamp:
-          type: integer
-          description: |
-            The UNIX timestamp for when the message was sent,
-            in UTC seconds.
         type:
           type: string
           description: |
             The type of the message: `stream` or `private`.
-    GetMessages:
-      allOf:
-        - $ref: "#/components/schemas/MessagesBase"
-        - additionalProperties: false
-          properties:
-            avatar_url:
-              nullable: true
-            client: {}
-            content: {}
-            content_type: {}
-            display_recipient: {}
-            id: {}
-            is_me_message: {}
-            reactions: {}
-            recipient_id: {}
-            sender_email: {}
-            sender_full_name: {}
-            sender_id: {}
-            sender_realm_str: {}
-            stream_id: {}
-            subject: {}
-            topic_links: {}
-            submessages: {}
-            timestamp: {}
-            type: {}
-            flags:
-              type: array
-              description: |
-                The user's [message flags][message-flags] for the message.
-
-                [message-flags]: /api/update-message-flags#available-flags
-              items:
-                type: string
-            last_edit_timestamp:
-              type: integer
-              description: |
-                The UNIX timestamp for when the message was last edited,
-                in UTC seconds.
-            match_content:
-              type: string
-              description: |
-                Only present if keyword search was included among the narrow parameters.
-                HTML content of a queried message that matches the narrow, with
-                `<span class="highlight">` elements wrapping the matches for the
-                search keywords.
-            match_subject:
-              type: string
-              description: |
-                Only present if keyword search was included among the narrow parameters.
-                HTML-escaped topic of a queried message that matches the narrow, with
-                `<span class="highlight">` elements wrapping the matches for the
-                search keywords.
     Presence:
       type: object
       description: |

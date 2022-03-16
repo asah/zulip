@@ -113,9 +113,22 @@ h3 .fa-question-circle-o {
     flex-wrap: wrap-reverse;
 }
 
-.user-avatar-section {
-    float: right;
+.profile-main-panel {
+    margin-right: 20px;
+}
 
+.profile-side-panel {
+    margin-right: 10px;
+}
+
+.user-details-title {
+    display: inline-block;
+    min-width: 80px;
+    font-weight: 600;
+    padding-right: 5px;
+}
+
+.user-avatar-section {
     .avatar-controls {
         margin-top: 20px;
         box-shadow: none;
@@ -338,13 +351,6 @@ td .button {
         }
     }
 
-    input[type="text"].search {
-        float: right;
-        margin: 2px 5px 2px 0;
-        padding: 2px 5px;
-        font-size: 0.9em;
-    }
-
     #admin_page_users_loading_indicator,
     #attachments_loading_indicator,
     #admin_page_deactivated_users_loading_indicator,
@@ -522,6 +528,16 @@ input[type="checkbox"] {
     }
 }
 
+#stream-specific-notify-table .unmute_stream {
+    position: relative;
+    left: 3px;
+
+    &:hover {
+        color: hsl(0, 0%, 20%);
+        cursor: pointer;
+    }
+}
+
 .organization-settings-parent > div:first-of-type {
     margin-top: 10px;
 }
@@ -631,6 +647,10 @@ input[type="checkbox"] {
             .filter-icon i {
                 padding-right: 0;
             }
+
+            label {
+                cursor: default;
+            }
         }
 
         td:first-child {
@@ -706,6 +726,7 @@ input[type="checkbox"] {
     input[type="text"] {
         padding: 6px;
     }
+    margin-bottom: 15px;
 }
 
 .add-new-emoji-box #emoji-file-name {
@@ -731,6 +752,7 @@ input[type="checkbox"] {
     button {
         margin-left: calc(10em + 20px) !important;
     }
+    margin-bottom: 15px;
 }
 
 .grey-box .wrapper {
@@ -743,7 +765,7 @@ input[type="checkbox"] {
         cursor: move;
 
         .fa-ellipsis-v {
-            color: hsl(0, 0, 75%);
+            color: hsl(0, 0%, 75%);
             position: relative;
             top: 1px;
 
@@ -1303,11 +1325,6 @@ input[type="checkbox"] {
         line-height: 1.2;
     }
 
-    input.search {
-        font-size: 0.9rem;
-        margin: 10px 0 20px;
-    }
-
     .form-sidebar {
         position: absolute;
         top: 45px;
@@ -1573,7 +1590,8 @@ input[type="checkbox"] {
         }
 
         textarea {
-            width: 320px;
+            width: max(206px, 25vw);
+            max-width: 320px;
             height: 80px;
         }
 
@@ -1737,8 +1755,6 @@ input[type="checkbox"] {
                     hsl(200, 100%, 40%),
                     hsl(200, 100%, 35%)
                 );
-                background-repeat: repeat-x;
-                filter: progid:dximagetransform.microsoft.gradient(startcolorstr='hsla(328, 100%, 50%, 0.8)', endcolorstr='hsla(332, 100%, 50%, 0.7)', gradienttype=0);
             }
         }
     }
@@ -1874,14 +1890,12 @@ input[type="checkbox"] {
 }
 
 .admin_exports_table {
-    margin-top: 20px;
     margin-bottom: 20px;
 }
 
 @media (width < $lg_min) {
     .user-avatar-section,
     .realm-icon-section {
-        float: none;
         display: block;
     }
 
@@ -2026,5 +2040,20 @@ input[type="checkbox"] {
     #edit-linkifier-pattern-status,
     #edit-linkifier-format-status {
         margin-top: 10px;
+    }
+}
+
+.settings_panel_list_header {
+    position: relative;
+
+    h3 {
+        display: inline-block;
+    }
+
+    input.search {
+        float: right;
+        font-size: 1em;
+        max-width: 160px;
+        margin-top: 12px;
     }
 }

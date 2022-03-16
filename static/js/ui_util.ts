@@ -47,3 +47,17 @@ export function update_unread_count_in_dom(unread_count_elem: JQuery, count: num
     const msg = count < 30 ? count : "30+";
     unread_count_span.text(msg).show();
 }
+
+/**
+ * Parse HTML and return a DocumentFragment.
+ *
+ * Like any consumer of HTML, this function must only be given input
+ * from trusted producers of safe HTML, such as auto-escaping
+ * templates; violating this expectation will introduce bugs that are
+ * likely to be security vulnerabilities.
+ */
+export function parse_html(html: string): DocumentFragment {
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    return template.content;
+}

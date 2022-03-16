@@ -89,3 +89,42 @@ class UnspecifiedValue:
     """
 
     pass
+
+
+class EditHistoryEvent(TypedDict, total=False):
+    """
+    Database format for edit history events.
+    """
+
+    # user_id is null for precisely those edit history events
+    # predating March 2017, when we started tracking the person who
+    # made edits, which is still years after the introduction of topic
+    # editing support in Zulip.
+    user_id: Optional[int]
+    timestamp: int
+    prev_stream: int
+    stream: int
+    prev_topic: str
+    topic: str
+    prev_content: str
+    prev_rendered_content: Optional[str]
+    prev_rendered_content_version: Optional[int]
+
+
+class FormattedEditHistoryEvent(TypedDict, total=False):
+    """
+    Extended format used in the edit history endpoint.
+    """
+
+    # See EditHistoryEvent for details on when this can be null.
+    user_id: Optional[int]
+    timestamp: int
+    prev_stream: int
+    stream: int
+    prev_topic: str
+    topic: str
+    prev_content: str
+    content: str
+    prev_rendered_content: Optional[str]
+    rendered_content: Optional[str]
+    content_html_diff: str
