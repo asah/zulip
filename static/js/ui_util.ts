@@ -41,10 +41,9 @@ export function update_unread_count_in_dom(unread_count_elem: JQuery, count: num
 
     if (count === 0) {
         unread_count_span.hide();
-        unread_count_span.text("");
         return;
     }
 
-    unread_count_span.show();
-    unread_count_span.text(count);
+    const msg = count < 30 ? count : "30+";
+    unread_count_span.text(msg).show();
 }
