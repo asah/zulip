@@ -199,3 +199,6 @@ bs4
 
 # better link previews
 previewlink
+
+# reddit
+praw

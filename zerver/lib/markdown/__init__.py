@@ -44,6 +44,7 @@ import requests
 from django.conf import settings
 from markdown.blockparser import BlockParser
 from markdown.extensions import codehilite, nl2br, sane_lists, tables
+import praw
 from soupsieve import escape as css_escape
 from tlds import tld_set
 from typing_extensions import TypedDict
@@ -558,6 +559,20 @@ def fetch_open_graph_image(url: str) -> Optional[Dict[str, Any]]:
     return None if og["image"] is None else og
 
 
+def get_reddit_post_info(url: str) -> Optional[list]:
+    parsed_url = urllib.parse.urlparse(url)
+    if not (parsed_url.netloc == "reddit.com" or parsed_url.netloc.endswith(".reddit.com")):
+        return None
+    # examples:
+    # https://www.reddit.com/r/redditdev/comments/61noov/do_you_have_to_authenticate_even_if_only_using/
+    # https://www.reddit.com/r/redditdev/comments/61noov/do_you_have_to_authenticate_even_if_only_using/dffyks4/
+    match = re.match(
+        r'/r/(?P<subreddit>[^/]+)/comments/(?P<post_id>[^/]+)/(?P<post_slug>[^/]+)/?(?P<comment_slug>[^/]*)',
+        parsed_url.path
+    )
+    return [match.group(0), match.group(1), match.group(2)] if match else None
+    
+    
 def get_tweet_id(url: str) -> Optional[str]:
     parsed_url = urllib.parse.urlparse(url)
     if not (parsed_url.netloc == "twitter.com" or parsed_url.netloc.endswith(".twitter.com")):
@@ -1175,6 +1190,32 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         div.set("class", "inline-preview-twitter")
         div.insert(0, twitter_data)
 
+    def handle_reddit_post_inlining(
+        self,
+        root: Element,
+        found_url: ResultWithFamily[Tuple[str, Optional[str]]],
+        reddit_post_info: Element,
+    ) -> None:
+        info = self.get_inlining_information(root, found_url)
+
+#wip        # todo: move to config file
+#wip        reddit = praw.Reddit(
+#wip            user_agent="Comment Extraction (by u/asah)",
+#wip            client_id="CLIENT_ID",
+#wip            client_secret="CLIENT_SECRET",
+#wip            username="USERNAME",
+#wip            password="PASSWORD",
+#wip        )
+#wip
+#wip        if info["index"] is not None:
+#wip            div = Element("div")
+#wip            root.insert(info["index"], div)
+#wip        else:
+#wip            div = SubElement(root, "div")
+#wip
+#wip        div.set("class", "inline-preview-twitter")
+#wip        div.insert(0, twitter_data)
+
     def handle_youtube_url_inlining(
         self,
         root: Element,
@@ -1385,6 +1426,11 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
                 rendered_tweet_count += 1
                 self.handle_tweet_inlining(root, found_url, twitter_data)
                 continue
+
+            reddit_post_info = get_reddit_post_info(url)
+            if reddit_post_info is not None:
+                self.handle_reddit_post_inlining(root, found_url, reddit_post_info)
+
             youtube = self.youtube_image(url)
             if youtube is not None:
                 self.handle_youtube_url_inlining(root, found_url, youtube)
