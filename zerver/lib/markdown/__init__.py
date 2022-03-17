@@ -30,6 +30,7 @@ from xml.etree.ElementTree import Element, SubElement
 from xml.sax.saxutils import escape as xml_escape
 
 import ahocorasick
+from bs4 import BeautifulSoup
 import dateutil.parser
 import dateutil.tz
 import lxml.etree
@@ -567,10 +568,10 @@ def get_reddit_post_info(url: str) -> Optional[list]:
     # https://www.reddit.com/r/redditdev/comments/61noov/do_you_have_to_authenticate_even_if_only_using/
     # https://www.reddit.com/r/redditdev/comments/61noov/do_you_have_to_authenticate_even_if_only_using/dffyks4/
     match = re.match(
-        r'/r/(?P<subreddit>[^/]+)/comments/(?P<post_id>[^/]+)/(?P<post_slug>[^/]+)/?(?P<comment_slug>[^/]*)',
+        r'/r/(?P<subreddit>[^/]+)/comments/(?P<post_id>[^/]+)/(?P<post_slug>[^/]+)(/(?P<comment_id>[^/]+))?',
         parsed_url.path
     )
-    return [match.group(0), match.group(1), match.group(2)] if match else None
+    return [match.group('subreddit'), match.group('post_id'), match.group('comment_id')] if match else None
     
     
 def get_tweet_id(url: str) -> Optional[str]:
@@ -1198,23 +1199,39 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
     ) -> None:
         info = self.get_inlining_information(root, found_url)
 
-#wip        # todo: move to config file
-#wip        reddit = praw.Reddit(
-#wip            user_agent="Comment Extraction (by u/asah)",
-#wip            client_id="CLIENT_ID",
-#wip            client_secret="CLIENT_SECRET",
-#wip            username="USERNAME",
-#wip            password="PASSWORD",
-#wip        )
-#wip
-#wip        if info["index"] is not None:
-#wip            div = Element("div")
-#wip            root.insert(info["index"], div)
-#wip        else:
-#wip            div = SubElement(root, "div")
-#wip
-#wip        div.set("class", "inline-preview-twitter")
-#wip        div.insert(0, twitter_data)
+        # todo: move to config file
+        reddit = praw.Reddit(
+            client_id="-_0O7vFTObCEIGJfaI0Kfg",
+            client_secret="KbKtdtP59Cir_XhMFzWYVTqY-_c9Cw",
+            password="Familiar-Pass-6424",
+            user_agent="testscript by u/fakebot3",
+            username="asah_forecast_chat",
+        )
+        subm = reddit.submission(id=reddit_post_info[1])
+        if subm is None:
+            return
+
+        if info["index"] is not None:
+            div = Element("div")
+            root.insert(info["index"], div)
+        else:
+            div = SubElement(root, "div")
+        div.set("class", "inline-preview-reddit")
+
+        b_elem = SubElement(div, "b")
+        b_elem.text = subm.title
+        print(subm.title)
+        p = SubElement(div, "p")
+        p.text = subm.selftext
+        print(subm.selftext)
+        if reddit_post_info[2] not in [None, ""]:
+            comm = reddit.comment(id=reddit_post_info[2])
+            all_html = "<html><body>"+comm.body_html+"</body></html>"
+            soup = BeautifulSoup(all_html, features='html.parser')
+            text = soup.get_text()
+            print(text)
+            p = SubElement(div, "p")
+            p.text = "> " + text
 
     def handle_youtube_url_inlining(
         self,
