@@ -34,18 +34,18 @@ export function convert_enter_to_click(e: JQuery.KeyDownEvent): void {
     }
 }
 
-export function update_unread_count_in_dom(unread_count_elem: JQuery, count: number): void {
+export function update_unread_count_in_dom($unread_count_elem: JQuery, count: number): void {
     // This function is used to update unread count in top left corner
     // elements.
-    const unread_count_span = unread_count_elem.find(".unread_count");
+    const $unread_count_span = $unread_count_elem.find(".unread_count");
 
     if (count === 0) {
-        unread_count_span.hide();
+        $unread_count_span.hide();
         return;
     }
 
     const msg = count < 30 ? count : "30+";
-    unread_count_span.text(msg).show();
+    $unread_count_span.text(msg).show();
 }
 
 /**

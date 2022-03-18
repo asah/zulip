@@ -23,8 +23,8 @@
         {{t 'See your Drafts' }}
     </a>
     <div class="divider hide-sm">|</div>
-<a role="button" class="compose_control_button compose_help_button" tabindex=0 data-tippy-content="{{t 'Help with Formatting' }}" data-overlay-trigger="message-formatting">Help with Formatting</a>
-    <div class="compose_control_menu_wrapper">
-        <a class="compose_control_button zulip-icon zulip-icon-ellipsis-v-solid hide {{#if message_id}}show-lg{{else}}show-sm{{/if}} compose_control_menu" tabindex=0 data-tippy-content="Compose actions"></a>
+    <a role="button" class="compose_control_button compose_help_button" tabindex=0 data-tippy-content="{{t 'Help with Formatting' }}" data-overlay-trigger="message-formatting">Help with Formatting</a>
+    <div class="compose_control_menu_wrapper" role="button" tabindex=0>
+        <a class="compose_control_button zulip-icon zulip-icon-ellipsis-v-solid hide {{#if message_id}}show-lg{{else}}show-sm{{/if}} compose_control_menu" tabindex="-1" data-tippy-content="Compose actions"></a>
     </div>
 </div>

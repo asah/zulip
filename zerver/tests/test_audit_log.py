@@ -11,6 +11,7 @@ from zerver.lib.actions import (
     bulk_remove_subscriptions,
     do_activate_mirror_dummy_user,
     do_add_realm_domain,
+    do_add_realm_playground,
     do_change_avatar_fields,
     do_change_bot_owner,
     do_change_default_all_public_streams,
@@ -32,25 +33,29 @@ from zerver.lib.actions import (
     do_reactivate_user,
     do_regenerate_api_key,
     do_remove_realm_domain,
+    do_remove_realm_playground,
     do_rename_stream,
     do_set_realm_authentication_methods,
     do_set_realm_message_editing,
     do_set_realm_notifications_stream,
     do_set_realm_signup_notifications_stream,
-    get_streams_traffic,
 )
 from zerver.lib.message import get_last_message_id
+from zerver.lib.stream_traffic import get_streams_traffic
 from zerver.lib.streams import create_stream_if_needed
 from zerver.lib.test_classes import ZulipTestCase
+from zerver.lib.types import RealmPlaygroundDict
 from zerver.models import (
     Message,
     Realm,
     RealmAuditLog,
+    RealmPlayground,
     Recipient,
     Subscription,
     UserProfile,
     get_realm,
     get_realm_domains,
+    get_realm_playgrounds,
     get_stream,
 )
 
@@ -723,6 +728,65 @@ class TestRealmAuditLog(ZulipTestCase):
             RealmAuditLog.objects.filter(
                 realm=user.realm,
                 event_type=RealmAuditLog.REALM_DOMAIN_REMOVED,
+                event_time__gte=now,
+                acting_user=user,
+                extra_data=orjson.dumps(expected_extra_data).decode(),
+            ).count(),
+            1,
+        )
+
+    def test_realm_playground_entries(self) -> None:
+        user = self.example_user("iago")
+        intial_playgrounds = get_realm_playgrounds(user.realm)
+        now = timezone_now()
+        playground_id = do_add_realm_playground(
+            user.realm,
+            acting_user=user,
+            name="Python playground",
+            pygments_language="Python",
+            url_prefix="https://python.example.com",
+        )
+        added_playground = RealmPlaygroundDict(
+            id=playground_id,
+            name="Python playground",
+            pygments_language="Python",
+            url_prefix="https://python.example.com",
+        )
+        expected_extra_data = {
+            "realm_playgrounds": intial_playgrounds + [added_playground],
+            "added_playground": added_playground,
+        }
+        self.assertEqual(
+            RealmAuditLog.objects.filter(
+                realm=user.realm,
+                event_type=RealmAuditLog.REALM_PLAYGROUND_ADDED,
+                event_time__gte=now,
+                acting_user=user,
+                extra_data=orjson.dumps(expected_extra_data).decode(),
+            ).count(),
+            1,
+        )
+
+        now = timezone_now()
+        realm_playground = RealmPlayground.objects.get(id=playground_id)
+        do_remove_realm_playground(
+            user.realm,
+            realm_playground,
+            acting_user=user,
+        )
+        removed_playground = {
+            "name": "Python playground",
+            "pygments_language": "Python",
+            "url_prefix": "https://python.example.com",
+        }
+        expected_extra_data = {
+            "realm_playgrounds": intial_playgrounds,
+            "removed_playground": removed_playground,
+        }
+        self.assertEqual(
+            RealmAuditLog.objects.filter(
+                realm=user.realm,
+                event_type=RealmAuditLog.REALM_PLAYGROUND_REMOVED,
                 event_time__gte=now,
                 acting_user=user,
                 extra_data=orjson.dumps(expected_extra_data).decode(),

@@ -70,13 +70,13 @@ export function set_name_in_mention_element(element, name) {
     }
 }
 
-export const update_elements = (content) => {
+export const update_elements = ($content) => {
     // Set the rtl class if the text has an rtl direction
-    if (rtl.get_direction(content.text()) === "rtl") {
-        content.addClass("rtl");
+    if (rtl.get_direction($content.text()) === "rtl") {
+        $content.addClass("rtl");
     }
 
-    content.find("comment").each(function () {
+    $content.find("comment").each(function () {
         $(this).hide();
     });
 
@@ -89,7 +89,7 @@ export const update_elements = (content) => {
 //	transcript_section.removeClass("fa-bookmark").addClass("fa-bookmark-o");
 //    });
 
-    content.find(".user-mention").each(function () {
+    $content.find(".user-mention").each(function () {
         const user_id = get_user_id_for_mention_button(this);
         // We give special highlights to the mention buttons
         // that refer to the current user.
@@ -111,7 +111,7 @@ export const update_elements = (content) => {
         }
     });
 
-    content.find(".user-group-mention").each(function () {
+    $content.find(".user-group-mention").each(function () {
         const user_group_id = get_user_group_id_for_mention_button(this);
         let user_group;
         try {
@@ -137,7 +137,7 @@ export const update_elements = (content) => {
         }
     });
 
-    content.find("a.stream").each(function () {
+    $content.find("a.stream").each(function () {
         const stream_id = Number.parseInt($(this).attr("data-stream-id"), 10);
         if (stream_id && !$(this).find(".highlight").length) {
             // Display the current name for stream if it is not
@@ -152,7 +152,7 @@ export const update_elements = (content) => {
         }
     });
 
-    content.find("a.stream-topic").each(function () {
+    $content.find("a.stream-topic").each(function () {
         const stream_id = Number.parseInt($(this).attr("data-stream-id"), 10);
         if (stream_id && !$(this).find(".highlight").length) {
             // Display the current name for stream if it is not
@@ -168,7 +168,7 @@ export const update_elements = (content) => {
         }
     });
 
-    content.find("time").each(function () {
+    $content.find("time").each(function () {
         // Populate each timestamp span with mentioned time
         // in user's local time zone.
         const time_str = $(this).attr("datetime");
@@ -188,7 +188,7 @@ export const update_elements = (content) => {
         }
     });
 
-    content.find("span.timestamp-error").each(function () {
+    $content.find("span.timestamp-error").each(function () {
         const [, time_str] = /^Invalid time format: (.*)$/.exec($(this).text());
         const text = $t(
             {defaultMessage: "Invalid time format: {timestamp}"},
@@ -197,7 +197,7 @@ export const update_elements = (content) => {
         $(this).text(text);
     });
 
-    content.find("div.spoiler-header").each(function () {
+    $content.find("div.spoiler-header").each(function () {
         // If a spoiler block has no header content, it should have a default header.
         // We do this client side to allow for i18n by the client.
         if ($(this).html().trim().length === 0) {
@@ -211,7 +211,7 @@ export const update_elements = (content) => {
     });
 
     // Display the view-code-in-playground and the copy-to-clipboard button inside the div.codehilite element.
-    content.find("div.codehilite").each(function () {
+    $content.find("div.codehilite").each(function () {
         const $codehilite = $(this);
         const $pre = $codehilite.find("pre");
         const fenced_code_lang = $codehilite.data("code-language");
@@ -224,23 +224,23 @@ export const update_elements = (content) => {
                 // there are multiple playgrounds, we display a
                 // popover listing the options.
                 let title = $t({defaultMessage: "View in playground"});
-                const view_in_playground_button = $(view_code_in_playground());
-                $pre.prepend(view_in_playground_button);
+                const $view_in_playground_button = $(view_code_in_playground());
+                $pre.prepend($view_in_playground_button);
                 if (playground_info.length === 1) {
                     title = $t(
                         {defaultMessage: "View in {playground_name}"},
                         {playground_name: playground_info[0].name},
                     );
                 } else {
-                    view_in_playground_button.attr("aria-haspopup", "true");
+                    $view_in_playground_button.attr("aria-haspopup", "true");
                 }
-                view_in_playground_button.attr("data-tippy-content", title);
-                view_in_playground_button.attr("aria-label", title);
+                $view_in_playground_button.attr("data-tippy-content", title);
+                $view_in_playground_button.attr("aria-label", title);
             }
         }
-        const copy_button = $(copy_code_button());
-        $pre.prepend(copy_button);
-        new ClipboardJS(copy_button[0], {
+        const $copy_button = $(copy_code_button());
+        $pre.prepend($copy_button);
+        new ClipboardJS($copy_button[0], {
             text(copy_element) {
                 return $(copy_element).siblings("code").text();
             },
@@ -250,7 +250,7 @@ export const update_elements = (content) => {
     // Display emoji (including realm emoji) as text if
     // user_settings.emojiset is 'text'.
     if (user_settings.emojiset === "text") {
-        content.find(".emoji").replaceWith(function () {
+        $content.find(".emoji").replaceWith(function () {
             const text = $(this).attr("title");
             return ":" + text + ":";
         });
