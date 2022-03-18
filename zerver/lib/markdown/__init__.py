@@ -571,7 +571,7 @@ def get_reddit_post_info(url: str) -> Optional[list]:
         r'/r/(?P<subreddit>[^/]+)/comments/(?P<post_id>[^/]+)/(?P<post_slug>[^/]+)(/(?P<comment_id>[^/]+))?',
         parsed_url.path
     )
-    return [match.group('subreddit'), match.group('post_id'), match.group('comment_id')] if match else None
+    return [url, match.group('subreddit'), match.group('post_id'), match.group('comment_id')] if match else None
     
     
 def get_tweet_id(url: str) -> Optional[str]:
@@ -1207,7 +1207,7 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             user_agent="testscript by u/fakebot3",
             username="asah_forecast_chat",
         )
-        subm = reddit.submission(id=reddit_post_info[1])
+        subm = reddit.submission(id=reddit_post_info[2])
         if subm is None:
             return
 
@@ -1224,14 +1224,20 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         p = SubElement(div, "p")
         p.text = subm.selftext
         print(subm.selftext)
-        if reddit_post_info[2] not in [None, ""]:
-            comm = reddit.comment(id=reddit_post_info[2])
+        if reddit_post_info[3] not in [None, ""]:
+            comm = reddit.comment(id=reddit_post_info[3])
             all_html = "<html><body>"+comm.body_html+"</body></html>"
             soup = BeautifulSoup(all_html, features='html.parser')
             text = soup.get_text()
             print(text)
             p = SubElement(div, "p")
             p.text = "> " + text
+        self.add_a(info["parent"], "", reddit_post_info[0], None, None,
+                   "reddit-preview", reddit_post_info[2],
+                   insertion_index=info["index"],
+                   already_thumbnailed=True,
+                   a_class_attr="reddit-link",
+        )
 
     def handle_youtube_url_inlining(
         self,
