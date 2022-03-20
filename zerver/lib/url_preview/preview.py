@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import Any, Callable, Dict, Match, Optional
 from urllib.parse import urljoin
@@ -123,21 +124,15 @@ def get_link_embed_data(
     if "image" in data:
         data["image"] = urljoin(response.url, data["image"])
 
-    # fallback to linkpreview
-    print(f'check linkpreview? {data}')
-    for key in ["title", "description", "image"]:
-        if (data.get('title', "") == "" or
-            data.get('description', "") == "" or
-            data.get('image', "") == ""):
-            res = preview_link(mark_sanitized_url)
-            #print(res)
-            if (data.get('title', "") == ""):
-                data['title'] = res.get('title', '')
-            if (data.get('description', "") == ""):
-                data['description'] = res.get('description', '')
-            if (data.get('image', "") == ""):
-                data['image'] = res.get('image', '')
-            #print(data)
+    if (data.get('title') in ['', None] or data.get('description') in ['', None] or
+        data.get('image') in ['', None]):
+        logging.info(f'trying preview_link({sanitized_url}) because some field(s) missing: {data}')
+        res = preview_link(sanitized_url)
+        for key in ["title", "description", "image"]:
+            if data.get(key) in ['', None]:
+                data[key] = res.get(key, '')
+
+    logging.info(f'found preview data: {data}')
 
     if 'news.ycombinator.com' in mark_sanitized_url:
         data['image'] = 'https://image.winudf.com/v2/image1/Y29tLmFsZmlhbmxvc2FyaS5oYWNrZXJuZXdzX2ljb25fMTU0MTY3Nzg4OF8wODA/icon.png?w=&fakeurl=1'
