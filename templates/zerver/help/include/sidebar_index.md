@@ -104,6 +104,8 @@
 * [Rename a topic](/help/rename-a-topic)
 * [Resolve a topic](/help/resolve-a-topic)
 * [Move content to another topic](/help/move-content-to-another-topic)
+* [Move content to another stream](/help/move-content-to-another-stream)
+* [Delete a topic](/help/delete-a-topic)
 * [Manage inactive streams](/help/manage-inactive-streams)
 
 ## Notifications
@@ -168,19 +170,17 @@
 * [Change a stream's description](/help/change-the-stream-description)
 * [Change the privacy of a stream](/help/change-the-privacy-of-a-stream)
 * [Delete or archive a stream](/help/archive-a-stream)
-* [Move content to another stream](/help/move-content-to-another-stream)
-* [Delete a topic](/help/delete-a-topic)
 
 ## Organization settings
 * [Custom emoji](/help/custom-emoji)
 * [Add a custom linkifier](/help/add-a-custom-linkifier)
-* [Restrict topic editing](/help/configure-who-can-edit-topics)
 * [Require topics in stream messages](/help/require-topics)
 * [Restrict private messages](/help/restrict-private-messages)
 * [Restrict wildcard mentions](/help/restrict-wildcard-mentions)
-* [Block image and link previews](/help/allow-image-link-previews)
+* [Restrict topic editing](/help/configure-who-can-edit-topics)
+* [Restrict message editing](/help/configure-message-editing-and-deletion)
 * [Disable message edit history](/help/disable-message-edit-history)
-* [Manage editing of old messages](/help/configure-message-editing-and-deletion)
+* [Block image and link previews](/help/allow-image-link-previews)
 * [Hide message content in emails](/help/hide-message-content-in-emails)
 * [Message retention policy](/help/message-retention-policy)
 * [Weekly digest emails](/help/digest-emails)

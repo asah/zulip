@@ -174,7 +174,7 @@ after resolving an issue. The most common causes of errors are:
   minimal RAM for running Zulip can run into out-of-memory issues
   during the upgrade process (generally `tools/webpack` is the step
   that fails). You can get past this by shutting down the Zulip
-  server with `supervisorctl stop all` to free up RAM before running
+  server with `./scripts/stop-server` to free up RAM before running
   the upgrade process.
 
 Useful logs are available in a few places:
@@ -419,7 +419,7 @@ instructions for other supported platforms.
    to back up the system:
 
    ```bash
-   supervisorctl stop all
+   /home/zulip/deployments/current/scripts/stop-server
    /home/zulip/deployments/current/manage.py backup --output=/home/zulip/release-upgrade.backup.tar.gz
    ```
 
@@ -757,8 +757,8 @@ Many Zulip servers (including chat.zulip.org and zulip.com) upgrade to
 so, it's important to understand how to happily run a server based on
 `main`.
 
-For background, it's backporting arbitrary patches from `main` to an
-older version requires some care. Common issues include:
+For background, backporting arbitrary patches from `main` to an older
+version requires some care. Common issues include:
 
 - Changes containing database migrations (new files under
   `*/migrations/`), which includes most new features. We
