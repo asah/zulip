@@ -439,6 +439,11 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
     else:
         body = f"(via email) {body}"
 
+    # gcaptain hacks: strip header, shorten URLs
+    body = re.sub(r'^(.|\n)+?[-]{20,100}\n+', '', body)
+    body = re.sub(r'(subscriber=true|goal=[0-9]_[0-9a-f-]{24,40}|mc_cid=[0-9a-f]{6,12})&', '', body)
+    body = re.sub(r'mc_eid=UNIQID', '', body)
+    
     # forecast.chat hack to redirect misc@ message to various other forums aka streams
     if re.search(r'^(zulipinbox.)?development-internal', to):
         if re.search('crypto|bitcoin', body):
