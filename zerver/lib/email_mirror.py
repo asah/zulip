@@ -439,13 +439,9 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
     else:
         body = f"(via email) {body}"
 
-    # gcaptain hacks: strip header, shorten URLs
+    # gcaptain hacks: shorten URLs, strip header
     body = re.sub(r'|(subscriber=true|goal=[0-9]_[0-9a-f-]{24,40}|mc_cid=[0-9a-f]{6,12})&', '', body)
-    body = re.sub(r'(From: no_reply@gcaptain.com|From: gCaptain <no_reply@gcaptain.com>'+
-                  r'|mc_eid=UNIQID|https://www.facebook.com/gCaptain-27223368885/[?]'+
-                  r'|https://www.linkedin.com/company/gcaptain[?]'+
-                  r'|https://twitter.com/gCaptain[?]'+
-                  r'|Jobs.+?Forums.+?Advertise.+?https://www.mptusa.com/[?]' + r')', '', body)
+    body = re.sub(r'^(.|\n)+?Top Story(.|\n)+?http', 'http', body)
 
     # forecast.chat hack to redirect misc@ message to various other forums aka streams
     if re.search(r'^(zulipinbox.)?development-internal', to):
