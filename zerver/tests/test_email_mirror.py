@@ -262,6 +262,136 @@ class TestStreamEmailMessagesSuccess(ZulipTestCase):
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
 
+    def test_receive_gcaptain_success(self) -> None:
+
+        # build dummy messages for stream
+        # test valid incoming stream message is processed properly
+        user_profile = self.example_user("hamlet")
+        self.login_user(user_profile)
+        self.subscribe(user_profile, "Denmark")
+        stream = get_stream("Denmark", user_profile.realm)
+
+        stream_to_address = encode_email_address(stream)
+
+        incoming_valid_message = EmailMessage()
+        incoming_valid_message.set_content("""
+
+https://www.facebook.com/gCaptain-27223368885/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID https://www.linkedin.com/company/gcaptain?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID https://twitter.com/gCaptain?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID
+Jobs (https://jobsite.gcaptain.com/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID) Forum (https://forum.gcaptain.com/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID) Advertise (https://gcaptain.com/advertising?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://sealiftcommand.com/?utm_source=3Dgcaptain&utm_medium=3Dnewsletter&utm_campaign=3DFY20&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID#nowhiring
+
+
+** Top Story
+------------------------------------------------------------
+
+
+https://gcaptain.com/britain-ferry-operators-minimum-wage/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID Britain to Force Ferry Operators to Pay Minimum Wage After P&O Debacle (https://gcaptain.com/britain-ferry-operators-minimum-wage/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+LONDON, March 28 (Reuters) =E2=80=93 Britain said on Monday it will force ferry operators do... (https://gcaptain.com/britain-ferry-operators-minimum-wage/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://www.detyens.com?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID
+https://gcaptain.com/clean-canaveral-performs-inaugural-barge-to-ship-lng-bunkering-operation/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID =E2=80=98Clean Canaveral=E2=80=99 Performs Inaugural Barge-to-Ship LNG Bunkering Operation (https://gcaptain.com/clean-canaveral-performs-inaugural-barge-to-ship-lng-bunkering-operation/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+The largest Jones Act-compliant LNG bunkering barge has completed its inaugural bunkering operation ... (https://gcaptain.com/clean-canaveral-performs-inaugural-barge-to-ship-lng-bunkering-operation/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/capital-link-international-shipping-forums-drybulk-panel/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID Capital Link=E2=80=99s International Shipping Forum Drybulk Panel: =E2=80=98You Pinch Yourself=E2=80=99 (https://gcaptain.com/capital-link-international-shipping-forums-drybulk-panel/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+The drybulk panel at Capital Link=E2=80=99s International Shipping Forum (now in its 16th year) proved to ... (https://gcaptain.com/capital-link-international-shipping-forums-drybulk-panel/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/a-history-of-american-maritime-law/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID A History of American Maritime Law (https://gcaptain.com/a-history-of-american-maritime-law/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+=E2=80=9CI am indeed lord of the world, but the Law is the lord of the sea. This matter must be decided by... (https://gcaptain.com/a-history-of-american-maritime-law/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/turkey-defuses-another-stray-naval-mine-in-black-sea/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID Turkey Defuses Another Stray Naval Mine in Black Sea (https://gcaptain.com/turkey-defuses-another-stray-naval-mine-in-black-sea/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+ISTANBUL, March 28 (Reuters) =E2=80=93 A military diving team deactivated a stray naval mine off... (https://gcaptain.com/turkey-defuses-another-stray-naval-mine-in-black-sea/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+http://www.jmsnet.com/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID
+https://gcaptain.com/savannah-completes-decades-long-harbor-deepening-project/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID Savannah Completes Decades-Long Harbor Deepening Project (https://gcaptain.com/savannah-completes-decades-long-harbor-deepening-project/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Officials at the Port of Savannah have marked the completion of the Savannah Harbord deepening proje... (https://gcaptain.com/savannah-completes-decades-long-harbor-deepening-project/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/maersk-to-explore-large-scale-green-fuel-production-in-egypt/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID Maersk to Explore Large-Scale Green Fuel Production in Egypt (https://gcaptain.com/maersk-to-explore-large-scale-green-fuel-production-in-egypt/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+A.P. Moller-Maersk will partner with authorities in Egypt to explore the large-scale production of g... (https://gcaptain.com/maersk-to-explore-large-scale-green-fuel-production-in-egypt/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/united-states-goods-trade-deficit-february/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID U.S. Goods Trade Deficit Narrows But Remains Near-Record (https://gcaptain.com/united-states-goods-trade-deficit-february/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+By Lucia Mutikani WASHINGTON, March 28 (Reuters) =E2=80=93 The U.S. trade deficit in goods n... (https://gcaptain.com/united-states-goods-trade-deficit-february/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/ukraine-wheat-exports-could-resume/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID Ukraine Could Resume Wheat Exports Depending on Next Crop (https://gcaptain.com/ukraine-wheat-exports-could-resume/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+By Volodymyr Verbyany (Bloomberg) =E2=80=94 Ukraine may ease wheat-export curbs as soon as next month... (https://gcaptain.com/ukraine-wheat-exports-could-resume/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/uk-offshore-wind-subsidies-dispute-wto/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID EU Lodges WTO Challenge Over UK=E2=80=99s Offshore Wind Subsidies (https://gcaptain.com/uk-offshore-wind-subsidies-dispute-wto/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+By Bryce Baschuk (Bloomberg) =E2=80=94 The European Union filed a dispute against the U.K. at the... (https://gcaptain.com/uk-offshore-wind-subsidies-dispute-wto/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/ever-forward-refloating-plan-revealed/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID Ever Forward Refloating Plan Revealed (https://gcaptain.com/ever-forward-refloating-plan-revealed/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Salvors will use five tugs to attempt to refloat the Ever Forward in Chesapeake Bay on Tuesday. Deta... (https://gcaptain.com/ever-forward-refloating-plan-revealed/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/a-history-of-american-maritime-law/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID A History of American Maritime Law (https://gcaptain.com/a-history-of-american-maritime-law/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+=E2=80=9CI am indeed lord of the world, but the Law is the lord of the sea. This matter must be decided by... (https://gcaptain.com/a-history-of-american-maritime-law/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/american-cruise-lines-is-hiring/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID American Cruise Lines is hiring (https://gcaptain.com/american-cruise-lines-is-hiring/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+American Cruise Lines leads the way with the newest fleet of small cruise ships, paddlewheelers, and... (https://gcaptain.com/american-cruise-lines-is-hiring/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://maritimeoptima.com/shipatlas/feature/real-time-vessel-positions?utm_source=3DgCaptain&utm_medium=3Dnewsletter-banner&utm_campaign=3DgCaptain-1&utm_content=3Dvessel-positions&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID
+
+
+** Corporate News
+------------------------------------------------------------
+
+
+https://gcaptain.com/liberian-registry-attains-qualship21-status-by-united-states-coast-guard/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID                                     Liberian Registry Attains Qualship21 Status by United States Coast Guard (https://gcaptain.com/liberian-registry-attains-qualship21-status-by-united-states-coast-guard/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/new-bedford-foss-terminal-opening-to-support-offshore-wind/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID                                                   New Bedford Foss Terminal Opening to Support Offshore Wind (https://gcaptain.com/new-bedford-foss-terminal-opening-to-support-offshore-wind/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/classnk-grants-innovation-endorsement-for-products-solutions-to-marlinks-cyberguard-threat-detection-service/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID ClassNK grants Innovation Endorsement for Products & Solutions to Marlink=E2=80=99s CyberGuard Threat Detection service (https://gcaptain.com/classnk-grants-innovation-endorsement-for-products-solutions-to-marlinks-cyberguard-threat-detection-service/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/inmarsat-makes-renewables-breakthrough-with-digital-ecosystem-contract-for-norwind-offshore/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID                  Inmarsat makes renewables breakthrough with digital ecosystem contract for Norwind Offshore (https://gcaptain.com/inmarsat-makes-renewables-breakthrough-with-digital-ecosystem-contract-for-norwind-offshore/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://gcaptain.com/marlink-cyberguard-threat-detection-service-receives-innovation-endorsement-certificate-from-classnk/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID         Marlink CyberGuard Threat Detection service receives Innovation Endorsement Certificate from ClassNK (https://gcaptain.com/marlink-cyberguard-threat-detection-service-receives-innovation-endorsement-certificate-from-classnk/?subscriber=3Dtrue&goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+http://www.incatcrowther.com?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID
+
+
+**
+------------------------------------------------------------
+
+
+Tug Captain (https://jobsite.gCaptain.com/job/tug-captain/62314940/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Norcliffe Ocean Shipping & Trading (https://jobsite.gCaptain.com/job/tug-captain/62314940/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Saint Simons Island, FL, United States (https://jobsite.gCaptain.com/job/tug-captain/62314940/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID) All Tug Crew Positions (https://jobsite.gCaptain.com/job/all-tug-crew-positions/57778309/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Dann Marine Towing, LC (https://jobsite.gCaptain.com/job/all-tug-crew-positions/57778309/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+MD, United States (https://jobsite.gCaptain.com/job/all-tug-crew-positions/57778309/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Chief Mate-Foss Ocean Fleet (https://jobsite.gCaptain.com/job/chief-mate-foss-ocean-fleet/62244940/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Foss Maritime (https://jobsite.gCaptain.com/job/chief-mate-foss-ocean-fleet/62244940/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Seattle, WA, United States (https://jobsite.gCaptain.com/job/chief-mate-foss-ocean-fleet/62244940/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID) AB Unlimited-Foss Ocean Fleet (https://jobsite.gCaptain.com/job/ab-unlimited-foss-ocean-fleet/62204654/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Foss Maritime (https://jobsite.gCaptain.com/job/ab-unlimited-foss-ocean-fleet/62204654/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+WA, United States (https://jobsite.gCaptain.com/job/ab-unlimited-foss-ocean-fleet/62204654/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+2nd Mate-Foss Ocean Fleet (https://jobsite.gCaptain.com/job/2nd-mate-foss-ocean-fleet/62204619/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Foss Maritime (https://jobsite.gCaptain.com/job/2nd-mate-foss-ocean-fleet/62204619/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+WA, United States (https://jobsite.gCaptain.com/job/2nd-mate-foss-ocean-fleet/62204619/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID) Captain-Foss Ocean Fleet (https://jobsite.gCaptain.com/job/captain-foss-ocean-fleet/62204590/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Foss Maritime (https://jobsite.gCaptain.com/job/captain-foss-ocean-fleet/62204590/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+WA, United States (https://jobsite.gCaptain.com/job/captain-foss-ocean-fleet/62204590/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+https://ral.ca?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID
+
+
+**
+------------------------------------------------------------
+
+
+12 noon (https://forum.gcaptain.com/t/12-noon/62654?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+in Scuttlebutt (https://forum.gcaptain.com/t/12-noon/62654?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Captain Sankey and his diagram (https://forum.gcaptain.com/t/captain-sankey-and-his-diagram/62648?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+in Scuttlebutt (https://forum.gcaptain.com/t/captain-sankey-and-his-diagram/62648?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Ocean liners cause US inflation (https://forum.gcaptain.com/t/ocean-liners-cause-us-inflation/62687?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+in Maritime News (https://forum.gcaptain.com/t/ocean-liners-cause-us-inflation/62687?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+Looking for ship position (https://forum.gcaptain.com/t/looking-for-ship-position/62649?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+in Professional Mariner Forum (https://forum.gcaptain.com/t/looking-for-ship-position/62649?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+The Suwalki gap (https://forum.gcaptain.com/t/the-suwalki-gap/62659?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+in Scuttlebutt (https://forum.gcaptain.com/t/the-suwalki-gap/62659?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID)
+http://www.farsounder.com/resources/training?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID
+Futuro Health - Where the Future of Car Begins
+FOLLOW US
+https://www.facebook.com/gCaptain-27223368885/?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID https://www.linkedin.com/company/gcaptain?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID https://twitter.com/gCaptain?goal=3D0_f50174ef03-6caf47ab43-170458215&mc_cid=3D6caf47ab43&mc_eid=3DUNIQID
+&COPY; 2017 Unofficial Networks LLC
+
+This email was sent to zulipinbox+development-internal.aadbd7b01f812fb94166bd2ff28b5877.show-sender@forecast.chat (mailto:zulipinbox+development-internal.aadbd7b01f812fb94166bd2ff28b5877.show-sender@forecast.chat)
+why did I get this? (https://gcaptain.us11.list-manage.com/about?u=3D9d589e63fba611f84640a8337&id=3Df50174ef03&e=3D301888b15d&c=3D6caf47ab43)     unsubscribe from this list (https://gcaptain.us11.list-manage.com/unsubscribe?u=3D9d589e63fba611f84640a8337&id=3Df50174ef03&e=3D301888b15d&c=3D6caf47ab43)     update subscription preferences (https://gcaptain.us11.list-manage.com/profile?u=3D9d589e63fba611f84640a8337&id=3Df50174ef03&e=3D301888b15d&c=3D6caf47ab43)
+Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
+""")
+
+        incoming_valid_message["Subject"] = "⚓️ gCaptain Daily: Your Daily Maritime News"
+        incoming_valid_message["From"] = "gCaptain <no_reply@gcaptain.com> Using Mailchimp Mailer - **CID6caf47ab43301888b15d**"
+        incoming_valid_message["To"] = stream_to_address
+
+        process_message(incoming_valid_message)
+
+        # Hamlet is subscribed to this stream so should see the email message from Othello.
+        message = most_recent_message(user_profile)
+
+        #print(message.content)
+        self.assertFalse("** Top Story" in message.content)
+        self.assertFalse("mc_eid=UNIQID" in message.content)
+        self.assertFalse("facebook.com/gCaptain" in message.content)
+        self.assertFalse("goal=3D0" in message.content)
+        self.assertTrue("Debacle" in message.content)
+        self.assertTrue("detyens.com" in message.content)
+
     # Test receiving an email with the address on an UnstructuredHeader
     # (e.g. Envelope-To) instead of an AddressHeader (e.g. To).
     # https://github.com/zulip/zulip/issues/15864
