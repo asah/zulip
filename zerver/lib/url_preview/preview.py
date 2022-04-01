@@ -126,8 +126,8 @@ def get_link_embed_data(
 
     if (data.get('title') in ['', None] or data.get('description') in ['', None] or
         data.get('image') in ['', None]):
-        logging.info(f'trying preview_link({sanitized_url}) because some field(s) missing: {data}')
-        res = preview_link(sanitized_url)
+        logging.info(f'trying preview_link({mark_sanitized_url}) because some field(s) missing: {data}')
+        res = preview_link(mark_sanitized_url)
         for key in ["title", "description", "image"]:
             if data.get(key) in ['', None]:
                 data[key] = res.get(key, '')
