@@ -442,9 +442,22 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
     # gcaptain hacks: shorten URLs, strip header
     if "gcaptain" in body:
         body = re.sub(r'(subscriber=(3D)?true|goal=(3D)?[0-9]_[0-9a-f-]{24,40}|mc_cid=(3D)?[0-9a-f]{6,12})&', '', body)
-        body = re.sub(r'^(.|\n)+?Top Story(.|\n)+?http', 'http', body)
+        body = re.sub(r'^(.|\n)+?Top Story(.|\n)+?http', "\nhttp", body)
         body = re.sub(r'[?&]mc_eid=(3D)?UNIQID', '', body)
         body = re.sub(r'[*][*] Corporate News(.|\n)+$', '', body)
+        body = re.sub(r'[\n]https://gcaptain.com/.+? ', "\n", body)
+        body = re.sub(r'[\n](.+?) ([(]https://gcaptain.com.+?[)])', r"\n[\1]\2", body)
+        body = re.sub(r'[\n]http.+?[\n]', "\n", body)
+        body = re.sub(r'=E2=80=9[89]', "'", body)
+        new_lines = []
+        urlseen = {}
+        for line in body.split("\n"):
+            grp = re.search(r'(https://gcaptain.+?)$', line)
+            if grp and grp.group(1) and grp.group(1) not in urlseen:
+                urlseen[grp.group(1)] = True
+                new_lines.append(line)
+        body = "\n".join(new_lines)
+        #logger.error("\nbody:\n  " + body.replace("\n", "\n  "))
 
     # forecast.chat hack to redirect misc@ message to various other forums aka streams
     if re.search(r'^(zulipinbox.)?development-internal', to):

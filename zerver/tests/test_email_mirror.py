@@ -385,12 +385,13 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         message = most_recent_message(user_profile)
 
         #print(message.content)
-        self.assertFalse("** Top Story" in message.content)
-        self.assertFalse("mc_eid=UNIQID" in message.content)
-        self.assertFalse("facebook.com/gCaptain" in message.content)
-        self.assertFalse("goal=3D0" in message.content)
-        self.assertTrue("Debacle" in message.content)
-        self.assertTrue("detyens.com" in message.content)
+        self.assertNotIn("** Top Story", message.content)
+        self.assertNotIn("mc_eid=UNIQID", message.content)
+        self.assertNotIn("facebook.com/gCaptain", message.content)
+        self.assertNotIn("goal=3D0", message.content)
+        self.assertIn("Debacle", message.content)
+        self.assertNotIn("detyens.com", message.content)
+        self.assertIn("\n['Clean Canaveral' Performs Inaugural Barge-to-Ship LNG Bunkering Operation](https", message.content)
 
     # Test receiving an email with the address on an UnstructuredHeader
     # (e.g. Envelope-To) instead of an AddressHeader (e.g. To).
