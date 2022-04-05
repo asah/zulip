@@ -1,11 +1,23 @@
 # Version history
 
 This page the release history for the Zulip server. See also the
-[Zulip release lifecycle](release-lifecycle.md).
+[Zulip release lifecycle](../overview/release-lifecycle.md).
+
+## Zulip 6.x series
+
+### 6.0 -- unreleased
+
+This section is an incomplete draft of the release notes for the next
+major release, and is only updated occasionally. See the [commit
+log][commit-log] for an up-to-date list of raw changes.
+
+#### Upgrade notes for 6.0
+
+- None yet.
 
 ## Zulip 5.x series
 
-### 5.0 -- unreleased
+### 5.0 -- 2022-03-29
 
 This section is an incomplete draft of the release notes for the next
 major release, and is only updated occasionally. See the [commit
@@ -186,6 +198,8 @@ log][commit-log] for an up-to-date list of raw changes.
   software from flagging invitations.
 - Added support for uploading animated PNGs as custom emoji.
 - Renamed "Night mode" to "Dark theme".
+- Added the mobile app's notification sound to desktop sound options,
+  as "Chime".
 - Reworked the `manage.py help` interface to hide Django commands that are
   useless or harmful to run on a production system. Also deleted
   several useless management commands.
@@ -1562,7 +1576,7 @@ Zulip installations; it has minimal changes for existing servers.
   disruption by running this migration first, before beginning the
   user-facing downtime. However, if you'd like to watch the downtime
   phase of the upgrade closely, we recommend
-  [running them first manually](https://zulip.readthedocs.io/en/1.9.0/production/expensive-migrations.html)
+  running them first manually
   as well as the usual trick of doing an apt upgrade first.
 
 #### Full feature changelog
@@ -1951,7 +1965,7 @@ running a version from before 1.7 should upgrade directly to 1.7.1.
   minimizes disruption by running these first, before beginning the
   user-facing downtime. However, if you'd like to watch the downtime
   phase of the upgrade closely, we recommend
-  [running them first manually](https://zulip.readthedocs.io/en/1.9.0/production/expensive-migrations.html)
+  running them first manually
   as well as the usual trick of doing an apt upgrade first.
 
 - We've removed support for an uncommon legacy deployment model where
@@ -2576,15 +2590,17 @@ running a version from before 1.7 should upgrade directly to 1.7.1.
 This section links to the upgrade notes from past releases, so you can
 easily read them all when upgrading across multiple releases.
 
-- [Draft upgrade notes for 5.0](#upgrade-notes-for-50)
-- [Upgrade notes for 4.0](#upgrade-notes-for-40)
-- [Upgrade notes for 3.0](#upgrade-notes-for-30)
-- [Upgrade notes for 2.1.5](#upgrade-notes-for-215)
-- [Upgrade notes for 2.1.0](#upgrade-notes-for-210)
-- [Upgrade notes for 2.0.0](#upgrade-notes-for-200)
-- [Upgrade notes for 1.9.0](#upgrade-notes-for-190)
-- [Upgrade notes for 1.8.0](#upgrade-notes-for-180)
-- [Upgrade notes for 1.7.0](#upgrade-notes-for-170)
+- [Draft upgrade notes for 6.0](#upgrade-notes-for-60)
+
+* [Upgrade notes for 5.0](#upgrade-notes-for-50)
+* [Upgrade notes for 4.0](#upgrade-notes-for-40)
+* [Upgrade notes for 3.0](#upgrade-notes-for-30)
+* [Upgrade notes for 2.1.5](#upgrade-notes-for-215)
+* [Upgrade notes for 2.1.0](#upgrade-notes-for-210)
+* [Upgrade notes for 2.0.0](#upgrade-notes-for-200)
+* [Upgrade notes for 1.9.0](#upgrade-notes-for-190)
+* [Upgrade notes for 1.8.0](#upgrade-notes-for-180)
+* [Upgrade notes for 1.7.0](#upgrade-notes-for-170)
 
 [docker-zulip]: https://github.com/zulip/docker-zulip
 [commit-log]: https://github.com/zulip/zulip/commits/main

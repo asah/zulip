@@ -978,7 +978,6 @@ class StreamAdminTest(ZulipTestCase):
         self.assertTrue(attachment.is_realm_public)
 
         params = {
-            "stream_name": orjson.dumps("test_stream").decode(),
             "is_private": orjson.dumps(True).decode(),
             "history_public_to_subscribers": orjson.dumps(True).decode(),
         }
@@ -1000,7 +999,6 @@ class StreamAdminTest(ZulipTestCase):
         self.assertFalse(validate_attachment_request_for_spectator_access(realm, attachment))
 
         params = {
-            "stream_name": orjson.dumps("test_stream").decode(),
             "is_private": orjson.dumps(False).decode(),
             "is_web_public": orjson.dumps(True).decode(),
             "history_public_to_subscribers": orjson.dumps(True).decode(),
@@ -1025,7 +1023,6 @@ class StreamAdminTest(ZulipTestCase):
         self.assertTrue(attachment.is_realm_public)
 
         params = {
-            "stream_name": orjson.dumps("test_stream").decode(),
             "is_private": orjson.dumps(False).decode(),
             "is_web_public": orjson.dumps(False).decode(),
             "history_public_to_subscribers": orjson.dumps(True).decode(),
@@ -1632,6 +1629,50 @@ class StreamAdminTest(ZulipTestCase):
             result,
             f"description is too long (limit: {Stream.MAX_DESCRIPTION_LENGTH} characters)",
         )
+
+        result = self.client_patch(
+            f"/json/streams/{stream_id}",
+            {"description": ""},
+        )
+        self.assert_json_success(result)
+        stream = get_stream("stream_name1", realm)
+        self.assertEqual(stream.description, "")
+
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        expected_notification = (
+            f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n\n"
+            "* **Old description:**\n"
+            "```` quote\n"
+            "Test description\n"
+            "````\n"
+            "* **New description:**\n"
+            "```` quote\n"
+            "*No description.*\n"
+            "````"
+        )
+        self.assertEqual(messages[-1].content, expected_notification)
+
+        result = self.client_patch(
+            f"/json/streams/{stream_id}",
+            {"description": "Test description"},
+        )
+        self.assert_json_success(result)
+        stream = get_stream("stream_name1", realm)
+        self.assertEqual(stream.description, "Test description")
+
+        messages = get_topic_messages(user_profile, stream, "stream events")
+        expected_notification = (
+            f"@_**{user_profile.full_name}|{user_profile.id}** changed the description for this stream.\n\n"
+            "* **Old description:**\n"
+            "```` quote\n"
+            "*No description.*\n"
+            "````\n"
+            "* **New description:**\n"
+            "```` quote\n"
+            "Test description\n"
+            "````"
+        )
+        self.assertEqual(messages[-1].content, expected_notification)
 
         result = self.client_patch(
             f"/json/streams/{stream_id}",
@@ -3924,6 +3965,7 @@ class SubscriptionAPITest(ZulipTestCase):
                 principals=orjson.dumps([self.user_profile.id]).decode(),
             ),
         )
+        target_stream = get_stream(invite_streams[0], self.test_realm)
 
         msg = self.get_second_to_last_message()
         self.assertEqual(msg.recipient.type, Recipient.STREAM)
@@ -3931,6 +3973,16 @@ class SubscriptionAPITest(ZulipTestCase):
         self.assertEqual(msg.sender_id, self.notification_bot(self.test_realm).id)
         expected_msg = (
             f"@_**{invitee_full_name}|{invitee.id}** created a new stream #**{invite_streams[0]}**."
+        )
+        self.assertEqual(msg.content, expected_msg)
+
+        msg = self.get_last_message()
+        self.assertEqual(msg.recipient.type, Recipient.STREAM)
+        self.assertEqual(msg.recipient.type_id, target_stream.id)
+        self.assertEqual(msg.sender_id, self.notification_bot(self.test_realm).id)
+        expected_msg = (
+            f"**Public** stream created by @_**{invitee_full_name}|{invitee.id}**. **Description:**\n"
+            "```` quote\n*No description.*\n````"
         )
         self.assertEqual(msg.content, expected_msg)
 
