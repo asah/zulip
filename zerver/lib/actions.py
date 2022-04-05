@@ -385,7 +385,7 @@ def notify_new_user(user_profile: UserProfile) -> None:
 
     is_first_user = user_count == 1
     if not is_first_user:
-        message = _("{user} just signed up for Zulip. (total: {user_count})").format(
+        message = _("{user} just signed up for forecast.chat (total: {user_count})").format(
             user=silent_mention_syntax_for_user(user_profile), user_count=user_count
         )
 
@@ -408,7 +408,7 @@ def notify_new_user(user_profile: UserProfile) -> None:
         # Check whether the stream exists
         signups_stream = get_signups_stream(admin_realm)
         # We intentionally use the same strings as above to avoid translation burden.
-        message = _("{user} just signed up for Zulip. (total: {user_count})").format(
+        message = _("{user} just signed up for forecast.chat (total: {user_count})").format(
             user=f"{user_profile.full_name} <`{user_profile.email}`>", user_count=user_count
         )
         internal_send_stream_message(
