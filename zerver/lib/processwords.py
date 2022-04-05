@@ -82,7 +82,10 @@ def processwords(text):
         cw = {}
         lineno = 0
         with open('zerver/lib/google-10000-english-usa.txt') as fh:
-            while commonword := fh.readline():
+            while True:
+                commonword = fh.readline()
+                if not commonword:
+                    break
                 lineno += 1
                 commonword = commonword.lower().strip()
                 if commonword not in cw:
@@ -100,7 +103,10 @@ def processwords(text):
 
         sw = {}
         with open('zerver/lib/stopwords.txt') as fh:
-            while stopword := fh.readline():
+            while True:
+                stopword = fh.readline()
+                if not stopword:
+                    break
                 stopword = stopword.lower().strip()
                 sw[ps.stem(stopword)] = True
         sw.update({ps.stem(word):True for word in sw_words.strip().split()})
@@ -203,7 +209,10 @@ if __name__ == "__main__":
     # fetch alltext.txt from production /tmp/alltext.txt
     with open('alltext.txt') as fh:
         text = ""
-        while line := fh.readline():
+        while True:
+            line = fh.readline()
+            if not line:
+                break
             text += line
         freq = processwords(text)
         print('\n'.join(
