@@ -391,7 +391,7 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         self.assertNotIn("goal=3D0", message.content)
         self.assertIn("Debacle", message.content)
         self.assertNotIn("detyens.com", message.content)
-        self.assertIn("\n['Clean Canaveral' Performs Inaugural Barge-to-Ship LNG Bunkering Operation](https", message.content)
+        self.assertIn("\n\n['Clean Canaveral' Performs Inaugural Barge-to-Ship LNG Bunkering Operation](https", message.content)
 
     # Test receiving an email with the address on an UnstructuredHeader
     # (e.g. Envelope-To) instead of an AddressHeader (e.g. To).

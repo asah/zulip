@@ -456,7 +456,7 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
             if grp and grp.group(1) and grp.group(1) not in urlseen:
                 urlseen[grp.group(1)] = True
                 new_lines.append(line)
-        body = "\n".join(new_lines)
+        body = "\n\n".join(new_lines)
         #logger.error("\nbody:\n  " + body.replace("\n", "\n  "))
 
     # forecast.chat hack to redirect misc@ message to various other forums aka streams
