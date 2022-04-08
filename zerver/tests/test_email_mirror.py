@@ -285,9 +285,10 @@ class TestStreamEmailMessagesSuccess(ZulipTestCase):
         denmark_stream_to_address = encode_email_address(denmark_stream)
         support_stream = get_stream("Support", user_profile.realm)
         support_stream_to_address = encode_email_address(support_stream)
-        # oilprice gets redirected to denmark
-        denmark_msg = send_email_custom_from(support_stream, "newsletter@oilprice.com")
+        # oilprice/etc gets redirected to denmark
         support_msg = send_email_custom_from(support_stream, "newsletter@somewhere.com")
+        denmark_msg = send_email_custom_from(support_stream, "newsletter@oilprice.com")
+        denmark_msg = send_email_custom_from(support_stream, "enterpriseweekly@work-bench.com")
 
         self.assertEqual(denmark_msg.recipient_id, denmark_stream.recipient_id)
         self.assertNotEqual(denmark_msg.recipient_id, support_msg.recipient_id);

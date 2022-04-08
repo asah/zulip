@@ -420,7 +420,9 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
 
     # oilprice hack: doesn't support long Zulip stream emails with "+" in them
     if ("@oilprice.com" in message.get("From", "").lower() or
-        "@oilprice.com" in message.get("Sender", "").lower()):
+        "@oilprice.com" in message.get("Sender", "").lower() or
+        "enterpriseweekly@" in message.get("From", "").lower() or
+        False):
         if settings.DEVELOPMENT:
             to = "denmark.95c5ca209b2cbd6bf7f57e3c52349a34@testserver"
         else:
