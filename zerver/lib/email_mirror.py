@@ -419,8 +419,12 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
     subject = strip_from_subject(subject_header) or "(no topic)"
 
     # oilprice hack: doesn't support long Zulip stream emails with "+" in them
-    if "@oilprice.com" in message.get("From", "").lower():
-        to = "zulipinbox+newsletters.b55a777a3dc126bd198456df86b4ded2.show-sender@forecast.chat"
+    if ("@oilprice.com" in message.get("From", "").lower() or
+        "@oilprice.com" in message.get("Sender", "").lower()):
+        if settings.DEVELOPMENT:
+            to = "denmark.95c5ca209b2cbd6bf7f57e3c52349a34@testserver"
+        else:
+            to = "zulipinbox+newsletters.b55a777a3dc126bd198456df86b4ded2.show-sender@forecast.chat"
     stream, options = decode_stream_email_address(to)
     # Don't remove quotations if message is forwarded, unless otherwise specified:
     if "include_quotes" not in options:

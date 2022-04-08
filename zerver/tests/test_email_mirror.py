@@ -262,6 +262,36 @@ class TestStreamEmailMessagesSuccess(ZulipTestCase):
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
 
+    def test_receive_oilprice_success(self) -> None:
+
+        # build dummy messages for stream
+        # test valid incoming stream message is processed properly
+        user_profile = self.example_user("hamlet")
+        self.login_user(user_profile)
+        self.subscribe(user_profile, "support")
+        self.subscribe(user_profile, "Denmark")
+
+        def send_email_custom_from(stream, fromaddr) -> None:
+            incoming_valid_message = EmailMessage()
+            incoming_valid_message.set_content(""" foo bar """)
+            incoming_valid_message["Subject"] = "replaceme when we know"
+            incoming_valid_message["From"] = fromaddr
+            incoming_valid_message["To"] = encode_email_address(stream)
+            process_message(incoming_valid_message)
+            message = most_recent_message(user_profile)
+            return message
+
+        denmark_stream = get_stream("Denmark", user_profile.realm)
+        denmark_stream_to_address = encode_email_address(denmark_stream)
+        support_stream = get_stream("Support", user_profile.realm)
+        support_stream_to_address = encode_email_address(support_stream)
+        # oilprice gets redirected to denmark
+        denmark_msg = send_email_custom_from(support_stream, "newsletter@oilprice.com")
+        support_msg = send_email_custom_from(support_stream, "newsletter@somewhere.com")
+
+        self.assertEqual(denmark_msg.recipient_id, denmark_stream.recipient_id)
+        self.assertNotEqual(denmark_msg.recipient_id, support_msg.recipient_id);
+
     def test_receive_gcaptain_success(self) -> None:
 
         # build dummy messages for stream
@@ -381,7 +411,6 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
 
         process_message(incoming_valid_message)
 
-        # Hamlet is subscribed to this stream so should see the email message from Othello.
         message = most_recent_message(user_profile)
 
         #print(message.content)
@@ -419,7 +448,6 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         # Hamlet is subscribed to this stream so should see the email message from Othello.
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, "TestStreamEmailMessages body")
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
 
