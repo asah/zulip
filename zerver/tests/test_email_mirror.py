@@ -256,7 +256,7 @@ class TestStreamEmailMessagesSuccess(ZulipTestCase):
         # Hamlet is subscribed to this stream so should see the email message from Othello.
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, "TestStreamEmailMessages body")
+        self.assertEqual(message.content, "(via email) TestStreamEmailMessages body")
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
 
@@ -471,7 +471,7 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         # Hamlet is subscribed to this stream so should see the email message from Othello.
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, "TestStreamEmailMessages body")
+        self.assertEqual(message.content, "(via email) TestStreamEmailMessages body")
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), "(no topic)")
 
@@ -497,7 +497,7 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         # Hamlet is subscribed to this stream so should see the email message from Othello.
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, "TestStreamEmailMessages body")
+        self.assertEqual(message.content, "(via email) TestStreamEmailMessages body")
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
 
@@ -526,7 +526,7 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         # Hamlet is subscribed to this stream so should see the email message from Othello.
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, "TestStreamEmailMessages body")
+        self.assertEqual(message.content, "(via email) TestStreamEmailMessages body")
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
 
@@ -553,7 +553,7 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
 
         self.assertEqual(
             message.content,
-            "From: {}\n{}".format(self.example_email("hamlet"), "TestStreamEmailMessages body"),
+            "From: {}\n{}".format(self.example_email("hamlet"), "From: hamlet@zulip.com\n(via email) TestStreamEmailMessages body"),
         )
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
@@ -615,7 +615,7 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         process_message(incoming_valid_message)
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, text)
+        self.assertEqual(message.content, "(via email) " + text)
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
 
@@ -646,7 +646,7 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         process_message(incoming_valid_message)
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, text)
+        self.assertEqual(message.content, "(via email) " + text)
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
 
@@ -992,7 +992,7 @@ class TestStreamEmailMessagesEmptyBody(ZulipTestCase):
         process_message(incoming_valid_message)
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, "(No email body)")
+        self.assertEqual(message.content, "(via email) (No email body)")
 
 
 class TestMissedMessageEmailMessages(ZulipTestCase):
@@ -1379,7 +1379,7 @@ class TestReplyExtraction(ZulipTestCase):
         stream = get_stream("Denmark", user_profile.realm)
 
         stream_to_address = encode_email_address(stream)
-        text = """Reply
+        text = """(via email) Reply
 
         -----Original Message-----
 
@@ -1398,7 +1398,7 @@ class TestReplyExtraction(ZulipTestCase):
         # Hamlet is subscribed to this stream so should see the email message from Othello.
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, "Reply")
+        self.assertEqual(message.content, "(via email) " + "Reply")
 
         # Don't extract if Subject indicates the email has been forwarded into the mirror:
         del incoming_valid_message["Subject"]
@@ -1449,7 +1449,7 @@ class TestReplyExtraction(ZulipTestCase):
         # Hamlet is subscribed to this stream so should see the email message from Othello.
         message = most_recent_message(user_profile)
 
-        self.assertEqual(message.content, "Reply")
+        self.assertEqual(message.content, "(via email) " + "Reply")
 
         # Don't extract if Subject indicates the email has been forwarded into the mirror:
         del incoming_valid_message["Subject"]
@@ -1531,7 +1531,7 @@ class TestEmailMirrorTornadoView(ZulipTestCase):
             MirrorWorker().consume(event)
 
             self.assertEqual(
-                self.get_last_message().content, "This is a plain-text message for testing Zulip."
+                self.get_last_message().content, "(via email) This is a plain-text message for testing Zulip."
             )
 
         post_data = {

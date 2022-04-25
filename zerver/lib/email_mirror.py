@@ -468,6 +468,18 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
         body = "\n\n".join(new_lines)
         #logger.error("\nbody:\n  " + body.replace("\n", "\n  "))
 
+    # gcaptain hacks: shorten URLs, strip header
+    if "tldrnewsletter" in body:
+        body = re.sub(r'^(.|\n)+?BIG TECH & STARTUPS', "BIG TECH & STARTUPS", body)
+        subject = "tldr tech newsletter"
+
+    if "enterpriseweekly@work-bench.com" in body:
+        body = re.sub(r'^(.|\n)+?This Week.s Biggest News', "This Week's Biggest News", body)
+        subject = "Enterprise software weekly"
+
+    if "earthlings@orbitalindex.com" in body:
+        body = re.sub(r'^(.|\n)+?Issue No', "Issue No", body)
+
     # forecast.chat hack to redirect misc@ message to various other forums aka streams
     if re.search(r'^(zulipinbox.)?development-internal', to):
         if re.search('crypto|bitcoin', body):
