@@ -2686,12 +2686,12 @@ def do_convert(
         )
 
     try:
-        # Spend at most 5 seconds rendering; this protects the backend
+        # Spend at most N seconds rendering; this protects the backend
         # from being overloaded by bugs (e.g. Markdown logic that is
         # extremely inefficient in corner cases) as well as user
         # errors (e.g. a linkifier that makes some syntax
         # infinite-loop).
-        rendering_result.rendered_content = timeout(5, lambda: _md_engine.convert(content))
+        rendering_result.rendered_content = timeout(15, lambda: _md_engine.convert(content))
 
         # Throw an exception if the content is huge; this protects the
         # rest of the codebase from any bugs where we end up rendering
