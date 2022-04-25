@@ -449,22 +449,22 @@ export const expires_in_values = {
     //     default: false,
     // },
     day: {
-        value: 1,
+        value: 24 * 60,
         description: $t({defaultMessage: "1 day"}),
         default: false,
     },
     threeDays: {
-        value: 3,
+        value: 3 * 24 * 60,
         description: $t({defaultMessage: "3 days"}),
         default: false,
     },
     tenDays: {
-        value: 10,
+        value: 10 * 24 * 60,
         description: $t({defaultMessage: "10 days"}),
         default: true,
     },
     thirtyDays: {
-        value: 30,
+        value: 30 * 24 * 60,
         description: $t({defaultMessage: "30 days"}),
         default: false,
     },
@@ -475,6 +475,11 @@ export const expires_in_values = {
         // before sending to the server.
         value: "null",
         description: $t({defaultMessage: "Never expires"}),
+        default: false,
+    },
+    custom: {
+        value: "custom",
+        description: $t({defaultMessage: "Custom"}),
         default: false,
     },
 };
@@ -494,6 +499,12 @@ export const display_settings_labels = {
     translate_emoticons: new Handlebars.SafeString(
         $t_html({
             defaultMessage: "Convert emoticons before sending (<code>:)</code> becomes 😃)",
+        }),
+    ),
+    display_emoji_reaction_users: new Handlebars.SafeString(
+        $t_html({
+            defaultMessage:
+                "Display names of reacting users when few users have reacted to a message.",
         }),
     ),
     escape_navigates_to_default_view: $t({defaultMessage: "Escape key navigates to default view"}),

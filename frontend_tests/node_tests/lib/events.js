@@ -721,6 +721,7 @@ exports.fixtures = {
             description: "mobile folks",
             members: [1],
             is_system_group: false,
+            subgroups: [2],
         },
     },
 
@@ -808,6 +809,13 @@ exports.fixtures = {
         type: "user_settings",
         op: "update",
         property: "dense_mode",
+        value: true,
+    },
+
+    user_settings__display_emoji_reaction_users: {
+        type: "user_settings",
+        op: "update",
+        property: "display_emoji_reaction_users",
         value: true,
     },
 
