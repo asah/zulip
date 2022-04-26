@@ -934,7 +934,7 @@ td.pointer {
         color: hsl(0, 0%, 73%);
 
         > i {
-/*            vertical-align: middle; */
+            /*            vertical-align: middle; */
         }
     }
 
@@ -952,8 +952,8 @@ td.pointer {
 
     .edit_content {
         width: 75%;
-	text-align: right;
-	padding-right: 5px;
+        text-align: right;
+        padding-right: 5px;
 
         &:hover {
             cursor: pointer;
@@ -1052,7 +1052,7 @@ td.pointer {
 .message_list {
     .recipient_row {
         border-bottom: 1px solid hsl(0, 0%, 88%);
-/*        margin-bottom: 10px; */
+        /*        margin-bottom: 10px; */
     }
 }
 
@@ -1341,7 +1341,7 @@ td.pointer {
     }
 
     .messagebox-content {
-/*        box-shadow: inset 0 0 0 2px hsl(215, 47%, 50%),
+        /*        box-shadow: inset 0 0 0 2px hsl(215, 47%, 50%),
             -1px -1px 0 0 hsl(215, 47%, 50%), 1px 1px 0 0 hsl(215, 47%, 50%),
             -1px 1px 0 0 hsl(215, 47%, 50%), 1px -1px 0 0 hsl(215, 47%, 50%);
 */
@@ -1373,38 +1373,38 @@ td.pointer {
 }
 
 .prediction_box1 {
-    display:inline-block;
+    display: inline-block;
     vertical-align: bottom;
-    margin-bottom:5px;
-    background-color:#f00;
+    margin-bottom: 5px;
+    background-color: #f00;
 }
 
 .prediction_box2 {
-    display:inline-block;
+    display: inline-block;
     vertical-align: bottom;
-    margin-bottom:5px;
-    background-color:#ffb347;
+    margin-bottom: 5px;
+    background-color: #ffb347;
 }
 
 .prediction_box3 {
-    display:inline-block;
+    display: inline-block;
     vertical-align: bottom;
-    margin-bottom:5px;
-    background-color:#ffff31;
+    margin-bottom: 5px;
+    background-color: #ffff31;
 }
 
 .prediction_box4 {
-    display:inline-block;
+    display: inline-block;
     vertical-align: bottom;
-    margin-bottom:5px;
-    background-color:#7FFF00;
+    margin-bottom: 5px;
+    background-color: #7fff00;
 }
 
 .prediction_box5 {
-    display:inline-block;
+    display: inline-block;
     vertical-align: bottom;
-    margin-bottom:5px;
-    background-color:#00FF00;
+    margin-bottom: 5px;
+    background-color: #0f0;
 }
 
 .sender_name-in-status {
@@ -1532,7 +1532,7 @@ div.focused_table {
     position: relative;
     overflow: hidden;
     @media (width >= $sm_min) {
-	width: 105%;
+        width: 105%;
     }
 
     &:empty {
@@ -1706,8 +1706,8 @@ div.focused_table {
 }
 
 .messagebox-content {
-    padding: 4px 115px 1px 10px; 
-/*    padding: 4px 15px 1px 10px; */
+    padding: 4px 115px 1px 10px;
+    /*    padding: 4px 15px 1px 10px; */
 }
 
 .bookend {
@@ -1849,7 +1849,7 @@ div.focused_table {
         padding-right: calc(3px + 10px);
 
         &::after {
-	    margin-left: 3px;
+            margin-left: 3px;
             content: "|";
             position: absolute;
             top: 30%;
@@ -2864,7 +2864,6 @@ select.inline_select_topic_edit {
     }
 }
 
-
 /* This max-width must be synced with message_viewport.is_narrow */
 @media (width < $xl_min) {
     .app-main,
@@ -2903,7 +2902,7 @@ select.inline_select_topic_edit {
         width: 30px;
     }
 
-/*
+    /*
     #top_navbar.rightside-userlist #navbar-buttons {
         margin-right: 41px;
     }
@@ -3141,7 +3140,7 @@ select.inline_select_topic_edit {
     }
 
     .message_content {
-/*        padding-right: 50px; */
+        /*        padding-right: 50px; */
     }
 }
 
@@ -3181,7 +3180,7 @@ select.inline_select_topic_edit {
 
 .fc_sender_name {
     display: inline-block;
-    font-size:12px;
+    font-size: 12px;
     width: 80px;
     overflow: hidden;
     white-space: nowrap;
@@ -3199,13 +3198,16 @@ select.inline_select_topic_edit {
     vertical-align: top;
     margin-top: 3px;
 }
+
 .fc_message_expander {
 }
+
 .fc_message_time {
     font-size: 12px;
     text-align: right;
     margin-left: 7px; /* line up with non-collapsed */
 }
+
 .fc_misc {
     display: inline-block;
     vertical-align: top;
