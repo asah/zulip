@@ -210,7 +210,7 @@
 }
 
 .right-sidebar-shortcuts {
-    display: flex;
+    display: none;
     flex-direction: row;
     justify-content: space-between;
     margin-top: 5px;
@@ -219,7 +219,7 @@
 /* This max-width must be synced with message_viewport.is_narrow */
 @media (width < $xl_min) {
     #userlist-toggle {
-	display: none;
+        display: none;
     }
 }
 
@@ -234,7 +234,7 @@
     #userlist-toggle {
         height: 30px;
         line-height: 30px;
-	display: none;
+        display: none;
     }
 
     #userlist-toggle-button {

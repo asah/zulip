@@ -18,9 +18,11 @@ import * as compose_error from "./compose_error";
 import * as compose_state from "./compose_state";
 import {media_breakpoints_num} from "./css_variables";
 import * as dark_theme from "./dark_theme";
+import * as dialog_widget from "./dialog_widget";
 import * as emoji_picker from "./emoji_picker";
 import * as hash_util from "./hash_util";
 import * as hotspots from "./hotspots";
+import {$t_html} from "./i18n";
 import * as message_edit from "./message_edit";
 import * as message_flags from "./message_flags";
 import * as message_lists from "./message_lists";
@@ -172,9 +174,9 @@ export function initialize() {
         const $row = $(this).closest(".message_row");
         const id = rows.id($row);
         const message = message_store.get(id);
-	if (message.collapsed) {
-	    return;
-	}
+        if (message.collapsed) {
+            return;
+        }
 
         if (message_edit.is_editing(id)) {
             // Clicks on a message being edited shouldn't trigger a reply.
@@ -275,25 +277,30 @@ export function initialize() {
     });
     $("body").on("click", ".ytbk", function (e) {
         const row = message_lists.current.get_row(rows.id($(this).closest(".message_row")));
-	let message_id = rows.id(row);
-	const message = message_lists.current.get(message_id);
-	// toggle content and save
-	const msg_list = message_lists.current;
-	$(this).parent().children().toggleClass("ythl");
-	$(this).toggleClass("fa-bookmark").toggleClass("fa-bookmark-o");
-	const secs = $(this).attr("ts");
-	let content = message.raw_content + "<ytbk:" + secs + ">";
-	console.log(content)
-	const request = { message_id: message.id, content: content };
-	channel.patch({
-	    url: "/json/messages/" + message.id,
-	    data: request,
-	    success() {
-	    },
-	    error(xhr) {
-		alert("backend error: bookmark change not saved")
-	    }
-	});
+        const message_id = rows.id(row);
+        const message = message_lists.current.get(message_id);
+        // toggle content and save
+        $(this).parent().children().toggleClass("ythl");
+        $(this).toggleClass("fa-bookmark").toggleClass("fa-bookmark-o");
+        const secs = $(this).attr("ts");
+        const content = message.raw_content + "<ytbk:" + secs + ">";
+        const request = {message_id: message.id, content};
+        channel.patch({
+            url: "/json/messages/" + message.id,
+            data: request,
+            success() {},
+            error() {
+                dialog_widget.launch({
+                    html_heading: $t_html({defaultMessage: "error"}),
+                    html_body: "backend error: bookmark change not saved",
+                    html_submit_button: $t_html({defaultMessage: "Got it"}),
+                    on_click: () => {},
+                    close_on_submit: true,
+                    focus_submit_on_open: true,
+                    single_footer_button: true,
+                });
+            },
+        });
         e.stopPropagation();
     });
     $("body").on("click", ".always_visible_topic_edit,.on_hover_topic_edit", function (e) {
@@ -551,7 +558,7 @@ export function initialize() {
         const sidebarHidden = !$(".app-main .column-right").hasClass("expanded");
         popovers.hide_all();
         if (sidebarHidden) {
-	    $(".app-main .column-right .right-sidebar").css('left', '100px');
+            $(".app-main .column-right .right-sidebar").css("left", "100px");
             popovers.show_userlist_sidebar();
         }
     });
@@ -885,6 +892,23 @@ export function initialize() {
         // Allow propagation to close gear menu.
         e.preventDefault();
         dark_theme.disable();
+    });
+
+    $("body").on("click", "#fc_invitelink", (e) => {
+        navigator.clipboard.writeText("https://forecast.chat/join/g64fx457g2qv3kbvesk3jril/");
+        const message = "Invite link copied to clipboard - you can now share this with friends.";
+        dialog_widget.launch({
+            html_heading: $t_html({defaultMessage: "Invitation Link"}),
+            html_body: message,
+            html_submit_button: $t_html({defaultMessage: "Got it"}),
+            on_click: () => {},
+            close_on_submit: true,
+            focus_submit_on_open: true,
+            single_footer_button: true,
+        });
+
+        e.stopPropagation();
+        e.preventDefault();
     });
 
     // MAIN CLICK HANDLER
