@@ -480,6 +480,10 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
     if "earthlings@orbitalindex.com" in body:
         body = re.sub(r'^(.|\n)+?Issue No', "Issue No", body)
 
+    if "eecs-announce@" in body:
+        body = re.sub(r'^From:(.|\n)+\n', "", body)
+        subject = "UCB eecs-announce"
+
     # forecast.chat hack to redirect misc@ message to various other forums aka streams
     if re.search(r'^(zulipinbox.)?development-internal', to):
         if re.search('crypto|bitcoin', body):
