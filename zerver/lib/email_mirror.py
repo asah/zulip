@@ -470,7 +470,11 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
 
     # gcaptain hacks: shorten URLs, strip header
     if "tldrnewsletter" in body:
-        body = re.sub(r'^(.|\n)+?Big Tech . Startups', "Big Tech . Startups", body, flags=re.IGNORECASE)
+        body = re.sub(r'^(.|\n)+?Big Tech . Startups[*]?', "Big Tech & Startups", body, flags=re.IGNORECASE)
+        body = re.sub(r'%3Futm_source=[^> ]+', '', body)
+        body = re.sub(r'https://tracking.tldrnewsletter.com/CL0/', '', body)
+        body = re.sub(r'%2F', '/', body)
+        # todo rest of de-escapification
         subject = "tldr tech newsletter"
 
     if "enterpriseweekly@work-bench.com" in body:
