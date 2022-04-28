@@ -61,6 +61,7 @@ basic long virusmove data first death many pretty risk might state
 invest idea thought vaccine sure price give use comment great effect
 little less part probably feel course real another asset whale number
 enough stream whatever example
+tldr please tldr.tech ecosystem clickhere wouldbe newsletter daily email!thanks wordby
 '''
 
 alias_words = '''
