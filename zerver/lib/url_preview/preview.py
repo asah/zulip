@@ -111,16 +111,16 @@ def get_link_embed_data(
             response.content, response.headers.get("Content-Type")
         ).extract_data()
         for key in ["title", "description", "image"]:
-            if (not data or not data.get(key)) and (og_data and og_data.get(key)):
-                data[key] = og_data[key]
+            if (not data or not data.get(key)) and (og_data and og_data.__dict__.get(key)):
+                data[key] = og_data.__dict__[key]
 
         generic_data = (
             GenericParser(response.content, response.headers.get("Content-Type")).extract_data()
             or {}
         )
         for key in ["title", "description", "image"]:
-            if not data.get(key) and generic_data.get(key):
-                data[key] = generic_data[key]
+            if not data.get(key) and generic_data.__dict__.get(key):
+                data[key] = generic_data.__dict__[key]
     if "image" in data:
         data["image"] = urljoin(response.url, data["image"])
 
@@ -142,8 +142,10 @@ def get_link_embed_data(
 
     for parser_class in (OpenGraphParser, GenericParser):
         parser = parser_class(response.content, response.headers.get("Content-Type"))
-        data.merge(parser.extract_data())
+        for key in ["title", "description", "image"]:
+            if not data.get(key):
+                data[key] = parser.__dict__.get(key)
 
-    if data.image:
-        data.image = urljoin(response.url, data.image)
+    if data['image']:
+        data['image'] = urljoin(response.url, data['image'])
     return data
