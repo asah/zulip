@@ -111,7 +111,7 @@ def get_link_embed_data(
             response.content, response.headers.get("Content-Type")
         ).extract_data()
         for key in ["title", "description", "image"]:
-            if not data.get(key) and og_data.get(key):
+            if (not data or not data.get(key)) and (og_data and og_data.get(key)):
                 data[key] = og_data[key]
 
         generic_data = (
