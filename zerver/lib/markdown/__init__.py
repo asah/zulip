@@ -21,6 +21,7 @@ from typing import (
     Pattern,
     Set,
     Tuple,
+    TypedDict,
     TypeVar,
     Union,
 )
@@ -48,7 +49,6 @@ from markdown.extensions import codehilite, nl2br, sane_lists, tables
 import praw
 from soupsieve import escape as css_escape
 from tlds import tld_set
-from typing_extensions import TypedDict
 from youtube_transcript_api import YouTubeTranscriptApi as yt_ts_api
 
 from zerver.lib import mention as mention
@@ -1543,7 +1543,7 @@ class YoutubeBookmark(markdown.inlinepatterns.Pattern):
         return ytbk_element
 
 
-# All of our emojis(non ZWJ sequences) belong to one of these Unicode blocks:
+# All of our emojis (excluding ZWJ sequences) belong to one of these Unicode blocks:
 # \U0001f100-\U0001f1ff - Enclosed Alphanumeric Supplement
 # \U0001f200-\U0001f2ff - Enclosed Ideographic Supplement
 # \U0001f300-\U0001f5ff - Miscellaneous Symbols and Pictographs
@@ -1878,7 +1878,7 @@ class MarkdownListPreprocessor(markdown.preprocessors.Preprocessor):
         copy = lines[:]
         for i in range(len(lines) - 1):
             # Ignore anything that is inside a fenced code block but not quoted.
-            # We ignore all lines where some parent is a non quote code block.
+            # We ignore all lines where some parent is a non-quote code block.
             m = FENCE_RE.match(lines[i])
             if m:
                 fence_str = m.group("fence")

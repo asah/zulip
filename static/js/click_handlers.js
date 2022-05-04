@@ -41,6 +41,7 @@ import * as rows from "./rows";
 import * as server_events from "./server_events";
 import * as settings_panel_menu from "./settings_panel_menu";
 import * as settings_toggle from "./settings_toggle";
+import * as spectators from "./spectators";
 import * as stream_list from "./stream_list";
 import * as stream_popover from "./stream_popover";
 import * as topic_list from "./topic_list";
@@ -220,6 +221,11 @@ export function initialize() {
         e.stopPropagation();
         popovers.hide_all();
 
+        if (page_params.is_spectator) {
+            spectators.login_to_access();
+            return;
+        }
+
         const message_id = rows.id($(this).closest(".message_row"));
         const message = message_store.get(message_id);
         message_flags.toggle_starred_and_update_server(message);
@@ -227,6 +233,12 @@ export function initialize() {
 
     $("#main_div").on("click", ".message_reaction", function (e) {
         e.stopPropagation();
+
+        if (page_params.is_spectator) {
+            spectators.login_to_access();
+            return;
+        }
+
         emoji_picker.hide_emoji_popover();
         const local_id = $(this).attr("data-reaction-id");
         const message_id = rows.get_message_id(this);
@@ -550,6 +562,11 @@ export function initialize() {
     });
 
     // SIDEBARS
+    $(".right-sidebar .login_button").on("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = hash_util.build_login_link();
+    });
 
     $("#userlist-toggle-button,#left-userlist-more-link").on("click", (e) => {
         e.preventDefault();

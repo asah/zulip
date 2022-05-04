@@ -48,6 +48,7 @@ from zerver.context_processors import common_context
 from zerver.decorator import do_two_factor_login
 from zerver.forms import HomepageForm, check_subdomain_available
 from zerver.lib.email_notifications import enqueue_welcome_emails, followup_day2_email_delay
+from zerver.lib.i18n import get_default_language_for_new_user
 from zerver.lib.initial_password import initial_password
 from zerver.lib.mobile_auth_otp import (
     ascii_to_hex,
@@ -70,6 +71,7 @@ from zerver.lib.streams import create_stream_if_needed
 from zerver.lib.subdomains import is_root_domain_available
 from zerver.lib.test_classes import ZulipTestCase
 from zerver.lib.test_helpers import (
+    HostRequestMock,
     avatar_disk_path,
     cache_tries_captured,
     find_key_by_email,
@@ -819,19 +821,20 @@ class LoginTest(ZulipTestCase):
         self.assert_logged_in_user_id(None)
 
     def test_login_wrong_subdomain(self) -> None:
-        email = self.mit_email("sipbtest")
-        with self.assertLogs(level="WARNING") as m:
+        user_profile = self.mit_user("sipbtest")
+        email = user_profile.delivery_email
+        with self.assertLogs("zulip.auth.OurAuthenticationForm", level="INFO") as m:
             result = self.login_with_return(email, "xxx")
+            matching_accounts_dict = {"realm_id": user_profile.realm_id, "id": user_profile.id}
             self.assertEqual(
                 m.output,
                 [
-                    "WARNING:root:User sipbtest@mit.edu attempted password login to wrong subdomain zulip"
+                    f"INFO:zulip.auth.OurAuthenticationForm:User attempted password login to wrong subdomain zulip. Matching accounts: [{matching_accounts_dict}]"
                 ],
             )
         self.assertEqual(result.status_code, 200)
         expected_error = (
-            f"Your Zulip account {email} is not a member of the "
-            + "organization associated with this subdomain."
+            "Please enter a correct email and password. Note that both fields may be case-sensitive"
         )
         self.assert_in_response(expected_error, result)
         self.assert_logged_in_user_id(None)
@@ -3931,8 +3934,7 @@ class UserSignUpTest(InviteUserBase):
 
     def test_user_default_language_and_timezone(self) -> None:
         """
-        Check if the default language of new user is the default language
-        of the realm.
+        Check if the default language of new user is set using the browser locale
         """
         email = self.nonreg_email("newguy")
         password = "newpassword"
@@ -3952,12 +3954,42 @@ class UserSignUpTest(InviteUserBase):
         self.assertEqual(result.status_code, 200)
 
         # Pick a password and agree to the ToS.
-        result = self.submit_reg_form_for_user(email, password, timezone=timezone)
+        result = self.submit_reg_form_for_user(
+            email, password, timezone=timezone, HTTP_ACCEPT_LANGUAGE="fr,en;q=0.9"
+        )
+        self.assertEqual(result.status_code, 302)
+
+        user_profile = self.nonreg_user("newguy")
+        self.assertNotEqual(user_profile.default_language, realm.default_language)
+        self.assertEqual(user_profile.default_language, "fr")
+        self.assertEqual(user_profile.timezone, timezone)
+        from django.core.mail import outbox
+
+        outbox.pop()
+
+    def test_default_language_with_unsupported_browser_locale(self) -> None:
+        email = self.nonreg_email("newguy")
+        password = "newpassword"
+        realm = get_realm("zulip")
+        do_set_realm_property(realm, "default_language", "de", acting_user=None)
+
+        result = self.client_post("/accounts/home/", {"email": email})
+        self.assertEqual(result.status_code, 302)
+        self.assertTrue(result["Location"].endswith(f"/accounts/send_confirm/{email}"))
+        result = self.client_get(result["Location"])
+        self.assert_in_response("Check your email so we can get started.", result)
+
+        # Visit the confirmation link.
+        confirmation_url = self.get_confirmation_url_from_outbox(email)
+        result = self.client_get(confirmation_url)
+        self.assertEqual(result.status_code, 200)
+
+        # Pick a password and agree to the ToS.
+        result = self.submit_reg_form_for_user(email, password, HTTP_ACCEPT_LANGUAGE="en-IND")
         self.assertEqual(result.status_code, 302)
 
         user_profile = self.nonreg_user("newguy")
         self.assertEqual(user_profile.default_language, realm.default_language)
-        self.assertEqual(user_profile.timezone, timezone)
         from django.core.mail import outbox
 
         outbox.pop()
@@ -5550,6 +5582,19 @@ class UserSignUpTest(InviteUserBase):
             days=settings.DEMO_ORG_DEADLINE_DAYS
         )
         self.assertEqual(realm.demo_organization_scheduled_deletion_date, expected_deletion_date)
+
+    def test_get_default_language_for_new_user(self) -> None:
+        realm = get_realm("zulip")
+        req = HostRequestMock()
+        req.META["HTTP_ACCEPT_LANGUAGE"] = "de,en"
+        self.assertEqual(get_default_language_for_new_user(req, realm), "de")
+
+        do_set_realm_property(realm, "default_language", "hi", acting_user=None)
+        realm.refresh_from_db()
+        self.assertEqual(get_default_language_for_new_user(req, realm), "de")
+
+        req.META["HTTP_ACCEPT_LANGUAGE"] = ""
+        self.assertEqual(get_default_language_for_new_user(req, realm), "hi")
 
 
 class DeactivateUserTest(ZulipTestCase):

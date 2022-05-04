@@ -16,7 +16,20 @@ import binascii
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, TypeVar, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    TypedDict,
+    TypeVar,
+    Union,
+    cast,
+)
 from urllib.parse import urlencode
 
 import magic
@@ -55,7 +68,6 @@ from social_core.exceptions import (
     SocialAuthBaseException,
 )
 from social_core.pipeline.partial import partial
-from typing_extensions import TypedDict
 from zxcvbn import zxcvbn
 
 from zerver.actions.create_user import do_create_user, do_reactivate_user
@@ -207,6 +219,9 @@ def common_get_active_user(
             return None
         if return_data is not None:
             return_data["invalid_subdomain"] = True
+            return_data["matching_user_ids_in_different_realms"] = list(
+                UserProfile.objects.filter(delivery_email__iexact=email).values("realm_id", "id")
+            )
         return None
     if not is_user_active(user_profile, return_data):
         return None

@@ -8,11 +8,19 @@ class zulip::common {
       $supervisor_system_conf_dir = '/etc/supervisor/conf.d'
       $supervisor_conf_file = '/etc/supervisor/supervisord.conf'
       $supervisor_service = 'supervisor'
-      $supervisor_start = '/etc/init.d/supervisor start'
-      # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=877086
-      # "restart" is actually "stop" under sysvinit
-      $supervisor_reload = '/etc/init.d/supervisor restart && (/etc/init.d/supervisor start || /bin/true) && /etc/init.d/supervisor status'
-      $supervisor_status = '/etc/init.d/supervisor status'
+      $supervisor_start = '/usr/sbin/service supervisor start'
+      $supervisor_reload = @(EOT)
+        # The init script's timeout waiting for supervisor is shorter
+        # than supervisor's timeout waiting for its programs, so we need
+        # to ask supervisor to stop its programs first.
+        supervisorctl stop all &&
+        service supervisor restart &&
+        # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=877086
+        # "restart" is actually "stop" under sysvinit
+        { service supervisor start || true; } &&
+        service supervisor status
+        | EOT
+      $supervisor_status = '/usr/sbin/service supervisor status'
     }
     'RedHat': {
       $nagios_plugins = 'nagios-plugins'
@@ -112,6 +120,15 @@ class zulip::common {
       'sha256' => {
         'amd64'   => 'e4546960688d1c85530ec3a93e109d15b540f3251e1f4736d0d9735e1e857faf',
         'aarch64' => '3ebe0c533583a9ab03363a80aa629edd8e0cc42da3583e33958eb7abe74d4cd2',
+      },
+    },
+
+    # https://github.com/oliver006/redis_exporter/releases
+    'redis_exporter' => {
+      'version' => '1.37.0',
+      'sha256' => {
+        'amd64'   => 'c4d0554a378151eab3372235c40d3a9c8c40fd6f40d91d768830985df8a44744',
+        'aarch64' => '742047d938192894979c8370830891bb0fea3262b762e6c51c849a8e47ddfb7e',
       },
     },
 

@@ -83,6 +83,7 @@ from zerver.lib.send_email import (
     send_email,
     send_future_email,
 )
+from zerver.lib.soft_deactivation import reactivate_user_if_soft_deactivated
 from zerver.lib.timestamp import timestamp_to_datetime
 from zerver.lib.upload import handle_reupload_emojis_event
 from zerver.lib.url_preview import preview as url_preview
@@ -1038,10 +1039,11 @@ class DeferredWorker(QueueProcessingWorker):
                     )
                 ).decode()
                 export_event.save(update_fields=["extra_data"])
-                logging.error(
+                logging.exception(
                     "Data export for %s failed after %s",
                     user_profile.realm.string_id,
                     time.time() - start,
+                    stack_info=True,
                 )
                 notify_realm_export(user_profile)
                 return
@@ -1083,6 +1085,9 @@ class DeferredWorker(QueueProcessingWorker):
             realm = Realm.objects.get(id=event["realm_id"])
             logger.info("Processing reupload_realm_emoji event for realm %s", realm.id)
             handle_reupload_emojis_event(realm, logger)
+        elif event["type"] == "soft_reactivate":
+            user_profile = get_user_profile_by_id(event["user_profile_id"])
+            reactivate_user_if_soft_deactivated(user_profile)
 
         end = time.time()
         logger.info("deferred_work processed %s event (%dms)", event["type"], (end - start) * 1000)

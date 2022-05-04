@@ -509,6 +509,7 @@ body.dark-theme {
         border-right-color: hsl(235, 18%, 7%);
     }
 
+    .narrow_to_compose_recipients,
     .expand_composebox_button,
     .collapse_composebox_button,
     #message_edit_tooltip,
@@ -526,6 +527,7 @@ body.dark-theme {
         color: hsl(236, 33%, 80%);
     }
 
+    .narrow_to_compose_recipients:hover,
     .expand_composebox_button:hover,
     .collapse_composebox_button:hover,
     #message_edit_tooltip:hover,
@@ -625,6 +627,10 @@ body.dark-theme {
     .btn-recent-selected,
     #recent_topics_table thead th {
         background-color: hsl(0, 0%, 0%) !important;
+
+        &[data-sort]:hover {
+            background-color: hsl(211, 29%, 14%) !important;
+        }
     }
 
     #recent_topics_table td a {
@@ -652,7 +658,7 @@ body.dark-theme {
     #settings_page .settings-header,
     #settings_page .form-sidebar .title,
     #settings_page .sidebar li.active,
-    #settings_page .sidebar .tab-container,
+    #settings_page .sidebar-wrapper .tab-container,
     .table-striped tbody tr:nth-child(even) td,
     .table-striped tbody tr:nth-child(odd) th,
     .modal-footer,
@@ -679,8 +685,8 @@ body.dark-theme {
     #subscription_overlay .subsection-parent div,
     #subscription_overlay .radio-input-parent,
     #stream_privacy_modal .radio-input-parent,
-    #settings_page .sidebar,
-    #settings_page .sidebar *,
+    #settings_page .sidebar-wrapper,
+    #settings_page .sidebar-wrapper *,
     table,
     table th,
     table td {

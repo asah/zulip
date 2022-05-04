@@ -253,7 +253,7 @@ class FileUploadTest(UploadSerializeMixin, ZulipTestCase):
         self.assert_json_success(result)
 
         add_ratelimit_rule(86400, 1000, domain="spectator_attachment_access_by_file")
-        # Deny file access for non web public stream
+        # Deny file access for non-web-public stream
         self.subscribe(self.example_user("hamlet"), "Denmark")
         host = self.example_user("hamlet").realm.host
         body = f"First message ...[zulip.txt](http://{host}" + uri + ")"
@@ -263,7 +263,7 @@ class FileUploadTest(UploadSerializeMixin, ZulipTestCase):
         response = self.client_get(uri)
         self.assertEqual(response.status_code, 403)
 
-        # Allow file access for web public stream
+        # Allow file access for web-public stream
         self.login("hamlet")
         self.make_stream("web-public-stream", is_web_public=True)
         self.subscribe(self.example_user("hamlet"), "web-public-stream")
@@ -1181,6 +1181,18 @@ class AvatarTest(UploadSerializeMixin, ZulipTestCase):
             "Not logged in: API authentication or user session required",
             status_code=401,
         )
+
+        with self.settings(RATE_LIMITING=True):
+            # Allow unauthenticated/spectator requests by ID for a reasonable number of requests.
+            add_ratelimit_rule(86400, 1000, domain="spectator_attachment_access_by_file")
+            response = self.client_get(f"/avatar/{cordelia.id}/medium", {"foo": "bar"})
+            self.assertEqual(302, response.status_code)
+            remove_ratelimit_rule(86400, 1000, domain="spectator_attachment_access_by_file")
+
+            # Deny file access since rate limited
+            add_ratelimit_rule(86400, 0, domain="spectator_attachment_access_by_file")
+            response = self.client_get(f"/avatar/{cordelia.id}/medium", {"foo": "bar"})
+            self.assertEqual(429, response.status_code)
 
     def test_non_valid_user_avatar(self) -> None:
 

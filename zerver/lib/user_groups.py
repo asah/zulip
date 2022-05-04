@@ -23,7 +23,7 @@ def access_user_group_by_id(
             return user_group
         if user_group.is_system_group:
             raise JsonableError(_("Insufficient permission"))
-        group_member_ids = get_user_group_direct_members(user_group)
+        group_member_ids = get_user_group_direct_member_ids(user_group)
         if (
             not user_profile.is_realm_admin
             and not user_profile.is_moderator
@@ -114,10 +114,14 @@ def create_user_group(
         return user_group
 
 
-def get_user_group_direct_members(user_group: UserGroup) -> List[int]:
+def get_user_group_direct_member_ids(user_group: UserGroup) -> List[int]:
     return UserGroupMembership.objects.filter(user_group=user_group).values_list(
         "user_profile_id", flat=True
     )
+
+
+def get_user_group_direct_members(user_group: UserGroup) -> "QuerySet[UserGroup]":
+    return user_group.direct_members.all()
 
 
 def get_direct_memberships_of_users(user_group: UserGroup, members: List[UserProfile]) -> List[int]:
@@ -163,7 +167,7 @@ def is_user_in_group(
     user_group: UserGroup, user: UserProfile, *, direct_member_only: bool = False
 ) -> bool:
     if direct_member_only:
-        return UserGroupMembership.objects.filter(user_group=user_group, user_profile=user).exists()
+        return get_user_group_direct_members(user_group=user_group).filter(id=user.id).exists()
 
     return get_recursive_group_members(user_group=user_group).filter(id=user.id).exists()
 
@@ -172,7 +176,7 @@ def get_user_group_member_ids(
     user_group: UserGroup, *, direct_member_only: bool = False
 ) -> List[int]:
     if direct_member_only:
-        member_ids = get_user_group_direct_members(user_group)
+        member_ids = get_user_group_direct_member_ids(user_group)
     else:
         member_ids = get_recursive_group_members(user_group).values_list("id", flat=True)
 

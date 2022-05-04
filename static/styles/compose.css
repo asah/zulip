@@ -84,6 +84,13 @@
     opacity: 1;
 }
 
+.narrow_to_compose_recipient_current_view_help {
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .compose_table {
     height: 100%;
     display: flex;
@@ -108,6 +115,22 @@
             -webkit-text-stroke: 0.05em;
             position: relative;
             margin: 0 5px;
+        }
+
+        a.narrow_to_compose_recipients {
+            background: transparent;
+            font-size: 18px;
+            padding: 1px;
+            line-height: 20px;
+            opacity: 0.7;
+            border: 0;
+            margin-left: 3px;
+            text-decoration: none;
+            color: inherit;
+
+            &:hover {
+                opacity: 1;
+            }
         }
     }
 
@@ -239,14 +262,15 @@
 
     button {
         background: transparent;
-        font-size: 20px;
-        font-weight: bold;
+        font-size: 15px;
+        font-weight: normal;
         line-height: 20px;
         opacity: 0.6;
         border: 0;
         padding: 0;
         margin-left: 4px;
         vertical-align: unset;
+        text-shadow: none;
 
         &:hover {
             opacity: 1;

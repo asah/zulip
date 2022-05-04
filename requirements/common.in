@@ -5,7 +5,7 @@
 # Django itself
 Django[argon2]==3.2.*
 
-# needed for Literal, TypedDict
+# needed for NotRequired, ParamSpec
 typing-extensions
 
 # Needed for rendering backend templates
@@ -84,7 +84,7 @@ redis
 sourcemap
 
 # Tornado used for server->client push system
-tornado==4.*  # https://github.com/zulip/zulip/issues/8913
+tornado
 
 # Fast JSON parser
 orjson
