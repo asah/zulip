@@ -657,13 +657,13 @@ more-itertools==8.12.0 \
     --hash=sha256:43e6dd9942dffd72661a2c4ef383ad7da1e6a3e968a927ad7a6083ab410a688b \
     --hash=sha256:7dc6ad46f05f545f900dd59e8dfb4e84a4827b97b3cfecb175ea0c7d247f6064
     # via openapi-core
-mypy-boto3-s3==1.22.0.post1 \
-    --hash=sha256:7e9374d89e708e69f93124aa5eafbf16df1149545aa071eabf88e5399a8a43be \
-    --hash=sha256:94ea6cca0622d62099f4382a3a37c9e072fd3ef4662ea329116aa078ec85088e
     # via -r requirements/common.in
 nltk==3.6.7 \
     --hash=sha256:22e97be5d6c784d93a52d17860515cc50c5cfcc620b1f5c3747765041255a01e \
     --hash=sha256:51bf1aef5304740a708be7c8e683f7798f03dc5c7a7e7feb758be9e95f4585e3
+mypy-boto3-s3==1.22.0.post1 \
+    --hash=sha256:7e9374d89e708e69f93124aa5eafbf16df1149545aa071eabf88e5399a8a43be \
+    --hash=sha256:94ea6cca0622d62099f4382a3a37c9e072fd3ef4662ea329116aa078ec85088e
     # via -r requirements/common.in
 oauthlib==3.2.0 \
     --hash=sha256:23a8208d75b902797ea29fd31fa80a15ed9dc2c6c16fe73f5d346f83f6fa27a2 \

@@ -1868,6 +1868,12 @@ div.focused_table {
         margin: 0 3px;
     }
 
+    .divider {
+        color: hsl(0, 0%, 88%);
+        font-size: 20px;
+        margin: 0 3px;
+    }
+
     .sub_count,
     .narrow_description {
         background: none;

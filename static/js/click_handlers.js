@@ -568,6 +568,12 @@ export function initialize() {
         window.location.href = hash_util.build_login_link();
     });
 
+    $(".right-sidebar .login_button").on("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = hash_util.build_login_link();
+    });
+
     $("#userlist-toggle-button,#left-userlist-more-link").on("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
