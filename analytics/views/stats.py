@@ -32,10 +32,10 @@ from zerver.decorator import (
 from zerver.lib.exceptions import JsonableError
 from zerver.lib.i18n import get_and_set_request_language, get_language_translation_data
 from zerver.lib.request import REQ, has_request_variables
-from zerver.lib.response import json_success, json_response
+from zerver.lib.response import json_response, json_success
 from zerver.lib.timestamp import convert_to_UTC
 from zerver.lib.validator import to_non_negative_int
-from zerver.models import Client, Realm, UserProfile, get_realm, Message
+from zerver.models import Client, Message, Realm, UserProfile, get_realm
 
 if settings.ZILENCER_ENABLED:
     from zilencer.models import RemoteInstallationCount, RemoteRealmCount, RemoteZulipServer
@@ -372,23 +372,23 @@ def get_chart_data(
     if chart_name == "most_active_users":
         if not request.user.is_realm_admin and not request.user.is_realm_owner:
             return json_response(res_type="error", msg="sorry, admins only", status=401)
-        #data = [{'email':val[0], 'cnt':val[1]} for val in Message.objects.filter(
-        data = [val[0] for val in Message.objects.filter(
-            date_sent__lte=end,
-            date_sent__gt=start,
-        ).exclude(
-            sender__email__contains="zulip.com"
-        ).values(
-            "sender"
-        ).annotate(
-            cnt=Count("id")
-        ).order_by(
-            "-cnt"
-        ).values_list(
-            #"sender__email", "cnt"
-            "sender__delivery_email"
-        )]
-        return json_success(request, data={'data': data, 'datastr':','.join(data)})
+        # data = [{'email':val[0], 'cnt':val[1]} for val in Message.objects.filter(
+        data = [
+            val[0]
+            for val in Message.objects.filter(
+                date_sent__lte=end,
+                date_sent__gt=start,
+            )
+            .exclude(sender__email__contains="zulip.com")
+            .values("sender")
+            .annotate(cnt=Count("id"))
+            .order_by("-cnt")
+            .values_list(
+                # "sender__email", "cnt"
+                "sender__delivery_email"
+            )
+        ]
+        return json_success(request, data={"data": data, "datastr": ",".join(data)})
 
     assert len({stat.frequency for stat in stats}) == 1
     end_times = time_range(start, end, stats[0].frequency, min_length)

@@ -31,7 +31,6 @@ from xml.etree.ElementTree import Element, SubElement
 from xml.sax.saxutils import escape as xml_escape
 
 import ahocorasick
-from bs4 import BeautifulSoup
 import dateutil.parser
 import dateutil.tz
 import lxml.etree
@@ -41,12 +40,13 @@ import markdown.inlinepatterns
 import markdown.postprocessors
 import markdown.treeprocessors
 import markdown.util
+import praw
 import re2
 import requests
+from bs4 import BeautifulSoup
 from django.conf import settings
 from markdown.blockparser import BlockParser
 from markdown.extensions import codehilite, nl2br, sane_lists, tables
-import praw
 from soupsieve import escape as css_escape
 from tlds import tld_set
 from youtube_transcript_api import YouTubeTranscriptApi as yt_ts_api
@@ -568,12 +568,16 @@ def get_reddit_post_info(url: str) -> Optional[list]:
     # https://www.reddit.com/r/redditdev/comments/61noov/do_you_have_to_authenticate_even_if_only_using/
     # https://www.reddit.com/r/redditdev/comments/61noov/do_you_have_to_authenticate_even_if_only_using/dffyks4/
     match = re.match(
-        r'/r/(?P<subreddit>[^/]+)/comments/(?P<post_id>[^/]+)/(?P<post_slug>[^/]+)(/(?P<comment_id>[^/]+))?',
-        parsed_url.path
+        r"/r/(?P<subreddit>[^/]+)/comments/(?P<post_id>[^/]+)/(?P<post_slug>[^/]+)(/(?P<comment_id>[^/]+))?",
+        parsed_url.path,
     )
-    return [url, match.group('subreddit'), match.group('post_id'), match.group('comment_id')] if match else None
-    
-    
+    return (
+        [url, match.group("subreddit"), match.group("post_id"), match.group("comment_id")]
+        if match
+        else None
+    )
+
+
 def get_tweet_id(url: str) -> Optional[str]:
     parsed_url = urllib.parse.urlparse(url)
     if not (parsed_url.netloc == "twitter.com" or parsed_url.netloc.endswith(".twitter.com")):
@@ -1223,17 +1227,23 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         print(subm.selftext)
         if reddit_post_info[3] not in [None, ""]:
             comm = reddit.comment(id=reddit_post_info[3])
-            all_html = "<html><body>"+comm.body_html+"</body></html>"
-            soup = BeautifulSoup(all_html, features='html.parser')
+            all_html = "<html><body>" + comm.body_html + "</body></html>"
+            soup = BeautifulSoup(all_html, features="html.parser")
             text = soup.get_text()
             print(text)
             p = SubElement(div, "p")
             p.text = "> " + text
-        self.add_a(info["parent"], "", reddit_post_info[0], None, None,
-                   "reddit-preview", reddit_post_info[2],
-                   insertion_index=info["index"],
-                   already_thumbnailed=True,
-                   a_class_attr="reddit-link",
+        self.add_a(
+            info["parent"],
+            "",
+            reddit_post_info[0],
+            None,
+            None,
+            "reddit-preview",
+            reddit_post_info[2],
+            insertion_index=info["index"],
+            already_thumbnailed=True,
+            a_class_attr="reddit-link",
         )
 
     def handle_youtube_url_inlining(
@@ -1251,22 +1261,24 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
         else:
             transcript = Element("div")
             info["parent"].insert(info["index"], transcript)
-        transcript.set("class", "yt-transcript");
+        transcript.set("class", "yt-transcript")
         ytspans = []
         try:
+
             def secs_to_mmss(secs):
                 sec = secs % 60
                 sec = 0 if sec <= 6 else sec
                 return f"{int(secs / 60)}:{sec:02} "
-            last = -59 # just in case it doesn't start at 0:00
+
+            last = -59  # just in case it doesn't start at 0:00
             recs = [r for r in yt_ts_api.get_transcript(yt_id)]
             last_ytspn = None
             for r in recs:
-                text = r['text']
+                text = r["text"]
                 if text in ["[Music]", "[Applause]"]:
                     continue
-                text = text.replace('>', '')
-                text = re.sub(r'\s(um|uh)\s', ' - ', text)
+                text = text.replace(">", "")
+                text = re.sub(r"\s(um|uh)\s", " - ", text)
                 start = int(float(r["start"]))
                 if start % 30 == 0 or start >= last + 30:
                     display_secs = secs_to_mmss(start)
@@ -1275,7 +1287,7 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
                     bookmark.set("ts", str(start))
                     link = SubElement(transcript, "a")
                     link.set("class", "ytsecs")
-                    link.set("href", f'https://youtu.be/{yt_id}?t={start}')
+                    link.set("href", f"https://youtu.be/{yt_id}?t={start}")
                     link.set("target", "_blank")
                     link.text = str(secs_to_mmss(start))
                     last = start
@@ -1288,16 +1300,18 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
                 last_ytspn.text = last_ytspn.text + text + " "
             has_transcript = True
             for ytspn in ytspans:
-                ytspn.text = re.sub(r'\s{2,}', ' ', ytspn.text.strip()) + " "
+                ytspn.text = re.sub(r"\s{2,}", " ", ytspn.text.strip()) + " "
             # I looked into real capitalizers ("truecase") but they changed
             # the length, which is a no-go for us, because we have to keep
             # text in chunks and match up the strings.
-            capstxt = re.sub(r'([\.\?!]"?\s+)([a-z])', lambda r:
-                             r.group(1) + r.group(2).upper(),
-                             ''.join([ytspn.text for ytspn in ytspans]).lower())
+            capstxt = re.sub(
+                r'([\.\?!]"?\s+)([a-z])',
+                lambda r: r.group(1) + r.group(2).upper(),
+                "".join([ytspn.text for ytspn in ytspans]).lower(),
+            )
             capstxt_idx = 0
             for ytspn in ytspans:
-                ytspn.text = capstxt[capstxt_idx:capstxt_idx+len(ytspn.text)]
+                ytspn.text = capstxt[capstxt_idx : capstxt_idx + len(ytspn.text)]
                 capstxt_idx += len(ytspn.text)
         except Exception as exc:
             has_transcript = False
@@ -1306,8 +1320,10 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             info["parent"],
             image_url=yt_image,
             link=url,
-            class_attr="youtube-video " + ("message_inline_image_with_transcript"
-                                if has_transcript else "message_inline_image"),
+            class_attr="youtube-video "
+            + (
+                "message_inline_image_with_transcript" if has_transcript else "message_inline_image"
+            ),
             data_id=yt_id,
             insertion_index=info["index"],
             already_thumbnailed=True,
@@ -1533,6 +1549,7 @@ class Timestamp(markdown.inlinepatterns.Pattern):
         # HTML to text will at least display something.
         time_element.text = markdown.util.AtomicString(time_input_string)
         return time_element
+
 
 class YoutubeBookmark(markdown.inlinepatterns.Pattern):
     def handleMatch(self, match: Match[str]) -> Optional[Element]:

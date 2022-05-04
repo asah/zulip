@@ -27,7 +27,6 @@ from django.utils.translation import gettext as _
 from django.utils.translation import override as override_language
 
 from zerver.actions.uploads import do_claim_attachments
-from zerver.lib.actions import check_send_message
 from zerver.lib.addressee import Addressee
 from zerver.lib.alert_words import get_alert_word_automaton
 from zerver.lib.cache import cache_with_key, user_profile_delivery_email_cache_key

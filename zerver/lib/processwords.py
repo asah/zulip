@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 
-from nltk.stem import PorterStemmer
 import math
 import re
+
+from nltk.stem import PorterStemmer
 
 ps = cw = sw = aliases = None
 pwloaded = False
 
 wordbreak = "pwwdbk"
 
-cw_words = '''
+cw_words = """
 unclear unhelpful anecdotally risky
 mattgroh zulip github.com
-'''
+"""
 
-sw_words = '''
+sw_words = """
     i'm     i'll     i'd    i've
  you're   you'll   you'd  you've
            he'll    he'd            he's
@@ -62,9 +63,9 @@ invest idea thought vaccine sure price give use comment great effect
 little less part probably feel course real another asset whale number
 enough stream whatever example
 tldr please tldr.tech ecosystem clickhere wouldbe newsletter daily email!thanks wordby
-'''
+"""
 
-alias_words = '''
+alias_words = """
 u.s US
 u.s.a US
 covid-19 covid
@@ -73,7 +74,8 @@ coronavirus covid
 russia's russia
 russian russia
 russians russia
-'''
+"""
+
 
 def processwords(text):
     global pwloaded, ps, cw, sw, aliases
@@ -82,7 +84,7 @@ def processwords(text):
 
         cw = {}
         lineno = 0
-        with open('zerver/lib/google-10000-english-usa.txt') as fh:
+        with open("zerver/lib/google-10000-english-usa.txt") as fh:
             while True:
                 commonword = fh.readline()
                 if not commonword:
@@ -103,14 +105,14 @@ def processwords(text):
                 cw[word] = 1
 
         sw = {}
-        with open('zerver/lib/stopwords.txt') as fh:
+        with open("zerver/lib/stopwords.txt") as fh:
             while True:
                 stopword = fh.readline()
                 if not stopword:
                     break
                 stopword = stopword.lower().strip()
                 sw[ps.stem(stopword)] = True
-        sw.update({ps.stem(word):True for word in sw_words.strip().split()})
+        sw.update({ps.stem(word): True for word in sw_words.strip().split()})
         print(f"found {len(sw)} stopwords.")
 
         aliases = dict(item.split() for item in alias_words.strip().split("\n"))
@@ -121,33 +123,32 @@ def processwords(text):
     singlewords = []
     bigrams = []
     lastword = ""
-    text = re.sub(r'@mention just signed up for Zulip.+?[(]total: [0-9]+[)]', '', text)
+    text = re.sub(r"@mention just signed up for Zulip.+?[(]total: [0-9]+[)]", "", text)
     knownwords = {}
-    for word in re.split(r'[\s/\\]', text):
+    for word in re.split(r"[\s/\\]", text):
         if len(word) < 4 or len(word) > 12:
             continue
         word = word.lower()
         word = word.strip()
         # skip @mentions and #mentions
-        if re.search(r'^(@|#)', word):
+        if re.search(r"^(@|#)", word):
             continue
-        word = re.sub(r'[^a-z0-9]+$', '', word)
-        word = re.sub(r'^[^a-z0-9]+', '', word)
+        word = re.sub(r"[^a-z0-9]+$", "", word)
+        word = re.sub(r"^[^a-z0-9]+", "", word)
         # skip URLs
-        if re.search(r'^https?://', word):
+        if re.search(r"^https?://", word):
             continue
         word = aliases.get(word, word)
         stem = ps.stem(word)
-#        print(f'{word} => {stem}')
+        #        print(f'{word} => {stem}')
         if stem in sw or word in sw:
-#            print("ignoring {stem} / {word}: sw")
+            #            print("ignoring {stem} / {word}: sw")
             continue
         if word == wordbreak:
             lastword = ""
-#            print("ignoring {stem} / {word}: wordbreak")
+            #            print("ignoring {stem} / {word}: wordbreak")
             continue
-        if (word in knownwords or 
-            (len(word) >= 4 and len([c for c in word if c.isalpha()]) > 2)):
+        if word in knownwords or (len(word) >= 4 and len([c for c in word if c.isalpha()]) > 2):
             knownwords[word] = True
             laststem = ps.stem(lastword)
             if lastword != "" and laststem != stem:
@@ -155,7 +156,7 @@ def processwords(text):
                 # too much punctuation - no bigram for you
                 if len([c for c in bigram if not c.isalnum()]) > 2:
                     continue
-                if lastword != "" and (stem not in cw or laststem not in cw):                    
+                if lastword != "" and (stem not in cw or laststem not in cw):
                     bigrams.append(bigram)
                     if stem not in cw:
                         bigrams.append(bigram)
@@ -164,7 +165,7 @@ def processwords(text):
             lastword = word
         # too much punctuation
         if len([c for c in word if not c.isalnum()]) > 1:
-#            print("ignoring {stem} / {word}: 2+ puncts")
+            #            print("ignoring {stem} / {word}: 2+ puncts")
             continue
         singlewords.append(word)
     print(f"scanned {len(singlewords)} single words and {len(bigrams)} bigrams.")
@@ -174,15 +175,15 @@ def processwords(text):
         stem = ps.stem(word)
         key = stem if stem in freq else word
         # penalize older posts / boost more recent posts
-        freq[key] = freq.get(key, 0.0) + math.log2(i+1) / math.log2(len(singlewords))
-    
+        freq[key] = freq.get(key, 0.0) + math.log2(i + 1) / math.log2(len(singlewords))
+
     for key in freq:
         if key in cw:
             freq[key] = freq[key] * (math.log(cw[key]) / math.log(10000))
-#            print(f'{key} => {(math.log(cw[key]) / math.log(10000))}')
+    #            print(f'{key} => {(math.log(cw[key]) / math.log(10000))}')
     top20 = dict(sorted(freq.items(), key=lambda r: r[1])[-100:])
-    #print(top20)
-    
+    # print(top20)
+
     bgfreq = {}
     for keyword in bigrams:
         word1, word2 = keyword.split()
@@ -192,10 +193,10 @@ def processwords(text):
             continue
         rev = f"{word2} {word1}"
         if rev in bgfreq:
-            bgfreq[rev] = bgfreq.get(rev, 0) +1
+            bgfreq[rev] = bgfreq.get(rev, 0) + 1
         else:
-            bgfreq[keyword] = bgfreq.get(keyword, 0) +1
-    
+            bgfreq[keyword] = bgfreq.get(keyword, 0) + 1
+
     for bigram, bgcnt in bgfreq.items():
         word1, word2 = bigram.split()
         wf1 = freq.get(word1, 0)
@@ -208,7 +209,7 @@ def processwords(text):
 
 if __name__ == "__main__":
     # fetch alltext.txt from production /tmp/alltext.txt
-    with open('alltext.txt') as fh:
+    with open("alltext.txt") as fh:
         text = ""
         while True:
             line = fh.readline()
@@ -216,8 +217,8 @@ if __name__ == "__main__":
                 break
             text += line
         freq = processwords(text)
-        print('\n'.join(
-            [ f"{v:3} {k}" for k,v in
-              sorted(freq.items(), key=lambda r: r[1], reverse=True) ]
-        ))
-
+        print(
+            "\n".join(
+                [f"{v:3} {k}" for k, v in sorted(freq.items(), key=lambda r: r[1], reverse=True)]
+            )
+        )

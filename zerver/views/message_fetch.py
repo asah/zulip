@@ -42,6 +42,7 @@ from zerver.lib.request import REQ, RequestNotes, has_request_variables
 from zerver.lib.response import json_success
 from zerver.lib.sqlalchemy_utils import get_sqlalchemy_connection
 from zerver.lib.streams import (
+    access_stream_by_name,
     can_access_stream_history_by_id,
     can_access_stream_history_by_name,
     get_public_streams_queryset,
@@ -80,7 +81,6 @@ from zerver.models import (
     UserMessage,
     UserProfile,
     get_active_streams,
-    get_stream,
     get_user_by_id_in_realm_including_cross_realm,
     get_user_including_cross_realm,
 )
@@ -1157,40 +1157,46 @@ def get_messages_backend(
                 raise Exception(str(err), message_id, narrow)
 
     # insert poll promo only when browsing on a linked-topic
-    @cache_with_key(lambda stream_id, topic:
-                    re.sub(r'[^a-zA-Z0-9]', '_', f"poll-msg-for-{stream_id}-{topic}"),
-                    timeout=10) # 3600 * 24 * 7
-    def get_poll_msg(stream_id: int, topic: str) -> Optional["Message"]:
+    @cache_with_key(
+        lambda user_profile, stream_id, topic: re.sub(
+            r"[^a-zA-Z0-9]", "_", f"poll-msg-for-{stream_id}-{topic}"
+        ),
+        timeout=10,
+    )  # 3600 * 24 * 7
+    def get_poll_msg(user_profile: UserProfile, stream_id: int, topic: str) -> Optional["Message"]:
         promo_rx = r"promo: (?:.*)?(#narrow/)?stream/%d-?[^/]*/topic/%s" % (
-            stream_id, hash_util_encode(topic))
+            stream_id,
+            hash_util_encode(topic),
+        )
         try:
-            polls_stream = get_stream("polls", realm)
+            polls_stream = access_stream_by_name(user_profile, "polls")
         except Exception:
             return None
         if polls_stream is None:
             return None
         msgs = Message.objects.filter(
-            recipient__type=Recipient.STREAM,
-            recipient__type_id=polls_stream.id
-        ).filter(
-            content__regex=promo_rx
-        )
+            recipient__type=Recipient.STREAM, recipient__type_id=polls_stream.id
+        ).filter(content__regex=promo_rx)
         return msgs[0] if len(msgs) > 0 else None
 
-    @cache_with_key(lambda stream_id, topic:
-                    re.sub(r'[^a-zA-Z0-9]', '_', f"poll-msg-for-{stream_id}-{topic}"),
-                    timeout=10) # 3600 * 24 * 7
-    def get_poll_promo_msg_id(stream_id: int, topic: str) -> Optional[int]:
-        poll_msg = get_poll_msg(stream_id, topic)
+    @cache_with_key(
+        lambda user_profile, stream_id, topic: re.sub(
+            r"[^a-zA-Z0-9]", "_", f"poll-msg-for-{stream_id}-{topic}"
+        ),
+        timeout=10,
+    )  # 3600 * 24 * 7
+    def get_poll_promo_msg_id(
+        user_profile: UserProfile, stream_id: int, topic: str
+    ) -> Optional[int]:
+        poll_msg = get_poll_msg(user_profile, stream_id, topic)
         if poll_msg is None:
             return None
-        sender_id = None
         for submsg in SubMessage.objects.filter(message_id=poll_msg.id):
-            if 'promo_msg_id' not in submsg.content:
+            if "promo_msg_id" not in submsg.content:
                 continue
             try:
                 data = orjson.loads(submsg.content)
-                return data["extra_data"]['promo_msg_id']
+                return data["extra_data"]["promo_msg_id"]
             except Exception:
                 logging.error("submsg %d: corrupt poll_promo_id", submsg.id)
         return None
@@ -1199,30 +1205,34 @@ def get_messages_backend(
         # [..., {'operator': 'topic', 'operand': 'new streams', 'negated': False}]
         stream_id = topic = None
         for op in narrow:
-            if op['operator'] == 'stream' and op['negated'] == False:
-                if type(op['operand']) is int:
-                    stream_id = op['operand']
+            if op["operator"] == "stream" and not op["negated"]:
+                if type(op["operand"]) is int:
+                    stream_id = op["operand"]
                 else:
-                    if re.search(r'^[0-9]+$', op['operand']):
-                        stream_id = int(op['operand'])
+                    if re.search(r"^[0-9]+$", op["operand"]):
+                        stream_id = int(op["operand"])
                     else:
                         try:
-                            stream = get_stream_by_narrow_operand_access_unchecked(op['operand'], realm)
+                            stream = get_stream_by_narrow_operand_access_unchecked(
+                                op["operand"], realm
+                            )
                             stream_id = stream.id
-                        except:
-                            print(f"get_messages_backend: couldn't parse stream op '{op['operand']}'")
+                        except Exception:
+                            print(
+                                f"get_messages_backend: couldn't parse stream op '{op['operand']}'"
+                            )
                             stream_id = None
-            if op['operator'] == 'topic' and op['negated'] == False:
-                topic = op['operand']
+            if op["operator"] == "topic" and not op["negated"]:
+                topic = op["operand"]
         # locate the promo msg and change its order to be second in the display
-        if stream_id is not None and topic is not None:
-            poll_promo_msgid = get_poll_promo_msg_id(stream_id, topic)
-            if poll_promo_msgid is not None:
-                if poll_promo_msgid in message_ids:
-                    message_ids.remove(poll_promo_msgid)
-                    message_ids.insert(len(message_ids)-1, poll_promo_msgid)
-                if poll_promo_msgid not in user_message_flags:
-                    user_message_flags[poll_promo_msgid] = "read"
+        if stream_id is not None and topic is not None and user_profile is not None:
+            poll_promo_message_id = get_poll_promo_msg_id(user_profile, stream_id, topic)
+            if poll_promo_message_id is not None:
+                if poll_promo_message_id in message_ids:
+                    message_ids.remove(poll_promo_message_id)
+                    message_ids.insert(len(message_ids) - 1, poll_promo_message_id)
+                if poll_promo_message_id not in user_message_flags:
+                    user_message_flags[poll_promo_message_id] = "read"
 
     message_list = messages_for_ids(
         message_ids=message_ids,

@@ -7,6 +7,7 @@ import magic
 import requests
 from django.conf import settings
 from django.utils.encoding import smart_str
+from previewlink import preview_link
 
 from version import ZULIP_VERSION
 from zerver.lib.cache import cache_with_key, preview_url_cache_key
@@ -15,8 +16,6 @@ from zerver.lib.pysa import mark_sanitized
 from zerver.lib.url_preview.oembed import get_oembed_data
 from zerver.lib.url_preview.parsers import GenericParser, OpenGraphParser
 from zerver.lib.url_preview.types import UrlEmbedData, UrlOEmbedData
-
-from previewlink import preview_link
 
 # Based on django.core.validators.URLValidator, with ftp support removed.
 link_regex = re.compile(
@@ -124,18 +123,25 @@ def get_link_embed_data(
     if "image" in data:
         data["image"] = urljoin(response.url, data["image"])
 
-    if (data.get('title') in ['', None] or data.get('description') in ['', None] or
-        data.get('image') in ['', None]):
-        logging.info(f'trying preview_link({mark_sanitized_url}) because some field(s) missing: {data}')
+    if (
+        data.get("title") in ["", None]
+        or data.get("description") in ["", None]
+        or data.get("image") in ["", None]
+    ):
+        logging.info(
+            f"trying preview_link({mark_sanitized_url}) because some field(s) missing: {data}"
+        )
         res = preview_link(mark_sanitized_url)
         for key in ["title", "description", "image"]:
-            if data.get(key) in ['', None]:
-                data[key] = res.get(key, '')
+            if data.get(key) in ["", None]:
+                data[key] = res.get(key, "")
 
-    logging.info(f'found preview data: {data}')
+    logging.info(f"found preview data: {data}")
 
-    if 'news.ycombinator.com' in mark_sanitized_url:
-        data['image'] = 'https://image.winudf.com/v2/image1/Y29tLmFsZmlhbmxvc2FyaS5oYWNrZXJuZXdzX2ljb25fMTU0MTY3Nzg4OF8wODA/icon.png?w=&fakeurl=1'
+    if "news.ycombinator.com" in mark_sanitized_url:
+        data[
+            "image"
+        ] = "https://image.winudf.com/v2/image1/Y29tLmFsZmlhbmxvc2FyaS5oYWNrZXJuZXdzX2ljb25fMTU0MTY3Nzg4OF8wODA/icon.png?w=&fakeurl=1"
 
     if data is None:
         data = UrlEmbedData()
@@ -146,6 +152,6 @@ def get_link_embed_data(
             if not data.get(key):
                 data[key] = parser.__dict__.get(key)
 
-    if data['image']:
-        data['image'] = urljoin(response.url, data['image'])
+    if data["image"]:
+        data["image"] = urljoin(response.url, data["image"])
     return data
