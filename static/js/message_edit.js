@@ -443,8 +443,9 @@ function edit_message($row, raw_content) {
             is_stream: message.type === "stream",
             message_id: message.id,
             is_editable,
-            is_content_editable: (editability === editability_types.FULL ||
-				  editability === editability_types.MSG_ONLY),
+            is_content_editable:
+                editability === editability_types.FULL ||
+                editability === editability_types.MSG_ONLY,
             is_widget_message: is_widget_message(message),
             has_been_editable: editability !== editability_types.NO,
             topic: message.topic,
@@ -506,7 +507,7 @@ function edit_message($row, raw_content) {
             create_copy_to_clipboard_handler($row, $copy_message[0], message.id);
             break;
         case editability_types.MSG_ONLY:
-            message_edit_topic.attr("readonly", "readonly");
+            $message_edit_topic.attr("readonly", "readonly");
             break;
         case editability_types.FULL: {
             $copy_message.remove();
@@ -627,10 +628,10 @@ function edit_message($row, raw_content) {
         const is_stream_edited = is_stream_editable ? new_stream_id !== original_stream_id : false;
         $message_edit_topic_propagate.toggle(is_topic_edited || is_stream_edited);
         $message_edit_breadcrumb_messages.toggle(is_stream_edited);
-	const contents = $message_edit_content.val();
-	if (new_topic.startsWith("inquiry:") && !contents.match(/(<p>)?Q: /)) {
-	    prefix_with_inquiry($message_edit_content);
-	}
+        const contents = $message_edit_content.val();
+        if (new_topic.startsWith("inquiry:") && !/(<p>)?Q: /.test(contents)) {
+            prefix_with_inquiry($message_edit_content);
+        }
 
         if (is_stream_edited) {
             /* Reinitialize the typeahead component with content for the new stream. */
@@ -934,7 +935,6 @@ export function save_message_row_edit($row) {
             raw_content: new_content,
             orig_content: message.content,
             orig_raw_content: message.raw_content,
-
 
             // Store flags that are about user interaction with the
             // message so that echo.edit_locally() can restore these
