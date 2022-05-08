@@ -92,6 +92,13 @@ def get_link_embed_data(
 
     if not valid_content_type(url):
         return None
+    
+    mark_sanitized_url = mark_sanitized(url)
+    if "reddit.com" in mark_sanitized_url:
+        data = UrlEmbedData()
+        res = preview_link(mark_sanitized_url)
+        data.merge_dict(res)
+        return data
 
     # The oembed data from pyoembed may be complete enough to return
     # as-is; if so, we use it.  Otherwise, we use it as a _base_ for
@@ -100,58 +107,22 @@ def get_link_embed_data(
     data = get_oembed_data(url, maxwidth=maxwidth, maxheight=maxheight)
     if data is not None and isinstance(data, UrlOEmbedData):
         return data
-    if data is None:
-        data = {}
 
-    mark_sanitized_url = mark_sanitized(url)
-    response = PreviewSession().get(mark_sanitized_url, stream=True)
-    if response.ok:
-        og_data = OpenGraphParser(
-            response.content, response.headers.get("Content-Type")
-        ).extract_data()
-        for key in ["title", "description", "image"]:
-            if (not data or not data.get(key)) and (og_data and og_data.__dict__.get(key)):
-                data[key] = og_data.__dict__[key]
-
-        generic_data = (
-            GenericParser(response.content, response.headers.get("Content-Type")).extract_data()
-            or {}
-        )
-        for key in ["title", "description", "image"]:
-            if not data.get(key) and generic_data.__dict__.get(key):
-                data[key] = generic_data.__dict__[key]
-    if "image" in data:
-        data["image"] = urljoin(response.url, data["image"])
-
-    if (
-        data.get("title") in ["", None]
-        or data.get("description") in ["", None]
-        or data.get("image") in ["", None]
-    ):
-        logging.info(
-            f"trying preview_link({mark_sanitized_url}) because some field(s) missing: {data}"
-        )
-        res = preview_link(mark_sanitized_url)
-        for key in ["title", "description", "image"]:
-            if data.get(key) in ["", None]:
-                data[key] = res.get(key, "")
-
-    logging.info(f"found preview data: {data}")
-
-    if "news.ycombinator.com" in mark_sanitized_url:
-        data[
-            "image"
-        ] = "https://image.winudf.com/v2/image1/Y29tLmFsZmlhbmxvc2FyaS5oYWNrZXJuZXdzX2ljb25fMTU0MTY3Nzg4OF8wODA/icon.png?w=&fakeurl=1"
+    response = PreviewSession().get(mark_sanitized(url), stream=True)
+    if not response.ok:
+        return None
 
     if data is None:
         data = UrlEmbedData()
 
     for parser_class in (OpenGraphParser, GenericParser):
         parser = parser_class(response.content, response.headers.get("Content-Type"))
-        for key in ["title", "description", "image"]:
-            if not data.get(key):
-                data[key] = parser.__dict__.get(key)
+        data.merge(parser.extract_data())
 
-    if data["image"]:
-        data["image"] = urljoin(response.url, data["image"])
+    if data.image:
+        data.image = urljoin(response.url, data.image)
+
+    if "news.ycombinator.com" in mark_sanitized_url:
+        data.image = "https://image.winudf.com/v2/image1/Y29tLmFsZmlhbmxvc2FyaS5oYWNrZXJuZXdzX2ljb25fMTU0MTY3Nzg4OF8wODA/icon.png?w=&fakeurl=1"
+
     return data
