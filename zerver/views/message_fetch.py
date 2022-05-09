@@ -1169,7 +1169,7 @@ def get_messages_backend(
             hash_util_encode(topic),
         )
         try:
-            polls_stream = access_stream_by_name(user_profile, "polls")
+            polls_stream, _ = access_stream_by_name(user_profile, "polls")
         except Exception:
             return None
         if polls_stream is None:
