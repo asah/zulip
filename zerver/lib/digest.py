@@ -3,7 +3,7 @@ import heapq
 import logging
 from collections import defaultdict
 from copy import deepcopy
-from typing import Any, collection, Dict, List, Set, Tuple
+from typing import Any, Collection, Dict, List, Set, Tuple
 
 from bs4 import BeautifulSoup
 from django.conf import settings
