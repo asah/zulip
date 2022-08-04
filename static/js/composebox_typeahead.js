@@ -47,8 +47,10 @@ export let emoji_collection = [];
 export function update_emoji_data() {
     emoji_collection = [];
     for (const emoji_dict of emoji.emojis_by_name.values()) {
+        const {reaction_type} = emoji.get_emoji_details_by_name(emoji_dict.name);
         if (emoji_dict.is_realm_emoji === true) {
             emoji_collection.push({
+                reaction_type,
                 emoji_name: emoji_dict.name,
                 emoji_url: emoji_dict.url,
                 is_realm_emoji: true,
@@ -56,6 +58,7 @@ export function update_emoji_data() {
         } else {
             for (const alias of emoji_dict.aliases) {
                 emoji_collection.push({
+                    reaction_type,
                     emoji_name: alias,
                     emoji_code: emoji_dict.emoji_code,
                 });
@@ -93,13 +96,8 @@ export function query_matches_person(query, person) {
     return typeahead.query_matches_source_attrs(query, person, ["full_name", email_attr], " ");
 }
 
-export function query_matches_name_description(query, user_group_or_stream) {
-    return typeahead.query_matches_source_attrs(
-        query,
-        user_group_or_stream,
-        ["name", "description"],
-        " ",
-    );
+export function query_matches_name(query, user_group_or_stream) {
+    return typeahead.query_matches_source_attrs(query, user_group_or_stream, ["name"], " ");
 }
 
 function get_stream_or_user_group_matcher(query) {
@@ -107,7 +105,7 @@ function get_stream_or_user_group_matcher(query) {
     query = typeahead.clean_query_lowercase(query);
 
     return function (user_group_or_stream) {
-        return query_matches_name_description(query, user_group_or_stream);
+        return query_matches_name(query, user_group_or_stream);
     };
 }
 
@@ -473,7 +471,7 @@ export function get_person_suggestions(query, opts) {
 
     const groups = user_groups.get_realm_user_groups();
 
-    const filtered_groups = groups.filter((item) => query_matches_name_description(query, item));
+    const filtered_groups = groups.filter((item) => query_matches_name(query, item));
 
     /*
         Let's say you're on a big realm and type

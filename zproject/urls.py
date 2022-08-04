@@ -145,6 +145,7 @@ from zerver.views.streams import (
     create_default_stream_group,
     deactivate_stream_backend,
     delete_in_topic,
+    get_stream_backend,
     get_streams_backend,
     get_subscribers_backend,
     get_topics_backend,
@@ -257,7 +258,7 @@ v1_api_and_json_patterns = [
     # realm/emoji -> zerver.views.realm_emoji
     rest_path("realm/emoji", GET=list_emoji),
     rest_path(
-        "realm/emoji/<emoji_name>",
+        "realm/emoji/<path:emoji_name>",
         POST=upload_emoji,
         DELETE=(delete_emoji, {"intentionally_undocumented"}),
     ),
@@ -443,7 +444,10 @@ v1_api_and_json_patterns = [
     # GET returns "stream info" (undefined currently?), HEAD returns whether stream exists (200 or 404)
     rest_path("streams/<int:stream_id>/members", GET=get_subscribers_backend),
     rest_path(
-        "streams/<int:stream_id>", PATCH=update_stream_backend, DELETE=deactivate_stream_backend
+        "streams/<int:stream_id>",
+        GET=get_stream_backend,
+        PATCH=update_stream_backend,
+        DELETE=deactivate_stream_backend,
     ),
     # Delete topic in stream
     rest_path("streams/<int:stream_id>/delete_topic", POST=delete_in_topic),
@@ -469,7 +473,7 @@ v1_api_and_json_patterns = [
     rest_path("users/me/subscriptions/muted_topics", PATCH=update_muted_topic),
     rest_path("users/me/muted_users/<int:muted_user_id>", POST=mute_user, DELETE=unmute_user),
     # used to register for an event queue in tornado
-    rest_path("register", POST=events_register_backend),
+    rest_path("register", POST=(events_register_backend, {"allow_anonymous_user_web"})),
     # events -> zerver.tornado.views
     rest_path("events", GET=get_events, DELETE=cleanup_event_queue),
     # report -> zerver.views.report
@@ -654,6 +658,11 @@ i18n_urls = [
         {"template_name": "zerver/asciidoctor-case-study.html"},
     ),
     path(
+        "case-studies/recurse-center/",
+        landing_view,
+        {"template_name": "zerver/recurse-center-case-study.html"},
+    ),
+    path(
         "for/communities/",
         landing_view,
         {"template_name": "zerver/for-communities.html"},
@@ -728,8 +737,7 @@ urls += [
 # We don't create URLs for particular Git integrations here
 # because of generic one below
 for incoming_webhook in WEBHOOK_INTEGRATIONS:
-    if incoming_webhook.url_object:
-        urls.append(incoming_webhook.url_object)
+    urls.append(incoming_webhook.url_object)
 
 # Desktop-specific authentication URLs
 urls += [

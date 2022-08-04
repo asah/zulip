@@ -2,7 +2,6 @@ import $ from "jquery";
 
 import * as resolved_topic from "../shared/js/resolved_topic";
 import render_compose_all_everyone from "../templates/compose_all_everyone.hbs";
-import render_compose_announce from "../templates/compose_announce.hbs";
 import render_compose_invite_users from "../templates/compose_invite_users.hbs";
 import render_compose_not_subscribed from "../templates/compose_not_subscribed.hbs";
 import render_compose_private_stream_alert from "../templates/compose_private_stream_alert.hbs";
@@ -24,10 +23,8 @@ import {user_settings} from "./user_settings";
 import * as util from "./util";
 
 let user_acknowledged_all_everyone = false;
-let user_acknowledged_announce = false;
 let wildcard_mention;
 
-export const announce_warn_threshold = 60;
 export let wildcard_mention_large_stream_threshold = 15;
 
 export function needs_subscribe_warning(user_id, stream_id) {
@@ -241,32 +238,8 @@ export function clear_all_everyone_warnings() {
     $("#compose-send-status").hide();
 }
 
-function show_announce_warnings(stream_id) {
-    const stream_count = peer_data.get_subscriber_count(stream_id) || 0;
-
-    const announce_template = render_compose_announce({count: stream_count});
-    const $error_area_announce = $("#compose-announce");
-
-    if (!$error_area_announce.is(":visible")) {
-        $error_area_announce.append(announce_template);
-    }
-
-    $error_area_announce.show();
-    user_acknowledged_announce = false;
-}
-
-export function clear_announce_warnings() {
-    $("#compose-announce").hide();
-    $("#compose-announce").empty();
-    $("#compose-send-status").hide();
-}
-
 export function set_user_acknowledged_all_everyone_flag(value) {
     user_acknowledged_all_everyone = value;
-}
-
-export function set_user_acknowledged_announce_flag(value) {
-    user_acknowledged_announce = value;
 }
 
 export function get_invalid_recipient_emails() {
@@ -327,7 +300,7 @@ export function wildcard_mention_allowed() {
     }
     if (
         page_params.realm_wildcard_mention_policy ===
-        settings_config.wildcard_mention_policy_values.by_stream_admins_only.code
+        settings_config.wildcard_mention_policy_values.by_admins_only.code
     ) {
         // TODO: Check the user's stream-level role once stream-level admins exist.
         return page_params.is_admin;
@@ -404,87 +377,6 @@ function validate_stream_message_mentions(stream_id) {
     return true;
 }
 
-function validate_stream_message_announce(sub) {
-    const stream_count = peer_data.get_subscriber_count(sub.stream_id) || 0;
-
-    if (sub.name === "announce" && stream_count > announce_warn_threshold) {
-        if (user_acknowledged_announce === undefined || user_acknowledged_announce === false) {
-            // user has not seen a warning message yet if undefined
-            show_announce_warnings(sub.stream_id);
-
-            $("#compose-send-button").prop("disabled", false);
-            compose_ui.hide_compose_spinner();
-            return false;
-        }
-    } else {
-        clear_announce_warnings();
-    }
-    // at this point, the user has acknowledged the warning
-    user_acknowledged_announce = undefined;
-
-    return true;
-}
-
-function validate_stream_message_post_policy(sub) {
-    if (page_params.is_admin) {
-        return true;
-    }
-
-    const stream_post_permission_type = stream_data.stream_post_policy_values;
-    const stream_post_policy = sub.stream_post_policy;
-
-    if (stream_post_policy === stream_post_permission_type.admins.code) {
-        compose_error.show(
-            $t_html({
-                defaultMessage: "Only organization admins are allowed to post to this stream.",
-            }),
-        );
-        return false;
-    }
-
-    if (page_params.is_moderator) {
-        return true;
-    }
-
-    if (stream_post_policy === stream_post_permission_type.moderators.code) {
-        compose_error.show(
-            $t_html({
-                defaultMessage:
-                    "Only organization admins and moderators are allowed to post to this stream.",
-            }),
-        );
-        return false;
-    }
-
-    if (page_params.is_guest && stream_post_policy !== stream_post_permission_type.everyone.code) {
-        compose_error.show(
-            $t_html({defaultMessage: "Guests are not allowed to post to this stream."}),
-        );
-        return false;
-    }
-
-    const person = people.get_by_user_id(page_params.user_id);
-    const current_datetime = new Date(Date.now());
-    const person_date_joined = new Date(person.date_joined);
-    const days = (current_datetime - person_date_joined) / 1000 / 86400;
-    let error_html;
-    if (
-        stream_post_policy === stream_post_permission_type.non_new_members.code &&
-        days < page_params.realm_waiting_period_threshold
-    ) {
-        error_html = $t_html(
-            {
-                defaultMessage:
-                    "New members are not allowed to post to this stream.<br />Permission will be granted in {days} days.",
-            },
-            {days},
-        );
-        compose_error.show(error_html);
-        return false;
-    }
-    return true;
-}
-
 export function validation_error(error_type, stream_name) {
     let response;
 
@@ -557,7 +449,12 @@ function validate_stream_message() {
         return validation_error("does-not-exist", stream_name);
     }
 
-    if (!validate_stream_message_post_policy(sub)) {
+    if (!stream_data.can_post_messages_in_stream(sub)) {
+        compose_error.show(
+            $t_html({
+                defaultMessage: "You do not have permission to post in this stream.",
+            }),
+        );
         return false;
     }
 
@@ -566,24 +463,11 @@ function validate_stream_message() {
        proceeding with further validation. */
     wildcard_mention = util.find_wildcard_mentions(compose_state.message_content());
 
-    // If both `@all` is mentioned and it's in `#announce`, just validate
-    // for `@all`. Users shouldn't have to hit "yes" more than once.
-    if (wildcard_mention !== null && stream_name === "announce") {
-        if (
-            !validate_stream_message_address_info(stream_name) ||
-            !validate_stream_message_mentions(sub.stream_id)
-        ) {
-            return false;
-        }
-        // If either criteria isn't met, just do the normal validation.
-    } else {
-        if (
-            !validate_stream_message_address_info(stream_name) ||
-            !validate_stream_message_mentions(sub.stream_id) ||
-            !validate_stream_message_announce(sub)
-        ) {
-            return false;
-        }
+    if (
+        !validate_stream_message_address_info(stream_name) ||
+        !validate_stream_message_mentions(sub.stream_id)
+    ) {
+        return false;
     }
 
     return true;

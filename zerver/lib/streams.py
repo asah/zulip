@@ -1,4 +1,4 @@
-from typing import Any, Collection, Dict, List, Optional, Set, Tuple, TypedDict, Union
+from typing import Collection, List, Optional, Set, Tuple, TypedDict, Union
 
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
@@ -9,8 +9,8 @@ from django.utils.translation import gettext as _
 from zerver.actions.default_streams import get_default_streams_for_realm
 from zerver.lib.exceptions import (
     JsonableError,
+    OrganizationAdministratorRequired,
     OrganizationOwnerRequired,
-    StreamAdministratorRequired,
 )
 from zerver.lib.markdown import markdown_convert
 from zerver.lib.stream_subscription import (
@@ -18,6 +18,7 @@ from zerver.lib.stream_subscription import (
     get_subscribed_stream_ids_for_user,
 )
 from zerver.lib.string_validation import check_stream_name
+from zerver.lib.types import APIStreamDict
 from zerver.models import (
     DefaultStreamGroup,
     Realm,
@@ -301,7 +302,7 @@ def check_for_exactly_one_stream_arg(stream_id: Optional[int], stream: Optional[
 def check_stream_access_for_delete_or_update(
     user_profile: UserProfile, stream: Stream, sub: Optional[Subscription] = None
 ) -> None:
-    error = _("Invalid stream id")
+    error = _("Invalid stream ID")
     if stream.realm_id != user_profile.realm_id:
         raise JsonableError(error)
 
@@ -311,10 +312,7 @@ def check_stream_access_for_delete_or_update(
     if sub is None and stream.invite_only:
         raise JsonableError(error)
 
-    if sub is not None and sub.is_stream_admin:
-        return
-
-    raise StreamAdministratorRequired()
+    raise OrganizationAdministratorRequired()
 
 
 def access_stream_for_delete_or_update(
@@ -323,7 +321,7 @@ def access_stream_for_delete_or_update(
     try:
         stream = Stream.objects.get(id=stream_id)
     except Stream.DoesNotExist:
-        raise JsonableError(_("Invalid stream id"))
+        raise JsonableError(_("Invalid stream ID"))
 
     try:
         sub = Subscription.objects.get(
@@ -334,6 +332,34 @@ def access_stream_for_delete_or_update(
 
     check_stream_access_for_delete_or_update(user_profile, stream, sub)
     return (stream, sub)
+
+
+def check_basic_stream_access(
+    user_profile: UserProfile,
+    stream: Stream,
+    sub: Optional[Subscription],
+    allow_realm_admin: bool = False,
+) -> bool:
+    # Any realm user, even guests, can access web_public streams.
+    if stream.is_web_public:
+        return True
+
+    # If the stream is in your realm and public, you can access it.
+    if stream.is_public() and not user_profile.is_guest:
+        return True
+
+    # Or if you are subscribed to the stream, you can access it.
+    if sub is not None:
+        return True
+
+    # For some specific callers (e.g. getting list of subscribers,
+    # removing other users from a stream, and updating stream name and
+    # description), we allow realm admins to access stream even if
+    # they are not subscribed to a private stream.
+    if user_profile.is_realm_admin and allow_realm_admin:
+        return True
+
+    return False
 
 
 # Only set allow_realm_admin flag to True when you want to allow realm admin to
@@ -357,29 +383,14 @@ def access_stream_common(
         raise AssertionError("user_profile and stream realms don't match")
 
     try:
+        assert stream.recipient_id is not None
         sub = Subscription.objects.get(
             user_profile=user_profile, recipient_id=stream.recipient_id, active=require_active
         )
     except Subscription.DoesNotExist:
         sub = None
 
-    # Any realm user, even guests, can access web_public streams.
-    if stream.is_web_public:
-        return sub
-
-    # If the stream is in your realm and public, you can access it.
-    if stream.is_public() and not user_profile.is_guest:
-        return sub
-
-    # Or if you are subscribed to the stream, you can access it.
-    if sub is not None:
-        return sub
-
-    # For some specific callers (e.g. getting list of subscribers,
-    # removing other users from a stream, and updating stream name and
-    # description), we allow realm admins to access stream even if
-    # they are not subscribed to a private stream.
-    if user_profile.is_realm_admin and allow_realm_admin:
+    if check_basic_stream_access(user_profile, stream, sub, allow_realm_admin=allow_realm_admin):
         return sub
 
     # Otherwise it is a private stream and you're not on it, so throw
@@ -393,7 +404,7 @@ def access_stream_by_id(
     require_active: bool = True,
     allow_realm_admin: bool = False,
 ) -> Tuple[Stream, Optional[Subscription]]:
-    error = _("Invalid stream id")
+    error = _("Invalid stream ID")
     try:
         stream = get_stream_by_id_in_realm(stream_id, user_profile.realm)
     except Stream.DoesNotExist:
@@ -409,11 +420,11 @@ def access_stream_by_id(
     return (stream, sub)
 
 
-def get_public_streams_queryset(realm: Realm) -> "QuerySet[Stream]":
+def get_public_streams_queryset(realm: Realm) -> QuerySet[Stream]:
     return Stream.objects.filter(realm=realm, invite_only=False, history_public_to_subscribers=True)
 
 
-def get_web_public_streams_queryset(realm: Realm) -> "QuerySet[Stream]":
+def get_web_public_streams_queryset(realm: Realm) -> QuerySet[Stream]:
     # This should match the include_web_public code path in do_get_streams.
     return Stream.objects.filter(
         realm=realm,
@@ -459,7 +470,7 @@ def access_stream_by_name(
 
 
 def access_web_public_stream(stream_id: int, realm: Realm) -> Stream:
-    error = _("Invalid stream id")
+    error = _("Invalid stream ID")
     try:
         stream = get_stream_by_id_in_realm(stream_id, realm)
     except Stream.DoesNotExist:
@@ -514,10 +525,10 @@ def public_stream_user_ids(stream: Stream) -> Set[int]:
     guest_subscriptions = get_active_subscriptions_for_stream_id(
         stream.id, include_deactivated_users=False
     ).filter(user_profile__role=UserProfile.ROLE_GUEST)
-    guest_subscriptions = {
+    guest_subscriptions_ids = {
         sub["user_profile_id"] for sub in guest_subscriptions.values("user_profile_id")
     }
-    return set(active_non_guest_user_ids(stream.realm_id)) | guest_subscriptions
+    return set(active_non_guest_user_ids(stream.realm_id)) | guest_subscriptions_ids
 
 
 def can_access_stream_user_ids(stream: Stream) -> Set[int]:
@@ -626,7 +637,7 @@ def list_to_streams(
     streams_raw: Collection[StreamDict],
     user_profile: UserProfile,
     autocreate: bool = False,
-    admin_access_required: bool = False,
+    unsubscribing_others: bool = False,
 ) -> Tuple[List[Stream], List[Stream]]:
     """Converts list of dicts to a list of Streams, validating input in the process
 
@@ -655,7 +666,7 @@ def list_to_streams(
     missing_stream_dicts: List[StreamDict] = []
     existing_stream_map = bulk_get_streams(user_profile.realm, stream_set)
 
-    if admin_access_required:
+    if unsubscribing_others:
         existing_recipient_ids = [stream.recipient_id for stream in existing_stream_map.values()]
         subs = Subscription.objects.filter(
             user_profile=user_profile, recipient_id__in=existing_recipient_ids, active=True
@@ -766,8 +777,7 @@ def ensure_stream(
     )[0]
 
 
-def get_occupied_streams(realm: Realm) -> QuerySet:
-    # TODO: Make a generic stub for QuerySet
+def get_occupied_streams(realm: Realm) -> QuerySet[Stream]:
     """Get streams with subscribers"""
     exists_expression = Exists(
         Subscription.objects.filter(
@@ -785,7 +795,7 @@ def get_occupied_streams(realm: Realm) -> QuerySet:
     return occupied_streams
 
 
-def get_web_public_streams(realm: Realm) -> List[Dict[str, Any]]:  # nocoverage
+def get_web_public_streams(realm: Realm) -> List[APIStreamDict]:  # nocoverage
     query = get_web_public_streams_queryset(realm)
     streams = Stream.get_client_data(query)
     return streams
@@ -799,7 +809,7 @@ def do_get_streams(
     include_all_active: bool = False,
     include_default: bool = False,
     include_owner_subscribed: bool = False,
-) -> List[Dict[str, Any]]:
+) -> List[APIStreamDict]:
     # This function is only used by API clients now.
 
     if include_all_active and not user_profile.is_realm_admin:

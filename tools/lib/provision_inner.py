@@ -10,13 +10,13 @@ ZULIP_PATH = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 
 sys.path.append(ZULIP_PATH)
 import pygments
-from pytz import VERSION as timezones_version
 
 from scripts.lib import clean_unused_caches
 from scripts.lib.zulip_tools import (
     ENDC,
     OKBLUE,
     get_dev_uuid_var_path,
+    get_tzdata_zi,
     is_digest_obsolete,
     run,
     run_as_root,
@@ -25,10 +25,13 @@ from scripts.lib.zulip_tools import (
 from tools.setup.generate_zulip_bots_static_files import generate_zulip_bots_static_files
 from version import PROVISION_VERSION
 
-pygments_version = pygments.__version__  # type: ignore[attr-defined] # private member missing from stubs
-
 VENV_PATH = "/srv/zulip-py3-venv"
 UUID_VAR_PATH = get_dev_uuid_var_path()
+
+with get_tzdata_zi() as f:
+    line = f.readline()
+    assert line.startswith("# version ")
+    timezones_version = line[len("# version ") :]
 
 
 def create_var_directories() -> None:
@@ -150,7 +153,7 @@ def need_to_run_build_pygments_data() -> bool:
     return is_digest_obsolete(
         "build_pygments_data_hash",
         build_pygments_data_paths(),
-        [pygments_version],
+        [pygments.__version__],
     )
 
 
@@ -228,7 +231,7 @@ def main(options: argparse.Namespace) -> int:
         write_new_digest(
             "build_pygments_data_hash",
             build_pygments_data_paths(),
-            [pygments_version],
+            [pygments.__version__],
         )
     else:
         print("No need to run `tools/setup/build_pygments_data`.")
@@ -270,6 +273,7 @@ def main(options: argparse.Namespace) -> int:
             destroy_leaked_test_databases,
         )
 
+        assert settings.RABBITMQ_PASSWORD is not None
         if options.is_force or need_to_run_configure_rabbitmq([settings.RABBITMQ_PASSWORD]):
             run_as_root(["scripts/setup/configure-rabbitmq"])
             write_new_digest(
@@ -358,7 +362,7 @@ def main(options: argparse.Namespace) -> int:
     version_file = os.path.join(UUID_VAR_PATH, "provision_version")
     print(f"writing to {version_file}\n")
     with open(version_file, "w") as f:
-        f.write(PROVISION_VERSION + "\n")
+        f.write(".".join(map(str, PROVISION_VERSION)) + "\n")
 
     print()
     print(OKBLUE + "Zulip development environment setup succeeded!" + ENDC)

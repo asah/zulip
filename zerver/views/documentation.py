@@ -195,7 +195,9 @@ class MarkdownDirectoryView(ApiURLView):
                 assert endpoint_name is not None
                 assert endpoint_method is not None
                 article_title = get_openapi_summary(endpoint_name, endpoint_method)
-            elif self.path_template == "/zerver/api/%s.md" and "{generate_api_title(" in first_line:
+            elif (
+                self.path_template == "/zerver/api/%s.md" and "{generate_api_header(" in first_line
+            ):
                 api_operation = context["OPEN_GRAPH_URL"].split("/api/")[1]
                 endpoint_name, endpoint_method = get_endpoint_from_operationid(api_operation)
                 article_title = get_openapi_summary(endpoint_name, endpoint_method)
@@ -223,7 +225,9 @@ class MarkdownDirectoryView(ApiURLView):
         add_google_analytics_context(context)
         return context
 
-    def get(self, request: HttpRequest, article: str = "") -> HttpResponse:
+    def get(
+        self, request: HttpRequest, *args: object, article: str = "", **kwargs: object
+    ) -> HttpResponse:
         # Hack: It's hard to reinitialize urls.py from tests, and so
         # we want to defer the use of settings.POLICIES_DIRECTORY to
         # runtime.
@@ -232,7 +236,7 @@ class MarkdownDirectoryView(ApiURLView):
 
         documentation_article = self.get_path(article)
         http_status = documentation_article.article_http_status
-        result = super().get(self, article=article)
+        result = super().get(request, article=article)
         if http_status != 200:
             result.status_code = http_status
         return result

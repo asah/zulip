@@ -118,6 +118,7 @@ class MutedTopicsTests(ZulipTestCase):
         # trying to mute the topic.  To do this, we patch the
         # topic_is_muted function to always return False when trying
         # to mute a topic that is already muted.
+        assert stream.recipient is not None
         add_topic_mute(
             user_profile=user,
             stream_id=stream.id,
@@ -186,7 +187,7 @@ class MutedTopicsTests(ZulipTestCase):
 
         data = {"stream_id": 999999999, "topic": "Verona3", "op": "add"}
         result = self.api_patch(user, url, data)
-        self.assert_json_error(result, "Invalid stream id")
+        self.assert_json_error(result, "Invalid stream ID")
 
         data = {"topic": "Verona3", "op": "add"}
         result = self.api_patch(user, url, data)

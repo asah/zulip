@@ -20,10 +20,37 @@ format used by the Zulip server that they are interacting with.
 
 ## Changes in Zulip 6.0
 
+**Feature level 133**
+
+* [`POST /register`](/api/register-queue), `PATCH /realm`: Removed
+  stream administrators option from `wildcard_mention_policy` setting.
+* [`POST /register`](/api/register-queue), [`GET /events`](/api/get-events),
+  [`GET /users/me/subscriptions`](/api/get-subscriptions): Removed
+  `role` field from subscription objects.
+
+**Feature level 132**
+
+* [`GET /streams/{stream_id}`](/api/get-stream-by-id):
+  Added new endpoint to get a stream by ID.
+
+**Feature level 131**
+
+* [`GET /user_groups`](/api/get-user-groups),[`POST
+  /register`](/api/register-queue): Renamed `subgroups` field in
+  the user group objects to `direct_subgroup_ids`.
+* [`GET /events`](/api/get-events): Renamed `subgroup_ids` field
+  in the group object to `direct_subgroup_ids`.
+
+**Feature level 130**
+
+* `PATCH /bots/{bot_user_id}`: Added support for changing a bot's role
+  via this endpoint. Previously, this could only be done via [`PATCH
+  /users/{user_id}`](/api/update-user).
+
 **Feature level 129**
 
 * [`POST /register`](/api/register-queue),
-  [`GET/events`](/api/get-events), `PATCH /realm`: Added realm setting
+  [`GET /events`](/api/get-events), `PATCH /realm`: Added realm setting
   `want_advertise_in_communities_directory` for organizations to give
   permission to be advertised in the Zulip communities directory.
 
@@ -200,7 +227,7 @@ No changes; feature level used for Zulip 5.0 release.
 
 **Feature level 104**
 
-* [`PATCH /realm`]: Added `string_id` parameter for changing an
+* `PATCH /realm`: Added `string_id` parameter for changing an
   organization's subdomain. Currently, this is only allowed for
   changing a demo organization to a normal one.
 
@@ -208,7 +235,8 @@ No changes; feature level used for Zulip 5.0 release.
 
 * [`POST /register`](/api/register-queue): Added `create_web_public_stream_policy`
   policy for which users can create web-public streams.
-* [`PATCH /realm`]: Added support for updating `create_web_public_stream_policy`.
+* [`GET /events`](/api/get-events), `PATCH /realm`: Added support for updating
+  `create_web_public_stream_policy`.
 * [`POST /register`](/api/register-queue): Added `can_create_web_public_streams` boolean
   field to the response.
 
@@ -695,7 +723,7 @@ field with an integer field `invite_to_realm_policy`.
 
 **Feature level 39**
 
-* Added new [GET /users/{email}](/api/get-user-by-email) endpoint.
+* Added new [`GET /users/{email}`](/api/get-user-by-email) endpoint.
 
 **Feature level 38**
 
@@ -768,15 +796,15 @@ releases.
 
 **Feature level 27**
 
-* The `short_name` field is removed from `display_recipients`
-  in `POST /users`.
+* [`POST /users`](/api/create-user): Removed `short_name` field from
+  `display_recipient` array objects.
 
 **Feature level 26**
 
-* The `sender_short_name` field is no longer included in
-  `GET /messages`.
-* The `short_name` field is removed from `display_recipients`
-  in `GET /messages`.
+* [`GET /messages`](/api/get-messages): `sender_short_name` field is no
+  longer included in return values for this endpoint.
+* [`GET /messages`](/api/get-messages) : Removed `short_name` field from
+  `display_recipient` array objects.
 
 ## Changes in Zulip 3.0
 
@@ -845,8 +873,8 @@ No changes; feature level used for Zulip 3.0 release.
 
 **Feature level 16**
 
-* [`GET /users/me`]: Removed `pointer` from the response, as the
-  "pointer" concept is being removed in Zulip.
+* [`GET /users/me`](/api/get-own-user): Removed `pointer` from the response,
+  as the "pointer" concept is being removed in Zulip.
 * Changed the rendered HTML markup for mentioning a time to use the
   `<time>` HTML tag.  It is OK for clients to ignore the previous time
   mention markup, as the feature was not advertised before this change.
@@ -866,7 +894,7 @@ No changes; feature level used for Zulip 3.0 release.
 
 * [`POST /register`](/api/register-queue): Added
   `bulk_message_deletion` to supported `client_capabilities`.
-* [`GET /events`](/api/get-events): `message_deleted`
+* [`GET /events`](/api/get-events): `delete_message`
   events have new behavior.  The `sender` and `sender_id` fields were
   removed, and the `message_id` field was replaced by a `message_ids`
   list for clients with the `bulk_message_deletion` client capability.
@@ -905,7 +933,7 @@ No changes; feature level used for Zulip 3.0 release.
   subscribe/unsubscribe, declared in the `principals` parameter, can
   now be referenced by user_id, rather than Zulip display email
   address.
-* [PATCH /messages/{message_id}](/api/update-message): Added
+* [`PATCH /messages/{message_id}`](/api/update-message): Added
   `send_notification_to_old_thread` and
   `send_notification_to_new_thread` optional parameters.
 
@@ -930,9 +958,9 @@ No changes; feature level used for Zulip 3.0 release.
 * [`GET /events`](/api/get-events): `realm_user` events
   sent when a user's role changes now include `role` property, instead
   of the previous `is_guest` or `is_admin` booleans.
-* `GET /realm/emoji`: The user who uploaded a given custom emoji is
-  now indicated by an `author_id` field, replacing a previous `author`
-  object with unnecessary additional data.
+* [`GET /realm/emoji`](/api/get-custom-emoji): The user who uploaded a
+  given custom emoji is now indicated by an `author_id` field, replacing
+  a previous `author` object that had unnecessary additional data.
 
 **Feature level 6**
 
@@ -945,6 +973,7 @@ No changes; feature level used for Zulip 3.0 release.
   `avatar_version` field as well.
 
 **Feature level 5**
+
 * [`GET /events`](/api/get-events): `realm_bot` events,
   sent when changes are made to bot users, now contain an
   integer-format `owner_id` field, replacing the `owner` field (which
@@ -990,37 +1019,46 @@ No changes; feature level used for Zulip 3.0 release.
 * [`GET /users`](/api/get-users): User objects for bots now
   contain a `bot_owner_id`, replacing the previous `bot_owner` field
   (which had the email address of the bot owner).
-* [`GET /users/{user_id}`](/api/get-user): Endpoint added.
+* [`GET /users/{user_id}`](/api/get-user): New endpoint added to get
+  a single user's details by the user's ID.
 * [`GET /messages`](/api/get-messages): Add support for string-format
   values for the `anchor` parameter, deprecating and replacing the
   `use_first_unread_anchor` parameter.
-* [`GET /messages`](/api/get-messages) and [`GET
-  /events`](/api/get-events): Message objects now use
-  `topic_links` rather than `subject_links` to indicate links either
-  present in the topic or generated by linkifiers applied to the topic.
-* [`POST /users/me/subscriptions`](/api/subscribe): Replaced
-  `is_announcement_only` boolean with `stream_post_policy` enum for
-  specifying who can post to a stream.
-* [`PATCH /streams/{stream_id}`](/api/update-stream): Replaced
-  `is_announcement_only` boolean with `stream_post_policy` enum for
-  specifying who can post to a stream.
-* [`GET /streams`](/api/get-streams): Replaced
-  `is_announcement_only` boolean with `stream_post_policy` enum for
-  specifying who can post to a stream.
-* `GET /api/v1/user_uploads`: Added new endpoint for requesting a
-  temporary URL for an uploaded file that does not require
-  authentication to access (e.g. for passing from a Zulip desktop,
-  mobile, or terminal app to the user's default browser).
-* Added `EMAIL_ADDRESS_VISIBILITY_NOBODY` possible value for
+* [`GET /messages`](/api/get-messages), [`GET /events`](/api/get-events):
+  Message objects now use `topic_links` rather than `subject_links` to
+  indicate links either present in the topic or generated by linkifiers
+  applied to the topic.
+* [`GET /streams`](/api/get-streams),
+  [`POST /users/me/subscriptions`](/api/subscribe),
+  [`PATCH /streams/{stream_id}`](/api/update-stream): Stream objects now
+  have `stream_post_policy` enum for specifying who can post to the stream,
+  deprecating and replacing the `is_announcement_only` boolean.
+* [`GET /user_uploads/{realm_id_str}/{filename}`](/api/get-file-temporary-url):
+  New endpoint added for requesting a temporary URL for an uploaded
+  file that does not require authentication to access (e.g. for passing
+  from a Zulip desktop, mobile, or terminal app to the user's default
+  browser).
+* [`POST /register`](/api/register-queue), [`GET /events`](/api/get-events),
+  `PATCH /realm`: Nobody added as an option for the realm setting
   `email_address_visibility`.
-* Added `private_message_policy` realm setting.
-* `muted_topic` objects now are a 3-item tuple: (`stream_id`, `topic`,
-  `date_muted`).  Previously, they were a 2-item tuple.
-* `GitLab` authentication is now available.
-* Added `None` as a video call provider option.
+* [`POST /register`](/api/register-queue), [`GET /events`](/api/get-events),
+  `PATCH /realm`: Added realm setting `private_message_policy`.
+* [`POST /register`](/api/register-queue), [`GET /events`](/api/get-events):
+  `muted_topics` array objects now are 3-item tuples that include the
+  stream name, the topic name, and the time when the topic was muted.
+  Previously, they were 2-item tuples and did not include the time when
+  the topic was muted.
+* [`GET /server_settings`](/api/get-server-settings): Added `gitlab` boolean
+  to deprecated `authentication_methods` object.
+* [`POST /register`](/api/register-queue), [`GET /events`](/api/get-events),
+  `PATCH /realm`: None added as an option for the realm setting
+  `video_chat_provider` to disable video call UI.
 
 ## Changes in Zulip 2.1
 
+* [`GET /messages`](/api/get-messages): Added support for
+  [search/narrow options](/api/construct-narrow) that use stream/user
+  IDs to specify a message's sender, its stream, and/or its recipient(s).
 * [`GET /users`](/api/get-users): Added `include_custom_profile_fields`
   to request custom profile field data.
 * [`GET /users/me`](/api/get-own-user): Added `avatar_url` field,
@@ -1060,6 +1098,9 @@ No changes; feature level used for Zulip 3.0 release.
 
 ## Changes in Zulip 2.0
 
+* [`PATCH /users/me/subscriptions/muted_topics`](/api/mute-topic):
+  Added support for using stream IDs to specify the stream in which to
+  mute/unmute a topic.
 * [`POST /messages`](/api/send-message): Added support for using user
   IDs and stream IDs for specifying the recipients of a message.
 * [`POST /messages`](/api/send-message), [`POST

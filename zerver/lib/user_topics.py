@@ -1,5 +1,5 @@
 import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, TypedDict
 
 from django.db.models.query import QuerySet
 from django.utils.timezone import now as timezone_now
@@ -49,6 +49,7 @@ def set_topic_mutes(
     for stream_name, topic_name in muted_topics:
         stream = get_stream(stream_name, user_profile.realm)
         recipient_id = stream.recipient_id
+        assert recipient_id is not None
 
         add_topic_mute(
             user_profile=user_profile,
@@ -120,16 +121,19 @@ def exclude_topic_mutes(
         # by not considering topic mutes outside the stream.
         query = query.filter(stream_id=stream_id)
 
-    query = query.values(
+    rows = query.values(
         "recipient_id",
         "topic_name",
     )
-    rows = list(query)
 
     if not rows:
         return conditions
 
-    def mute_cond(row: Dict[str, Any]) -> ClauseElement:
+    class RecipientTopicDict(TypedDict):
+        recipient_id: int
+        topic_name: str
+
+    def mute_cond(row: RecipientTopicDict) -> ClauseElement:
         recipient_id = row["recipient_id"]
         topic_name = row["topic_name"]
         stream_cond = column("recipient_id", Integer) == recipient_id
@@ -147,7 +151,6 @@ def build_topic_mute_checker(user_profile: UserProfile) -> Callable[[int, str], 
         "recipient_id",
         "topic_name",
     )
-    rows = list(rows)
 
     tups = set()
     for row in rows:

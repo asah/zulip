@@ -1,7 +1,7 @@
 import calendar
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from django.conf import settings
 from django.http import HttpRequest
@@ -125,7 +125,7 @@ def build_page_params_for_home_page_load(
     first_in_realm: bool,
     prompt_for_invites: bool,
     needs_tutorial: bool,
-) -> Tuple[int, Dict[str, Any]]:
+) -> Tuple[int, Dict[str, object]]:
     """
     This function computes page_params for when we load the home page.
 
@@ -144,6 +144,7 @@ def build_page_params_for_home_page_load(
         assert client is not None
         register_ret = do_events_register(
             user_profile,
+            realm,
             client,
             apply_markdown=True,
             client_gravatar=True,
@@ -152,42 +153,33 @@ def build_page_params_for_home_page_load(
             narrow=narrow,
             include_streams=False,
         )
+        default_language = register_ret["user_settings"]["default_language"]
     else:
-        # Since events for spectator is not implemented, we only fetch the data
-        # at the time of request and don't register for any events.
-        # TODO: Implement events for spectator.
-        from zerver.lib.events import fetch_initial_state_data, post_process_state
+        # The spectator client will be fetching the /register response
+        # for spectators via the API. But we still need to set the
+        # values not presence in that object.
+        register_ret = {
+            "queue_id": None,
+        }
+        default_language = realm.default_language
 
-        register_ret = fetch_initial_state_data(
-            user_profile,
-            realm=realm,
-            event_types=None,
-            queue_id=None,
-            client_gravatar=False,
-            user_avatar_url_field_optional=client_capabilities["user_avatar_url_field_optional"],
-            user_settings_object=client_capabilities["user_settings_object"],
-            slim_presence=False,
-            include_subscribers=False,
-            include_streams=False,
+    if user_profile is None:
+        request_language = request.COOKIES.get(settings.LANGUAGE_COOKIE_NAME, default_language)
+    else:
+        request_language = get_and_set_request_language(
+            request,
+            default_language,
+            translation.get_language_from_path(request.path_info),
         )
 
-        post_process_state(user_profile, register_ret, False)
-
     furthest_read_time = get_furthest_read_time(user_profile)
-
-    request_language = get_and_set_request_language(
-        request,
-        register_ret["user_settings"]["default_language"],
-        translation.get_language_from_path(request.path_info),
-    )
-
     two_fa_enabled = settings.TWO_FACTOR_AUTHENTICATION_ENABLED and user_profile is not None
     billing_info = get_billing_info(user_profile)
     user_permission_info = get_user_permission_info(user_profile)
 
     # Pass parameters to the client-side JavaScript code.
     # These end up in a JavaScript Object named 'page_params'.
-    page_params = dict(
+    page_params: Dict[str, object] = dict(
         ## Server settings.
         test_suite=settings.TEST_SUITE,
         insecure_desktop_app=insecure_desktop_app,
@@ -243,6 +235,7 @@ def build_page_params_for_home_page_load(
     if user_profile is None:
         # Get rendered version of realm description which is displayed in right
         # sidebar for spectator.
-        page_params["realm_description"] = get_realm_rendered_description(realm)
+        page_params["realm_rendered_description"] = get_realm_rendered_description(realm)
+        page_params["language_cookie_name"] = settings.LANGUAGE_COOKIE_NAME
 
     return register_ret["queue_id"], page_params

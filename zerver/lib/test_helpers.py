@@ -3,7 +3,6 @@ import os
 import re
 import sys
 import time
-import weakref
 from contextlib import contextmanager
 from functools import wraps
 from typing import (
@@ -24,7 +23,7 @@ from typing import (
 )
 from unittest import mock
 
-import boto3
+import boto3.session
 import fakeldap
 import ldap
 import orjson
@@ -33,6 +32,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.db.migrations.state import StateApps
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.http.request import QueryDict
+from django.http.response import HttpResponseBase
 from django.test import override_settings
 from django.urls import URLResolver
 from moto import mock_s3
@@ -45,7 +45,6 @@ from zerver.lib.avatar import avatar_url
 from zerver.lib.cache import get_cache_backend
 from zerver.lib.db import Params, ParamsT, Query, TimeTrackingCursor
 from zerver.lib.integrations import WEBHOOK_INTEGRATIONS
-from zerver.lib.notes import BaseNotes
 from zerver.lib.request import RequestNotes
 from zerver.lib.upload import LocalUploadBackend, S3UploadBackend
 from zerver.models import (
@@ -64,8 +63,10 @@ from zilencer.models import RemoteZulipServer
 from zproject.backends import ExternalAuthDataDict, ExternalAuthResult
 
 if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
+
     # Avoid an import cycle; we only need these for type annotations.
-    from zerver.lib.test_classes import ClientArg, MigrationsTestCase, ZulipTestCase
+    from zerver.lib.test_classes import MigrationsTestCase, ZulipTestCase
 
 
 class MockLDAP(fakeldap.MockLDAP):
@@ -217,6 +218,7 @@ def avatar_disk_path(
 ) -> str:
     avatar_url_path = avatar_url(user_profile, medium)
     assert avatar_url_path is not None
+    assert settings.LOCAL_UPLOADS_DIR is not None
     avatar_disk_path = os.path.join(
         settings.LOCAL_UPLOADS_DIR,
         "avatars",
@@ -267,6 +269,7 @@ def most_recent_message(user_profile: UserProfile) -> Message:
 def get_subscription(stream_name: str, user_profile: UserProfile) -> Subscription:
     stream = get_stream(stream_name, user_profile.realm)
     recipient_id = stream.recipient_id
+    assert recipient_id is not None
     return Subscription.objects.get(
         user_profile=user_profile, recipient_id=recipient_id, active=True
     )
@@ -283,7 +286,10 @@ def get_user_messages(user_profile: UserProfile) -> List[Message]:
 
 class DummyHandler(AsyncDjangoHandler):
     def __init__(self) -> None:
-        allocate_handler_id(self)
+        self.handler_id = allocate_handler_id(self)
+
+
+dummy_handler = DummyHandler()
 
 
 class HostRequestMock(HttpRequest):
@@ -293,11 +299,12 @@ class HostRequestMock(HttpRequest):
     def __init__(
         self,
         post_data: Dict[str, Any] = {},
-        user_profile: Optional[Union[UserProfile, AnonymousUser, RemoteZulipServer]] = None,
+        user_profile: Union[UserProfile, None] = None,
+        remote_server: Optional[RemoteZulipServer] = None,
         host: str = settings.EXTERNAL_HOST,
         client_name: Optional[str] = None,
         meta_data: Optional[Dict[str, Any]] = None,
-        tornado_handler: Optional[AsyncDjangoHandler] = DummyHandler(),
+        tornado_handler: Optional[AsyncDjangoHandler] = None,
         path: str = "",
     ) -> None:
         self.host = host
@@ -318,18 +325,18 @@ class HostRequestMock(HttpRequest):
         else:
             self.META = meta_data
         self.path = path
-        self.user = user_profile
+        self.user = user_profile or AnonymousUser()
         self._body = b""
         self.content_type = ""
-        BaseNotes[str, str].get_notes
 
         RequestNotes.set_notes(
             self,
             RequestNotes(
                 client_name="",
                 log_data={},
-                tornado_handler=None if tornado_handler is None else weakref.ref(tornado_handler),
+                tornado_handler_id=None if tornado_handler is None else tornado_handler.handler_id,
                 client=get_client(client_name) if client_name is not None else None,
+                remote_server=remote_server,
             ),
         )
 
@@ -348,7 +355,7 @@ class HostRequestMock(HttpRequest):
 INSTRUMENTING = os.environ.get("TEST_INSTRUMENT_URL_COVERAGE", "") == "TRUE"
 INSTRUMENTED_CALLS: List[Dict[str, Any]] = []
 
-UrlFuncT = TypeVar("UrlFuncT", bound=Callable[..., HttpResponse])  # TODO: make more specific
+UrlFuncT = TypeVar("UrlFuncT", bound=Callable[..., HttpResponseBase])  # TODO: make more specific
 
 
 def append_instrumentation_data(data: Dict[str, Any]) -> None:
@@ -356,13 +363,14 @@ def append_instrumentation_data(data: Dict[str, Any]) -> None:
 
 
 def instrument_url(f: UrlFuncT) -> UrlFuncT:
+    # TODO: Type this with ParamSpec to preserve the function signature.
     if not INSTRUMENTING:  # nocoverage -- option is always enabled; should we remove?
         return f
     else:
 
         def wrapper(
-            self: "ZulipTestCase", url: str, info: object = {}, **kwargs: "ClientArg"
-        ) -> HttpResponse:
+            self: "ZulipTestCase", url: str, info: object = {}, **kwargs: Union[bool, str]
+        ) -> HttpResponseBase:
             start = time.time()
             result = f(self, url, info, **kwargs)
             delay = time.time() - start
@@ -531,7 +539,7 @@ def write_instrumentation_reports(full_suite: bool, include_webhooks: bool) -> N
             sys.exit(1)
 
 
-def load_subdomain_token(response: HttpResponse) -> ExternalAuthDataDict:
+def load_subdomain_token(response: Union["TestHttpResponse", HttpResponse]) -> ExternalAuthDataDict:
     assert isinstance(response, HttpResponseRedirect)
     token = response.url.rsplit("/", 1)[1]
     data = ExternalAuthResult(login_token=token, delete_stored_data=False).data_dict
@@ -556,16 +564,19 @@ def use_s3_backend(method: FuncT) -> FuncT:
 
 
 def create_s3_buckets(*bucket_names: str) -> List[Bucket]:
-    session = boto3.Session(settings.S3_KEY, settings.S3_SECRET_KEY)
+    session = boto3.session.Session(settings.S3_KEY, settings.S3_SECRET_KEY)
     s3 = session.resource("s3")
     buckets = [s3.create_bucket(Bucket=name) for name in bucket_names]
     return buckets
 
 
+TestCaseT = TypeVar("TestCaseT", bound="MigrationsTestCase")
+
+
 def use_db_models(
-    method: Callable[["MigrationsTestCase", StateApps], None]
-) -> Callable[["MigrationsTestCase", StateApps], None]:  # nocoverage
-    def method_patched_with_mock(self: "MigrationsTestCase", apps: StateApps) -> None:
+    method: Callable[[TestCaseT, StateApps], None]
+) -> Callable[[TestCaseT, StateApps], None]:  # nocoverage
+    def method_patched_with_mock(self: TestCaseT, apps: StateApps) -> None:
         ArchivedAttachment = apps.get_model("zerver", "ArchivedAttachment")
         ArchivedMessage = apps.get_model("zerver", "ArchivedMessage")
         ArchivedUserMessage = apps.get_model("zerver", "ArchivedUserMessage")

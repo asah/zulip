@@ -1,8 +1,10 @@
-from typing import Any, Dict, Optional, Sequence
+from email.headerregistry import Address
+from typing import Any, Dict, Literal, Optional
 
 import orjson
 from django.conf import settings
 from django.db import transaction
+from django.db.models.query import QuerySet
 from django.utils.timezone import now as timezone_now
 
 from confirmation.models import Confirmation, create_confirmation_link, generate_key
@@ -20,6 +22,7 @@ from zerver.models import (
     Attachment,
     Realm,
     RealmAuditLog,
+    RealmReactivationStatus,
     RealmUserDefault,
     ScheduledEmail,
     Stream,
@@ -32,7 +35,7 @@ if settings.BILLING_ENABLED:
     from corporate.lib.stripe import downgrade_now_without_creating_additional_invoices
 
 
-def active_humans_in_realm(realm: Realm) -> Sequence[UserProfile]:
+def active_humans_in_realm(realm: Realm) -> QuerySet[UserProfile]:
     return UserProfile.objects.filter(realm=realm, is_active=True, is_bot=False)
 
 
@@ -186,13 +189,29 @@ def do_set_realm_message_editing(
     send_event(realm, event, active_user_ids(realm.id))
 
 
-def do_set_realm_notifications_stream(
-    realm: Realm, stream: Optional[Stream], stream_id: int, *, acting_user: Optional[UserProfile]
+def do_set_realm_stream(
+    realm: Realm,
+    field: Literal["notifications_stream", "signup_notifications_stream"],
+    stream: Optional[Stream],
+    stream_id: int,
+    *,
+    acting_user: Optional[UserProfile],
 ) -> None:
-    old_value = realm.notifications_stream_id
-    realm.notifications_stream = stream
+    # We could calculate more of these variables from `field`, but
+    # it's probably more readable to not do so.
+    if field == "notifications_stream":
+        old_value = realm.notifications_stream_id
+        realm.notifications_stream = stream
+        property = "notifications_stream_id"
+    elif field == "signup_notifications_stream":
+        old_value = realm.signup_notifications_stream_id
+        realm.signup_notifications_stream = stream
+        property = "signup_notifications_stream_id"
+    else:
+        raise AssertionError("Invalid realm stream field.")
+
     with transaction.atomic():
-        realm.save(update_fields=["notifications_stream"])
+        realm.save(update_fields=[field])
 
         event_time = timezone_now()
         RealmAuditLog.objects.create(
@@ -204,7 +223,7 @@ def do_set_realm_notifications_stream(
                 {
                     RealmAuditLog.OLD_VALUE: old_value,
                     RealmAuditLog.NEW_VALUE: stream_id,
-                    "property": "notifications_stream",
+                    "property": field,
                 }
             ).decode(),
         )
@@ -212,41 +231,24 @@ def do_set_realm_notifications_stream(
     event = dict(
         type="realm",
         op="update",
-        property="notifications_stream_id",
+        property=property,
         value=stream_id,
     )
     send_event(realm, event, active_user_ids(realm.id))
+
+
+def do_set_realm_notifications_stream(
+    realm: Realm, stream: Optional[Stream], stream_id: int, *, acting_user: Optional[UserProfile]
+) -> None:
+    do_set_realm_stream(realm, "notifications_stream", stream, stream_id, acting_user=acting_user)
 
 
 def do_set_realm_signup_notifications_stream(
     realm: Realm, stream: Optional[Stream], stream_id: int, *, acting_user: Optional[UserProfile]
 ) -> None:
-    old_value = realm.signup_notifications_stream_id
-    realm.signup_notifications_stream = stream
-    with transaction.atomic():
-        realm.save(update_fields=["signup_notifications_stream"])
-
-        event_time = timezone_now()
-        RealmAuditLog.objects.create(
-            realm=realm,
-            event_type=RealmAuditLog.REALM_PROPERTY_CHANGED,
-            event_time=event_time,
-            acting_user=acting_user,
-            extra_data=orjson.dumps(
-                {
-                    RealmAuditLog.OLD_VALUE: old_value,
-                    RealmAuditLog.NEW_VALUE: stream_id,
-                    "property": "signup_notifications_stream",
-                }
-            ).decode(),
-        )
-    event = dict(
-        type="realm",
-        op="update",
-        property="signup_notifications_stream_id",
-        value=stream_id,
+    do_set_realm_stream(
+        realm, "signup_notifications_stream", stream, stream_id, acting_user=acting_user
     )
-    send_event(realm, event, active_user_ids(realm.id))
 
 
 def do_set_realm_user_default_setting(
@@ -369,7 +371,9 @@ def do_scrub_realm(realm: Realm, *, acting_user: Optional[UserProfile]) -> None:
         do_delete_messages_by_sender(user)
         do_delete_avatar_image(user, acting_user=acting_user)
         user.full_name = f"Scrubbed {generate_key()[:15]}"
-        scrubbed_email = f"scrubbed-{generate_key()[:15]}@{realm.host}"
+        scrubbed_email = Address(
+            username=f"scrubbed-{generate_key()[:15]}", domain=realm.host
+        ).addr_spec
         user.email = scrubbed_email
         user.delivery_email = scrubbed_email
         user.save(update_fields=["full_name", "email", "delivery_email"])
@@ -400,7 +404,7 @@ def do_change_realm_org_type(
         realm=realm,
         event_time=timezone_now(),
         acting_user=acting_user,
-        extra_data={"old_value": old_value, "new_value": org_type},
+        extra_data=str({"old_value": old_value, "new_value": org_type}),
     )
 
     event = dict(type="realm", op="update", property="org_type", value=org_type)
@@ -412,6 +416,11 @@ def do_change_realm_plan_type(
     realm: Realm, plan_type: int, *, acting_user: Optional[UserProfile]
 ) -> None:
     old_value = realm.plan_type
+
+    if plan_type == Realm.PLAN_TYPE_LIMITED:
+        # We do not allow public access on limited plans.
+        do_set_realm_property(realm, "enable_spectator_access", False, acting_user=acting_user)
+
     realm.plan_type = plan_type
     realm.save(update_fields=["plan_type"])
     RealmAuditLog.objects.create(
@@ -419,7 +428,7 @@ def do_change_realm_plan_type(
         realm=realm,
         event_time=timezone_now(),
         acting_user=acting_user,
-        extra_data={"old_value": old_value, "new_value": plan_type},
+        extra_data=str({"old_value": old_value, "new_value": plan_type}),
     )
 
     if plan_type == Realm.PLAN_TYPE_PLUS:
@@ -431,7 +440,7 @@ def do_change_realm_plan_type(
         realm.message_visibility_limit = None
         realm.upload_quota_gb = Realm.UPLOAD_QUOTA_STANDARD
     elif plan_type == Realm.PLAN_TYPE_SELF_HOSTED:
-        realm.max_invites = None  # type: ignore[assignment] # Apparent mypy bug with Optional[int] setter.
+        realm.max_invites = None  # type: ignore[assignment] # https://github.com/python/mypy/issues/3004
         realm.message_visibility_limit = None
         realm.upload_quota_gb = None
     elif plan_type == Realm.PLAN_TYPE_STANDARD_FREE:
@@ -447,7 +456,14 @@ def do_change_realm_plan_type(
 
     update_first_visible_message_id(realm)
 
-    realm.save(update_fields=["_max_invites", "message_visibility_limit", "upload_quota_gb"])
+    realm.save(
+        update_fields=[
+            "_max_invites",
+            "enable_spectator_access",
+            "message_visibility_limit",
+            "upload_quota_gb",
+        ]
+    )
 
     event = {
         "type": "realm",
@@ -460,7 +476,9 @@ def do_change_realm_plan_type(
 
 
 def do_send_realm_reactivation_email(realm: Realm, *, acting_user: Optional[UserProfile]) -> None:
-    url = create_confirmation_link(realm, Confirmation.REALM_REACTIVATION)
+    obj = RealmReactivationStatus.objects.create(realm=realm)
+
+    url = create_confirmation_link(obj, Confirmation.REALM_REACTIVATION)
     RealmAuditLog.objects.create(
         realm=realm,
         acting_user=acting_user,

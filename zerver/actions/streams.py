@@ -1,7 +1,18 @@
 import hashlib
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Collection, Dict, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Collection,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+)
 
 import orjson
 from django.conf import settings
@@ -46,6 +57,7 @@ from zerver.lib.streams import (
     send_stream_creation_event,
 )
 from zerver.lib.subscription_info import get_subscribers_query
+from zerver.lib.types import APISubscriptionDict
 from zerver.models import (
     ArchivedAttachment,
     Attachment,
@@ -62,6 +74,9 @@ from zerver.models import (
     get_system_bot,
 )
 from zerver.tornado.django_api import send_event
+
+if TYPE_CHECKING:
+    from django.db.models.query import _QuerySet as ValuesQuerySet
 
 
 @transaction.atomic(savepoint=False)
@@ -132,7 +147,80 @@ def do_deactivate_stream(
     )
 
 
-def get_subscriber_ids(stream: Stream, requesting_user: Optional[UserProfile] = None) -> List[str]:
+def bulk_delete_cache_keys(message_ids_to_clear: List[int]) -> None:
+    while len(message_ids_to_clear) > 0:
+        batch = message_ids_to_clear[0:5000]
+
+        keys_to_delete = [to_dict_cache_key_id(message_id) for message_id in batch]
+        cache_delete_many(keys_to_delete)
+
+        message_ids_to_clear = message_ids_to_clear[5000:]
+
+
+def merge_streams(
+    realm: Realm, stream_to_keep: Stream, stream_to_destroy: Stream
+) -> Tuple[int, int, int]:
+    recipient_to_destroy = stream_to_destroy.recipient
+    recipient_to_keep = stream_to_keep.recipient
+    assert recipient_to_keep is not None
+    assert recipient_to_destroy is not None
+    if recipient_to_destroy.id == recipient_to_keep.id:
+        return (0, 0, 0)
+
+    # The high-level approach here is to move all the messages to
+    # the surviving stream, deactivate all the subscriptions on
+    # the stream to be removed and deactivate the stream, and add
+    # new subscriptions to the stream to keep for any users who
+    # were only on the now-deactivated stream.
+    #
+    # The order of operations is carefully chosen so that calling this
+    # function again is likely to be an effective way to recover if
+    # this process is interrupted by an error.
+
+    # Move the Subscription objects.  This algorithm doesn't
+    # preserve any stream settings/colors/etc. from the stream
+    # being destroyed, but it's convenient.
+    existing_subs = Subscription.objects.filter(recipient=recipient_to_keep)
+    users_already_subscribed = {sub.user_profile_id: sub.active for sub in existing_subs}
+
+    subs_to_deactivate = Subscription.objects.filter(recipient=recipient_to_destroy, active=True)
+    users_to_activate = [
+        sub.user_profile
+        for sub in subs_to_deactivate
+        if not users_already_subscribed.get(sub.user_profile_id, False)
+    ]
+
+    if len(users_to_activate) > 0:
+        bulk_add_subscriptions(realm, [stream_to_keep], users_to_activate, acting_user=None)
+
+    # Move the messages, and delete the old copies from caches. We do
+    # this before removing the subscription objects, to avoid messages
+    # "disappearing" if an error interrupts this function.
+    message_ids_to_clear = list(
+        Message.objects.filter(recipient=recipient_to_destroy).values_list("id", flat=True)
+    )
+    count = Message.objects.filter(recipient=recipient_to_destroy).update(
+        recipient=recipient_to_keep
+    )
+    bulk_delete_cache_keys(message_ids_to_clear)
+
+    # Remove subscriptions to the old stream.
+    if len(subs_to_deactivate) > 0:
+        bulk_remove_subscriptions(
+            realm,
+            [sub.user_profile for sub in subs_to_deactivate],
+            [stream_to_destroy],
+            acting_user=None,
+        )
+
+    do_deactivate_stream(stream_to_destroy, acting_user=None)
+
+    return (len(users_to_activate), count, len(subs_to_deactivate))
+
+
+def get_subscriber_ids(
+    stream: Stream, requesting_user: Optional[UserProfile] = None
+) -> "ValuesQuerySet[Subscription, int]":
     subscriptions_query = get_subscribers_query(stream, requesting_user)
     return subscriptions_query.values_list("user_profile_id", flat=True)
 
@@ -177,19 +265,46 @@ def send_subscription_add_events(
             )
 
     for user_id, sub_infos in info_by_user.items():
-        sub_dicts = []
+        sub_dicts: List[APISubscriptionDict] = []
         for sub_info in sub_infos:
             stream = sub_info.stream
             stream_info = stream_info_dict[stream.id]
             subscription = sub_info.sub
-            sub_dict = stream.to_dict()
-            for field_name in Subscription.API_FIELDS:
-                sub_dict[field_name] = getattr(subscription, field_name)
+            stream_dict = stream.to_dict()
+            # This is verbose as we cannot unpack existing TypedDict
+            # to initialize another TypedDict while making mypy happy.
+            # https://github.com/python/mypy/issues/5382
+            sub_dict = APISubscriptionDict(
+                # Fields from Subscription.API_FIELDS
+                audible_notifications=subscription.audible_notifications,
+                color=subscription.color,
+                desktop_notifications=subscription.desktop_notifications,
+                email_notifications=subscription.email_notifications,
+                is_muted=subscription.is_muted,
+                pin_to_top=subscription.pin_to_top,
+                push_notifications=subscription.push_notifications,
+                wildcard_mentions_notify=subscription.wildcard_mentions_notify,
+                # Computed fields not present in Subscription.API_FIELDS
+                email_address=stream_info.email_address,
+                in_home_view=not subscription.is_muted,
+                stream_weekly_traffic=stream_info.stream_weekly_traffic,
+                subscribers=stream_info.subscribers,
+                # Fields from Stream.API_FIELDS
+                date_created=stream_dict["date_created"],
+                description=stream_dict["description"],
+                first_message_id=stream_dict["first_message_id"],
+                history_public_to_subscribers=stream_dict["history_public_to_subscribers"],
+                invite_only=stream_dict["invite_only"],
+                is_web_public=stream_dict["is_web_public"],
+                message_retention_days=stream_dict["message_retention_days"],
+                name=stream_dict["name"],
+                rendered_description=stream_dict["rendered_description"],
+                stream_id=stream_dict["stream_id"],
+                stream_post_policy=stream_dict["stream_post_policy"],
+                # Computed fields not present in Stream.API_FIELDS
+                is_announcement_only=stream_dict["is_announcement_only"],
+            )
 
-            sub_dict["in_home_view"] = not subscription.is_muted
-            sub_dict["email_address"] = stream_info.email_address
-            sub_dict["stream_weekly_traffic"] = stream_info.stream_weekly_traffic
-            sub_dict["subscribers"] = stream_info.subscribers
             sub_dicts.append(sub_dict)
 
         # Send a notification to the user who subscribed.
@@ -373,7 +488,10 @@ def bulk_add_subscriptions(
     recipient_id_to_stream = {stream.recipient_id: stream for stream in streams}
 
     recipient_color_map = {}
+    recipient_ids_set: Set[int] = set()
     for stream in streams:
+        assert stream.recipient_id is not None
+        recipient_ids_set.add(stream.recipient_id)
         color: Optional[str] = color_map.get(stream.name, None)
         if color is not None:
             recipient_color_map[stream.recipient_id] = color
@@ -399,7 +517,7 @@ def bulk_add_subscriptions(
         # Make a fresh set of all new recipient ids, and then we will
         # remove any for which our user already has a subscription
         # (and we'll re-activate any subscriptions as needed).
-        new_recipient_ids: Set[int] = {stream.recipient_id for stream in streams}
+        new_recipient_ids: Set[int] = recipient_ids_set.copy()
 
         for sub in my_subs:
             if sub.recipient_id in new_recipient_ids:
@@ -564,10 +682,10 @@ def bulk_remove_subscriptions(
             subs_to_deactivate.append(sub_info)
             sub_ids_to_deactivate.append(sub_info.sub.id)
 
+    streams_to_unsubscribe = [sub_info.stream for sub_info in subs_to_deactivate]
     # We do all the database changes in a transaction to ensure
     # RealmAuditLog entries are atomically created when making changes.
     with transaction.atomic():
-        occupied_streams_before = list(get_occupied_streams(realm))
         Subscription.objects.filter(
             id__in=sub_ids_to_deactivate,
         ).update(active=False)
@@ -607,7 +725,9 @@ def bulk_remove_subscriptions(
         event = {
             "type": "mark_stream_messages_as_read",
             "user_profile_id": user_profile.id,
-            "stream_recipient_ids": [stream.recipient_id for stream in streams],
+            "stream_recipient_ids": [
+                stream.recipient_id for stream in streams_by_user[user_profile.id]
+            ],
         }
         queue_json_publish("deferred_work", event)
 
@@ -617,7 +737,7 @@ def bulk_remove_subscriptions(
         altered_user_dict=altered_user_dict,
     )
 
-    new_vacant_streams = set(occupied_streams_before) - set(occupied_streams_after)
+    new_vacant_streams = set(streams_to_unsubscribe) - set(occupied_streams_after)
     new_vacant_private_streams = [stream for stream in new_vacant_streams if stream.invite_only]
 
     if new_vacant_private_streams:
@@ -755,6 +875,7 @@ def do_change_stream_permission(
         if old_invite_only_value != stream.invite_only:
             # Reset the Attachment.is_realm_public cache for all
             # messages in the stream whose permissions were changed.
+            assert stream.recipient_id is not None
             Attachment.objects.filter(messages__recipient_id=stream.recipient_id).update(
                 is_realm_public=None
             )
@@ -798,6 +919,7 @@ def do_change_stream_permission(
         if old_is_web_public_value != stream.is_web_public:
             # Reset the Attachment.is_realm_public cache for all
             # messages in the stream whose permissions were changed.
+            assert stream.recipient_id is not None
             Attachment.objects.filter(messages__recipient_id=stream.recipient_id).update(
                 is_web_public=None
             )
@@ -822,6 +944,43 @@ def do_change_stream_permission(
                 ).decode(),
             )
 
+    notify_stream_creation_ids = set()
+    if old_invite_only_value and not stream.invite_only:
+        # We need to send stream creation event to users who can access the
+        # stream now but were not able to do so previously. So, we can exclude
+        # subscribers, users who were previously subscribed to the stream and
+        # realm admins from the non-guest user list.
+        previously_subscribed_user_ids = Subscription.objects.filter(
+            recipient_id=stream.recipient_id, active=False, is_user_active=True
+        ).values_list("user_profile_id", flat=True)
+        stream_subscriber_user_ids = get_active_subscriptions_for_stream_id(
+            stream.id, include_deactivated_users=False
+        ).values_list("user_profile_id", flat=True)
+
+        old_can_access_stream_user_ids = (
+            set(stream_subscriber_user_ids)
+            | set(previously_subscribed_user_ids)
+            | {user.id for user in stream.realm.get_admin_users_and_bots()}
+        )
+        non_guest_user_ids = set(active_non_guest_user_ids(stream.realm_id))
+        notify_stream_creation_ids = non_guest_user_ids - old_can_access_stream_user_ids
+        send_stream_creation_event(stream, list(notify_stream_creation_ids))
+
+        # Add subscribers info to the stream object. We need to send peer_add
+        # events to users who were previously subscribed to the streams as
+        # they did not had subscribers data.
+        old_subscribers_access_user_ids = set(stream_subscriber_user_ids) | {
+            user.id for user in stream.realm.get_admin_users_and_bots()
+        }
+        peer_notify_user_ids = non_guest_user_ids - old_subscribers_access_user_ids
+        peer_add_event = dict(
+            type="subscription",
+            op="peer_add",
+            stream_ids=[stream.id],
+            user_ids=sorted(stream_subscriber_user_ids),
+        )
+        send_event(stream.realm, peer_add_event, peer_notify_user_ids)
+
     event = dict(
         op="update",
         type="stream",
@@ -832,7 +991,10 @@ def do_change_stream_permission(
         stream_id=stream.id,
         name=stream.name,
     )
-    send_event(stream.realm, event, can_access_stream_user_ids(stream))
+    # we do not need to send update events to the users who received creation event
+    # since they already have the updated stream info.
+    notify_stream_update_ids = can_access_stream_user_ids(stream) - notify_stream_creation_ids
+    send_event(stream.realm, event, notify_stream_update_ids)
 
     old_policy_name = get_stream_permission_policy_name(
         invite_only=old_invite_only_value,
@@ -948,7 +1110,8 @@ def do_rename_stream(stream: Stream, new_name: str, user_profile: UserProfile) -
         ).decode(),
     )
 
-    recipient_id = stream.recipient_id
+    assert stream.recipient_id is not None
+    recipient_id: int = stream.recipient_id
     messages = Message.objects.filter(recipient_id=recipient_id).only("id")
 
     # Update the display recipient and stream, which are easy single

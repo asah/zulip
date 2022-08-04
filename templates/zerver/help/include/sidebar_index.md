@@ -56,9 +56,11 @@
 
 ## Sending messages
 * [Open the compose box](/help/open-the-compose-box)
+* [Mastering the compose box](/help/mastering-the-compose-box)
 * [Resize the compose box](/help/resize-the-compose-box)
 * [Format messages using Markdown](/help/format-your-message-using-markdown)
 * [Mention a user or group](/help/mention-a-user-or-group)
+* [Typing notifications](/help/typing-notifications)
 * [Preview messages before sending](/help/preview-your-message-before-sending)
 * [Enable Enter to send](/help/enable-enter-to-send)
 * [Verify a message was sent](/help/verify-your-message-was-successfully-sent)
@@ -151,11 +153,12 @@
 * [Deactivate or reactivate a user](/help/deactivate-or-reactivate-a-user)
 * [Add custom profile fields](/help/add-custom-profile-fields)
 * [Configure default new user settings](/help/configure-default-new-user-settings)
-* [Configure organization notifications language](/help/change-the-default-language-for-your-organization)
+* [Configure organization language](/help/change-the-default-language-for-your-organization)
 * [User groups](/help/user-groups)
 * [Restrict visibility of email addresses](/help/restrict-visibility-of-email-addresses)
 * [Change a user's role](/help/change-a-users-role)
 * [Change a user's name](/help/change-a-users-name)
+* [Manage a user's stream subscriptions](/help/manage-user-stream-subscriptions)
 * [Restrict name and email changes](/help/restrict-name-and-email-changes)
 * [Restrict profile picture changes](/help/restrict-profile-picture-changes)
 * [Restrict permissions of new members](/help/restrict-permissions-of-new-members)
@@ -188,6 +191,7 @@
 * [Weekly digest emails](/help/digest-emails)
 * [Disable welcome emails](/help/disable-welcome-emails)
 * [Configure notification bot](/help/configure-notification-bot)
+* [Configure multi-language search](/help/configure-multi-language-search)
 
 ## Bots & integrations
 * [Bots and integrations](/help/bots-and-integrations)
@@ -199,4 +203,5 @@
 
 ## Support
 * [View Zulip version](/help/view-zulip-version)
+* [Zulip Cloud billing](/help/zulip-cloud-billing)
 * [Contact support](/help/contact-support)

@@ -33,6 +33,7 @@ def create_linkifier(
             realm=user_profile.realm,
             pattern=pattern,
             url_format_string=url_format_string,
+            acting_user=user_profile,
         )
         return json_success(request, data={"id": linkifier_id})
     except ValidationError as e:
@@ -44,7 +45,7 @@ def delete_linkifier(
     request: HttpRequest, user_profile: UserProfile, filter_id: int
 ) -> HttpResponse:
     try:
-        do_remove_linkifier(realm=user_profile.realm, id=filter_id)
+        do_remove_linkifier(realm=user_profile.realm, id=filter_id, acting_user=None)
     except RealmFilter.DoesNotExist:
         raise JsonableError(_("Linkifier not found."))
     return json_success(request)
@@ -65,6 +66,7 @@ def update_linkifier(
             id=filter_id,
             pattern=pattern,
             url_format_string=url_format_string,
+            acting_user=user_profile,
         )
         return json_success(request)
     except RealmFilter.DoesNotExist:

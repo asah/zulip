@@ -1,9 +1,9 @@
 from typing import Any, Dict, Optional
 
-import pytz
 from django.conf import settings
 from django.contrib.auth import authenticate, update_session_auth_hash
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import UploadedFile
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils.html import escape
@@ -41,8 +41,19 @@ from zerver.lib.response import json_success
 from zerver.lib.send_email import FromAddress, send_email
 from zerver.lib.sounds import get_available_notification_sounds
 from zerver.lib.upload import upload_avatar_image
-from zerver.lib.validator import check_bool, check_int, check_int_in, check_string_in
-from zerver.models import UserProfile, avatar_changes_disabled, name_changes_disabled
+from zerver.lib.validator import (
+    check_bool,
+    check_int,
+    check_int_in,
+    check_string_in,
+    check_timezone,
+)
+from zerver.models import (
+    EmailChangeStatus,
+    UserProfile,
+    avatar_changes_disabled,
+    name_changes_disabled,
+)
 from zerver.views.auth import redirect_to_deactivation_notice
 from zproject.backends import check_password_strength, email_belongs_to_ldap
 
@@ -51,10 +62,13 @@ AVATAR_CHANGES_DISABLED_ERROR = gettext_lazy("Avatar changes are disabled in thi
 
 def confirm_email_change(request: HttpRequest, confirmation_key: str) -> HttpResponse:
     try:
-        email_change_object = get_object_from_key(confirmation_key, [Confirmation.EMAIL_CHANGE])
+        email_change_object = get_object_from_key(
+            confirmation_key, [Confirmation.EMAIL_CHANGE], mark_object_used=True
+        )
     except ConfirmationKeyException as exception:
         return render_confirmation_key_error(request, exception)
 
+    assert isinstance(email_change_object, EmailChangeStatus)
     new_email = email_change_object.new_email
     old_email = email_change_object.old_email
     user_profile = email_change_object.user_profile
@@ -157,9 +171,7 @@ def json_change_settings(
     demote_inactive_streams: Optional[int] = REQ(
         json_validator=check_int_in(UserProfile.DEMOTE_STREAMS_CHOICES), default=None
     ),
-    timezone: Optional[str] = REQ(
-        str_validator=check_string_in(pytz.all_timezones_set), default=None
-    ),
+    timezone: Optional[str] = REQ(str_validator=check_timezone, default=None),
     email_notifications_batching_period_seconds: Optional[int] = REQ(
         json_validator=check_int, default=None
     ),
@@ -327,6 +339,8 @@ def set_avatar_backend(request: HttpRequest, user_profile: UserProfile) -> HttpR
         raise JsonableError(str(AVATAR_CHANGES_DISABLED_ERROR))
 
     user_file = list(request.FILES.values())[0]
+    assert isinstance(user_file, UploadedFile)
+    assert user_file.size is not None
     if (settings.MAX_AVATAR_FILE_SIZE_MIB * 1024 * 1024) < user_file.size:
         raise JsonableError(
             _("Uploaded file is larger than the allowed limit of {} MiB").format(

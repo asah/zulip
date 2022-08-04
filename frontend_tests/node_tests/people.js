@@ -62,9 +62,9 @@ function initialize() {
 }
 
 function test_people(label, f) {
-    run_test(label, ({override, override_rewire}) => {
+    run_test(label, (helpers) => {
         initialize();
-        f({override, override_rewire});
+        f(helpers);
     });
 }
 
@@ -127,6 +127,7 @@ const bot_botson = {
     full_name: "Bot Botson",
     is_bot: true,
     bot_owner_id: isaac.user_id,
+    role: 300,
 };
 
 const moderator = {
@@ -525,7 +526,7 @@ test_people("user_type", () => {
     assert.equal(people.get_user_type(guest.user_id), $t({defaultMessage: "Guest"}));
     assert.equal(people.get_user_type(realm_owner.user_id), $t({defaultMessage: "Owner"}));
     assert.equal(people.get_user_type(moderator.user_id), $t({defaultMessage: "Moderator"}));
-    assert.equal(people.get_user_type(bot_botson.user_id), $t({defaultMessage: "Bot"}));
+    assert.equal(people.get_user_type(bot_botson.user_id), $t({defaultMessage: "Moderator"}));
 });
 
 test_people("updates", () => {
@@ -814,7 +815,7 @@ test_people("message_methods", () => {
     assert.equal(people.sender_is_guest(message), false);
 });
 
-test_people("extract_people_from_message", ({override_rewire}) => {
+test_people("extract_people_from_message", () => {
     let message = {
         type: "stream",
         sender_full_name: maria.full_name,
@@ -823,26 +824,12 @@ test_people("extract_people_from_message", ({override_rewire}) => {
     };
     assert.ok(!people.is_known_user_id(maria.user_id));
 
-    let reported;
-    override_rewire(people, "report_late_add", (user_id, email) => {
-        assert.equal(user_id, maria.user_id);
-        assert.equal(email, maria.email);
-        reported = true;
-    });
-
+    blueslip.expect("error", `Added user late: user_id=${maria.user_id} email=${maria.email}`);
     people.extract_people_from_message(message);
     assert.ok(people.is_known_user_id(maria.user_id));
-    assert.ok(reported);
+    blueslip.reset();
 
     // Get line coverage
-    people.__Rewire__(
-        "report_late_add",
-        /* istanbul ignore next */
-        () => {
-            throw new Error("unexpected late add");
-        },
-    );
-
     message = {
         type: "private",
         display_recipient: [unknown_user],

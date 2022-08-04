@@ -1,7 +1,9 @@
+from email.headerregistry import Address
 from typing import Any, Dict, List, Optional, Union
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
+from django.core.files.uploadedfile import UploadedFile
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.utils.translation import gettext as _
@@ -39,15 +41,15 @@ from zerver.lib.exceptions import (
     CannotDeactivateLastUserError,
     JsonableError,
     MissingAuthenticationError,
+    OrganizationAdministratorRequired,
     OrganizationOwnerRequired,
-    RateLimited,
 )
 from zerver.lib.integrations import EMBEDDED_BOTS
 from zerver.lib.rate_limiter import rate_limit_spectator_attachment_access_by_file
 from zerver.lib.request import REQ, has_request_variables
-from zerver.lib.response import json_response_from_error, json_success
+from zerver.lib.response import json_success
 from zerver.lib.streams import access_stream_by_id, access_stream_by_name, subscribed_to_stream
-from zerver.lib.types import ProfileDataElementValue, Validator
+from zerver.lib.types import ProfileDataElementUpdateDict, ProfileDataElementValue, Validator
 from zerver.lib.upload import upload_avatar_image
 from zerver.lib.url_encoding import append_url_query_string
 from zerver.lib.users import (
@@ -190,13 +192,15 @@ def update_user_backend(
 
     if role is not None and target.role != role:
         # Require that the current user has permissions to
-        # grant/remove the role in question.  access_user_by_id has
-        # already verified we're an administrator; here we enforce
-        # that only owners can toggle the is_realm_owner flag.
+        # grant/remove the role in question.
+        #
+        # Logic replicated in patch_bot_backend.
         if UserProfile.ROLE_REALM_OWNER in [role, target.role] and not user_profile.is_realm_owner:
             raise OrganizationOwnerRequired()
+        elif not user_profile.is_realm_admin:
+            raise OrganizationAdministratorRequired()
 
-        if target.role == UserProfile.ROLE_REALM_OWNER and check_last_owner(user_profile):
+        if target.role == UserProfile.ROLE_REALM_OWNER and check_last_owner(target):
             raise JsonableError(
                 _("The owner permission cannot be removed from the only organization owner.")
             )
@@ -208,9 +212,10 @@ def update_user_backend(
         check_change_full_name(target, full_name, user_profile)
 
     if profile_data is not None:
-        clean_profile_data = []
+        clean_profile_data: List[ProfileDataElementUpdateDict] = []
         for entry in profile_data:
             assert isinstance(entry["id"], int)
+            assert not isinstance(entry["value"], int)
             if entry["value"] is None or not entry["value"]:
                 field_id = entry["id"]
                 check_remove_custom_profile_field_value(target, field_id)
@@ -255,13 +260,8 @@ def avatar(
             raise MissingAuthenticationError()
 
         if settings.RATE_LIMITING:
-            try:
-                unique_avatar_key = f"{realm.id}/{email_or_id}/{medium}"
-                rate_limit_spectator_attachment_access_by_file(unique_avatar_key)
-            except RateLimited:
-                return json_response_from_error(
-                    RateLimited(_("Too many attempts, please try after some time."))
-                )
+            unique_avatar_key = f"{realm.id}/{email_or_id}/{medium}"
+            rate_limit_spectator_attachment_access_by_file(unique_avatar_key)
     else:
         realm = maybe_user_profile.realm
 
@@ -302,6 +302,12 @@ def patch_bot_backend(
     user_profile: UserProfile,
     bot_id: int,
     full_name: Optional[str] = REQ(default=None),
+    role: Optional[int] = REQ(
+        default=None,
+        json_validator=check_int_in(
+            UserProfile.ROLE_TYPES,
+        ),
+    ),
     bot_owner_id: Optional[int] = REQ(json_validator=check_int, default=None),
     config_data: Optional[Dict[str, str]] = REQ(
         default=None, json_validator=check_dict(value_validator=check_string)
@@ -316,6 +322,16 @@ def patch_bot_backend(
 
     if full_name is not None:
         check_change_bot_full_name(bot, full_name, user_profile)
+
+    if role is not None and bot.role != role:
+        # Logic duplicated from update_user_backend.
+        if UserProfile.ROLE_REALM_OWNER in [role, bot.role] and not user_profile.is_realm_owner:
+            raise OrganizationOwnerRequired()
+        elif not user_profile.is_realm_admin:
+            raise OrganizationAdministratorRequired()
+
+        do_change_user_role(bot, role, acting_user=user_profile)
+
     if bot_owner_id is not None:
         try:
             owner = get_user_profile_by_id_in_realm(bot_owner_id, user_profile.realm)
@@ -359,6 +375,8 @@ def patch_bot_backend(
         pass
     elif len(request.FILES) == 1:
         user_file = list(request.FILES.values())[0]
+        assert isinstance(user_file, UploadedFile)
+        assert user_file.size is not None
         upload_avatar_image(user_file, user_profile, bot)
         avatar_source = UserProfile.AVATAR_FROM_USER
         do_change_avatar_fields(bot, avatar_source, acting_user=user_profile)
@@ -424,7 +442,7 @@ def add_bot_backend(
     short_name += "-bot"
     full_name = check_full_name(full_name_raw)
     try:
-        email = f"{short_name}@{user_profile.realm.get_bot_domain()}"
+        email = Address(username=short_name, domain=user_profile.realm.get_bot_domain()).addr_spec
     except InvalidFakeEmailDomain:
         raise JsonableError(
             _(
@@ -432,6 +450,8 @@ def add_bot_backend(
                 "Please contact your server administrator."
             )
         )
+    except ValueError:
+        raise JsonableError(_("Bad name or username"))
     form = CreateUserForm({"full_name": full_name, "email": email})
 
     if bot_type == UserProfile.EMBEDDED_BOT:
@@ -440,8 +460,10 @@ def add_bot_backend(
         if service_name not in [bot.name for bot in EMBEDDED_BOTS]:
             raise JsonableError(_("Invalid embedded bot name."))
 
-    if not form.is_valid():
-        # We validate client-side as well
+    if not form.is_valid():  # nocoverage
+        # coverage note: The similar block above covers the most
+        # common situation where this might fail, but this case may be
+        # still possible with an overly long username.
         raise JsonableError(_("Bad name or username"))
     try:
         get_user_by_delivery_email(email, user_profile.realm)
@@ -495,6 +517,8 @@ def add_bot_backend(
     )
     if len(request.FILES) == 1:
         user_file = list(request.FILES.values())[0]
+        assert isinstance(user_file, UploadedFile)
+        assert user_file.size is not None
         upload_avatar_image(user_file, user_profile, bot_profile)
 
     if bot_type in (UserProfile.OUTGOING_WEBHOOK_BOT, UserProfile.EMBEDDED_BOT):

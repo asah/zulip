@@ -1,16 +1,14 @@
 import os
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from django.contrib.staticfiles.storage import staticfiles_storage
-from django.urls import path
-from django.urls.resolvers import URLPattern
+from django.urls import URLResolver, path
 from django.utils.functional import Promise
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext as gettext_lazy
 
 from zerver.lib.storage import static_path
-from zerver.lib.types import Validator
 
 """This module declares all of the (documented) integrations available
 in the Zulip server.  The Integration class is used as part of
@@ -30,6 +28,8 @@ To add a new integration category, add to the CATEGORIES dict.
 Over time, we expect this registry to grow additional convenience
 features for writing and configuring integrations efficiently.
 """
+
+OptionValidator = Callable[[str, str], Optional[str]]
 
 CATEGORIES: Dict[str, Promise] = {
     "meta-integration": gettext_lazy("Integration frameworks"),
@@ -66,7 +66,7 @@ class Integration:
         doc: Optional[str] = None,
         stream_name: Optional[str] = None,
         legacy: bool = False,
-        config_options: Sequence[Tuple[str, str, Validator[object]]] = [],
+        config_options: Sequence[Tuple[str, str, OptionValidator]] = [],
     ) -> None:
         self.name = name
         self.client_name = client_name
@@ -91,6 +91,7 @@ class Integration:
         self.categories = list(map((lambda c: CATEGORIES[c]), categories))
 
         self.logo_path = logo if logo is not None else self.get_logo_path()
+        # TODO: Enforce that all integrations have logo_url with an assertion.
         self.logo_url = self.get_logo_url()
 
         if display_name is None:
@@ -188,7 +189,7 @@ class WebhookIntegration(Integration):
         doc: Optional[str] = None,
         stream_name: Optional[str] = None,
         legacy: bool = False,
-        config_options: Sequence[Tuple[str, str, Validator[object]]] = [],
+        config_options: Sequence[Tuple[str, str, OptionValidator]] = [],
     ) -> None:
         if client_name is None:
             client_name = self.DEFAULT_CLIENT_NAME.format(name=name.title())
@@ -222,7 +223,8 @@ class WebhookIntegration(Integration):
         self.doc = doc
 
     @property
-    def url_object(self) -> URLPattern:
+    def url_object(self) -> URLResolver:
+        assert self.function is not None
         return path(self.url, self.function)
 
 
@@ -432,6 +434,7 @@ WEBHOOK_INTEGRATIONS: List[WebhookIntegration] = [
     WebhookIntegration("radarr", ["entertainment"], display_name="Radarr"),
     WebhookIntegration("raygun", ["monitoring"], display_name="Raygun"),
     WebhookIntegration("reviewboard", ["version-control"], display_name="Review Board"),
+    WebhookIntegration("rhodecode", ["version-control"], display_name="RhodeCode"),
     WebhookIntegration("semaphore", ["continuous-integration", "deployment"]),
     WebhookIntegration("sentry", ["monitoring"]),
     WebhookIntegration(
@@ -772,6 +775,7 @@ DOC_SCREENSHOT_CONFIG: Dict[str, List[BaseScreenshotConfig]] = {
     "radarr": [ScreenshotConfig("radarr_movie_grabbed.json")],
     "raygun": [ScreenshotConfig("new_error.json")],
     "reviewboard": [ScreenshotConfig("review_request_published.json")],
+    "rhodecode": [ScreenshotConfig("push.json")],
     "semaphore": [ScreenshotConfig("pull_request.json")],
     "sentry": [
         ScreenshotConfig("event_for_exception_python.json"),

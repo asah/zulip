@@ -31,6 +31,21 @@ to a stream][configure-invites].
       To add users in bulk, you can copy members from an
       existing stream or [user group](/help/user-groups).
 
+### Mentioning a user in the compose box (alternate method)
+
+When you [mention a user](/help/mention-a-user-or-group) while composing
+a message, an alert banner appears above the compose box if they are not
+subscribed to the stream.
+
+Click the **Subscribe them** button on the banner to add the user to the
+stream. You will not see the button if you don't have permission to
+subscribe the user.
+
+!!! tip ""
+
+      You do not have to send the message you are composing for
+      the user to be subscribed this way.
+
 ## Remove users from a stream
 
 {!admin-only.md!}
@@ -62,12 +77,7 @@ This method is useful if you need to remove one user from multiple streams.
 
 {start_tabs}
 
-1. Hover over a user's name in the right sidebar.
-
-1. Click on the ellipsis (<i class="zulip-icon zulip-icon-ellipsis-v-solid"></i>) to
-   the right of their name.
-
-1. Click **View full profile**.
+{!right-sidebar-view-full-profile.md!}
 
 1. Select the **Streams** tab.
 
@@ -77,3 +87,13 @@ This method is useful if you need to remove one user from multiple streams.
 1. Click the **Unsubscribe** button in that row.
 
 {end_tabs}
+
+## Related articles
+
+* [Browse and subscribe to streams](/help/browse-and-subscribe-to-streams)
+* [Unsubscribe from a stream](/help/unsubscribe-from-a-stream)
+* [Manage a user's stream subscriptions](/help/manage-user-stream-subscriptions)
+* [Restrict stream invitation](/help/configure-who-can-invite-to-streams)
+* [Set default streams for new users](/help/set-default-streams-for-new-users)
+* [Roles and permissions](/help/roles-and-permissions)
+* [Mention a user or group](/help/mention-a-user-or-group)

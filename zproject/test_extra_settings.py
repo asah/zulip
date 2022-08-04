@@ -4,8 +4,8 @@ from typing import Dict, List, Optional, Tuple
 import ldap
 from django_auth_ldap.config import LDAPSearch
 
-from zerver.lib.db import TimeTrackingConnection
-from zerver.lib.types import SAMLIdPConfigDict
+from zerver.lib.db import TimeTrackingConnection, TimeTrackingCursor
+from zerver.lib.types import OIDCIdPConfigDict, SAMLIdPConfigDict, SCIMConfigDict
 
 from .config import DEPLOY_ROOT, get_from_file_if_exists
 from .settings import (
@@ -37,7 +37,10 @@ DATABASES["default"] = {
     "SCHEMA": "zulip",
     "ENGINE": "django.db.backends.postgresql",
     "TEST_NAME": "django_zulip_tests",
-    "OPTIONS": {"connection_factory": TimeTrackingConnection},
+    "OPTIONS": {
+        "connection_factory": TimeTrackingConnection,
+        "cursor_factory": TimeTrackingCursor,
+    },
 }
 
 
@@ -191,7 +194,7 @@ APPLE_ID_TOKEN_GENERATION_KEY = get_from_file_if_exists(
     "zerver/tests/fixtures/apple/token_gen_private_key"
 )
 
-SOCIAL_AUTH_OIDC_ENABLED_IDPS = {
+SOCIAL_AUTH_OIDC_ENABLED_IDPS: Dict[str, OIDCIdPConfigDict] = {
     "testoidc": {
         "display_name": "Test OIDC",
         "oidc_url": "https://example.com/api/openid",
@@ -269,7 +272,7 @@ RATE_LIMITING_RULES: Dict[str, List[Tuple[int, int]]] = {
 
 FREE_TRIAL_DAYS: Optional[int] = None
 
-SCIM_CONFIG = {
+SCIM_CONFIG: Dict[str, SCIMConfigDict] = {
     "zulip": {
         "bearer_token": "token1234",
         "scim_client_name": "test-scim-client",

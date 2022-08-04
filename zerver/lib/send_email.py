@@ -7,7 +7,7 @@ from email.headerregistry import Address
 from email.parser import Parser
 from email.policy import default
 from email.utils import formataddr, parseaddr
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import backoff
 import orjson
@@ -101,7 +101,11 @@ def build_email(
                 stringified = str(Address(addr_spec=to_user.delivery_email))
             to_emails.append(stringified)
 
-    extra_headers = {}
+    # Attempt to suppress all auto-replies.  This header originally
+    # came out of Microsoft Outlook and friends, but seems reasonably
+    # commonly-recognized.
+    extra_headers = {"X-Auto-Response-Suppress": "All"}
+
     if realm is not None:
         # formaddr is meant for formatting (display_name, email_address) pair for headers like "To",
         # but we can use its utility for formatting the List-Id header, as it follows the same format,
@@ -262,7 +266,7 @@ def send_email(
     if request is not None:
         cause = f" (triggered from {request.META['REMOTE_ADDR']})"
 
-    logging_recipient = mail.to
+    logging_recipient: Union[str, List[str]] = mail.to
     if realm is not None:
         logging_recipient = f"{mail.to} in {realm.string_id}"
 
@@ -493,7 +497,7 @@ def get_header(option: Optional[str], header: Optional[str], name: str) -> str:
 
 
 def send_custom_email(
-    users: List[UserProfile], *, target_emails: Sequence[str] = [], options: Dict[str, Any]
+    users: Iterable[UserProfile], *, target_emails: Sequence[str] = [], options: Dict[str, Any]
 ) -> None:
     """
     Helper for `manage.py send_custom_email`.

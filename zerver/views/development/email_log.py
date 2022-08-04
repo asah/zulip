@@ -1,6 +1,7 @@
 import os
 import subprocess
 import urllib
+from typing import Optional
 
 import orjson
 from django.conf import settings
@@ -13,16 +14,22 @@ from zerver.actions.realm_settings import do_send_realm_reactivation_email
 from zerver.actions.user_settings import do_change_user_delivery_email
 from zerver.actions.users import change_user_is_active
 from zerver.lib.email_notifications import enqueue_welcome_emails
+from zerver.lib.request import REQ, has_request_variables
 from zerver.lib.response import json_success
 from zerver.models import Realm, get_realm, get_realm_stream, get_user_by_delivery_email
+from zerver.views.invite import INVITATION_LINK_VALIDITY_MINUTES
 from zproject.email_backends import get_forward_address, set_forward_address
 
 ZULIP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../")
 
 
-def email_page(request: HttpRequest) -> HttpResponse:
+@has_request_variables
+def email_page(
+    request: HttpRequest, forward_address: Optional[str] = REQ(default=None)
+) -> HttpResponse:
     if request.method == "POST":
-        set_forward_address(request.POST["forward_address"])
+        assert forward_address is not None
+        set_forward_address(forward_address)
         return json_success(request)
     try:
         with open(settings.EMAIL_CONTENT_LOG_PATH, "r+") as f:
@@ -65,19 +72,22 @@ def generate_all_emails(request: HttpRequest) -> HttpResponse:
     registered_email = "hamlet@zulip.com"
     unregistered_email_1 = "new-person@zulip.com"
     unregistered_email_2 = "new-person-2@zulip.com"
-    invite_expires_in_minutes = settings.INVITATION_LINK_VALIDITY_MINUTES
+    invite_expires_in_minutes = INVITATION_LINK_VALIDITY_MINUTES
     realm = get_realm("zulip")
     other_realm = Realm.objects.exclude(string_id="zulip").first()
     user = get_user_by_delivery_email(registered_email, realm)
-    host_kwargs = {"HTTP_HOST": realm.host}
 
     # Password reset emails
     # active account in realm
-    result = client.post("/accounts/password/reset/", {"email": registered_email}, **host_kwargs)
+    result = client.post(
+        "/accounts/password/reset/", {"email": registered_email}, HTTP_HOST=realm.host
+    )
     assert result.status_code == 302
     # deactivated user
     change_user_is_active(user, False)
-    result = client.post("/accounts/password/reset/", {"email": registered_email}, **host_kwargs)
+    result = client.post(
+        "/accounts/password/reset/", {"email": registered_email}, HTTP_HOST=realm.host
+    )
     assert result.status_code == 302
     change_user_is_active(user, True)
     # account on different realm
@@ -88,16 +98,16 @@ def generate_all_emails(request: HttpRequest) -> HttpResponse:
     assert result.status_code == 302
     # no account anywhere
     result = client.post(
-        "/accounts/password/reset/", {"email": unregistered_email_1}, **host_kwargs
+        "/accounts/password/reset/", {"email": unregistered_email_1}, HTTP_HOST=realm.host
     )
     assert result.status_code == 302
 
     # Confirm account email
-    result = client.post("/accounts/home/", {"email": unregistered_email_1}, **host_kwargs)
+    result = client.post("/accounts/home/", {"email": unregistered_email_1}, HTTP_HOST=realm.host)
     assert result.status_code == 302
 
     # Find account email
-    result = client.post("/accounts/find/", {"emails": registered_email}, **host_kwargs)
+    result = client.post("/accounts/find/", {"emails": registered_email}, HTTP_HOST=realm.host)
     assert result.status_code == 302
 
     # New login email
@@ -113,13 +123,16 @@ def generate_all_emails(request: HttpRequest) -> HttpResponse:
             "invite_expires_in_minutes": invite_expires_in_minutes,
             "stream_ids": orjson.dumps([stream.id]).decode(),
         },
-        **host_kwargs,
+        HTTP_HOST=realm.host,
     )
     assert result.status_code == 200
 
     # Verification for new email
     result = client.patch(
-        "/json/settings", urllib.parse.urlencode({"email": "hamlets-new@zulip.com"}), **host_kwargs
+        "/json/settings",
+        urllib.parse.urlencode({"email": "hamlets-new@zulip.com"}),
+        content_type="application/x-www-form-urlencoded",
+        HTTP_HOST=realm.host,
     )
     assert result.status_code == 200
 

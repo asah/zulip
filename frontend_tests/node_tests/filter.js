@@ -2,8 +2,11 @@
 
 const {strict: assert} = require("assert");
 
-const {mock_esm, with_field, zrequire} = require("../zjsunit/namespace");
+const {parseOneAddress} = require("email-addresses");
+
+const {mock_esm, with_overrides, zrequire} = require("../zjsunit/namespace");
 const {run_test} = require("../zjsunit/test");
+const blueslip = require("../zjsunit/zblueslip");
 const $ = require("../zjsunit/zjquery");
 const {page_params} = require("../zjsunit/zpage_params");
 
@@ -61,9 +64,9 @@ function make_sub(name, stream_id) {
 }
 
 function test(label, f) {
-    run_test(label, ({override, override_rewire}) => {
+    run_test(label, (helpers) => {
         stream_data.clear_subscriptions();
-        f({override, override_rewire});
+        f(helpers);
     });
 }
 
@@ -533,7 +536,7 @@ test("new_style_operators", () => {
     assert.ok(filter.can_bucket_by("stream"));
 });
 
-test("public_operators", () => {
+test("public_operators", ({override}) => {
     stream_data.clear_subscriptions();
     let operators = [
         {operator: "stream", operand: "some_stream"},
@@ -542,16 +545,14 @@ test("public_operators", () => {
     ];
 
     let filter = new Filter(operators);
-    with_field(page_params, "narrow_stream", undefined, () => {
-        assert_same_operators(filter.public_operators(), operators);
-    });
+    override(page_params, "narrow_stream", undefined);
+    assert_same_operators(filter.public_operators(), operators);
     assert.ok(filter.can_bucket_by("stream"));
 
     operators = [{operator: "stream", operand: "default"}];
     filter = new Filter(operators);
-    with_field(page_params, "narrow_stream", "default", () => {
-        assert_same_operators(filter.public_operators(), []);
-    });
+    override(page_params, "narrow_stream", "default");
+    assert_same_operators(filter.public_operators(), []);
 });
 
 test("redundancies", () => {
@@ -695,7 +696,8 @@ test("predicate_basics", () => {
     assert.ok(!predicate({stream_id: unknown_stream_id, stream: "unknown"}));
     assert.ok(predicate({type: "private"}));
 
-    with_field(page_params, "narrow_stream", "kiosk", () => {
+    with_overrides(({override}) => {
+        override(page_params, "narrow_stream", "kiosk");
         assert.ok(predicate({stream: "kiosk"}));
     });
 
@@ -906,10 +908,9 @@ function test_mit_exceptions() {
     assert.ok(!predicate({type: "stream", stream: "foo", topic: "bar"}));
 }
 
-test("mit_exceptions", () => {
-    with_field(page_params, "realm_is_zephyr_mirror_realm", true, () => {
-        test_mit_exceptions();
-    });
+test("mit_exceptions", ({override}) => {
+    override(page_params, "realm_is_zephyr_mirror_realm", true);
+    test_mit_exceptions();
 });
 
 test("predicate_edge_cases", () => {
@@ -1576,7 +1577,7 @@ test("navbar_helpers", () => {
             icon: "envelope",
             title: properly_separated_names([joe.full_name]),
             redirect_url_with_search:
-                "/#narrow/pm-with/" + joe.user_id + "-" + joe.email.split("@")[0],
+                "/#narrow/pm-with/" + joe.user_id + "-" + parseOneAddress(joe.email).local,
         },
         {
             operator: group_pm,
@@ -1611,13 +1612,13 @@ test("navbar_helpers", () => {
         {
             operator: sender_me,
             redirect_url_with_search:
-                "/#narrow/sender/" + me.user_id + "-" + me.email.split("@")[0],
+                "/#narrow/sender/" + me.user_id + "-" + parseOneAddress(me.email).local,
             is_common_narrow: false,
         },
         {
             operator: sender_joe,
             redirect_url_with_search:
-                "/#narrow/sender/" + joe.user_id + "-" + joe.email.split("@")[0],
+                "/#narrow/sender/" + joe.user_id + "-" + parseOneAddress(joe.email).local,
             is_common_narrow: false,
         },
     ];
@@ -1668,13 +1669,13 @@ test("navbar_helpers", () => {
     assert.equal(filter.generate_redirect_url(), default_redirect.redirect_url);
 });
 
-test("error_cases", ({override_rewire}) => {
+test("error_cases", () => {
     // This test just gives us 100% line coverage on defensive code that
     // should not be reached unless we break other code.
-    override_rewire(people, "pm_with_user_ids", () => {});
 
     const predicate = get_predicate([["pm-with", "Joe@example.com"]]);
-    assert.ok(!predicate({type: "private"}));
+    blueslip.expect("error", "Empty recipient list in message");
+    assert.ok(!predicate({type: "private", display_recipient: []}));
 });
 
 run_test("is_spectator_compatible", () => {

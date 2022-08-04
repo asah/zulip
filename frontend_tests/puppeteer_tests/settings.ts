@@ -162,15 +162,15 @@ async function test_edit_bot_form(page: Page): Promise<void> {
     const bot1_edit_btn = `.open_edit_bot_form[data-email="${CSS.escape(bot1_email)}"]`;
     await page.click(bot1_edit_btn);
 
-    const edit_form_selector = `.edit_bot_form[data-email="${CSS.escape(bot1_email)}"]`;
+    const edit_form_selector = `#bot-edit-form[data-email="${CSS.escape(bot1_email)}"]`;
     await page.waitForSelector(edit_form_selector, {visible: true});
-    const name_field_selector = edit_form_selector + " [name=bot_name]";
+    const name_field_selector = edit_form_selector + " [name=full_name]";
     assert.equal(
         await page.$eval(name_field_selector, (el) => (el as HTMLInputElement).value),
         "Bot 1",
     );
 
-    await common.fill_form(page, edit_form_selector, {bot_name: "Bot one"});
+    await common.fill_form(page, edit_form_selector, {full_name: "Bot one"});
     const save_btn_selector = "#edit_bot_modal .dialog_submit_button";
     await page.click(save_btn_selector);
 
@@ -193,30 +193,32 @@ async function test_invalid_edit_bot_form(page: Page): Promise<void> {
     const bot1_edit_btn = `.open_edit_bot_form[data-email="${CSS.escape(bot1_email)}"]`;
     await page.click(bot1_edit_btn);
 
-    const edit_form_selector = `.edit_bot_form[data-email="${CSS.escape(bot1_email)}"]`;
+    const edit_form_selector = `#bot-edit-form[data-email="${CSS.escape(bot1_email)}"]`;
     await page.waitForSelector(edit_form_selector, {visible: true});
-    const name_field_selector = edit_form_selector + " [name=bot_name]";
+    const name_field_selector = edit_form_selector + " [name=full_name]";
     assert.equal(
         await page.$eval(name_field_selector, (el) => (el as HTMLInputElement).value),
         "Bot one",
     );
 
-    await common.fill_form(page, edit_form_selector, {bot_name: "Bot 2"});
+    await common.fill_form(page, edit_form_selector, {full_name: "Bot 2"});
     const save_btn_selector = "#edit_bot_modal .dialog_submit_button";
     await page.click(save_btn_selector);
 
     // The form should not get closed on saving. Errors should be visible on the form.
     await common.wait_for_micromodal_to_open(page);
-    await page.waitForSelector(".bot_edit_errors", {visible: true});
+    await page.waitForSelector("#dialog_error", {visible: true});
     assert.strictEqual(
-        await common.get_text_from_selector(page, "div.bot_edit_errors"),
-        "Name is already in use!",
+        await common.get_text_from_selector(page, "#dialog_error"),
+        "Failed: Name is already in use!",
     );
 
     const cancel_button_selector = "#edit_bot_modal .dialog_cancel_button";
     await page.waitForFunction(
         (cancel_button_selector: string) =>
             !document.querySelector(cancel_button_selector)?.hasAttribute("disabled"),
+        {},
+        cancel_button_selector,
     );
     await page.click(cancel_button_selector);
     await page.waitForXPath(
@@ -303,8 +305,10 @@ async function test_alert_words_section(page: Page): Promise<void> {
 }
 
 async function change_language(page: Page, language_data_code: string): Promise<void> {
-    await page.waitForSelector("#user-display-settings .setting_default_language", {visible: true});
-    await page.click("#user-display-settings .setting_default_language");
+    await page.waitForSelector("#user-display-settings .language_selection_button", {
+        visible: true,
+    });
+    await page.click("#user-display-settings .language_selection_button");
     await common.wait_for_micromodal_to_open(page);
     const language_selector = `a[data-code="${CSS.escape(language_data_code)}"]`;
     await page.click(language_selector);
@@ -317,10 +321,12 @@ async function check_language_setting_status(page: Page): Promise<void> {
 }
 
 async function assert_language_changed_to_chinese(page: Page): Promise<void> {
-    await page.waitForSelector("#user-display-settings .setting_default_language", {visible: true});
+    await page.waitForSelector("#user-display-settings .language_selection_button", {
+        visible: true,
+    });
     const default_language = await common.get_text_from_selector(
         page,
-        "#user-display-settings .setting_default_language",
+        "#user-display-settings .language_selection_button",
     );
     assert.strictEqual(
         default_language,
@@ -346,7 +352,9 @@ async function test_default_language_setting(page: Page): Promise<void> {
     // Check that the saved indicator appears
     await check_language_setting_status(page);
     await page.click(".reload_link");
-    await page.waitForSelector("#user-display-settings .setting_default_language", {visible: true});
+    await page.waitForSelector("#user-display-settings .language_selection_button", {
+        visible: true,
+    });
     await assert_language_changed_to_chinese(page);
     await test_i18n_language_precedence(page);
     await page.waitForSelector(display_settings_section, {visible: true});
@@ -363,7 +371,9 @@ async function test_default_language_setting(page: Page): Promise<void> {
     await page.waitForSelector("#user-display-settings .lang-time-settings-status", {
         visible: true,
     });
-    await page.waitForSelector("#user-display-settings .setting_default_language", {visible: true});
+    await page.waitForSelector("#user-display-settings .language_selection_button", {
+        visible: true,
+    });
 }
 
 async function test_notifications_section(page: Page): Promise<void> {

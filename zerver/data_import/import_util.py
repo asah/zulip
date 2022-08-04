@@ -1,8 +1,8 @@
 import logging
-import multiprocessing
 import os
 import random
 import shutil
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
 from typing import (
     AbstractSet,
@@ -75,13 +75,13 @@ def build_zerver_realm(
 ) -> List[ZerverFieldsT]:
     realm = Realm(
         id=realm_id,
-        date_created=time,
         name=realm_subdomain,
         string_id=realm_subdomain,
         description=f"Organization imported from {other_product}!",
     )
     auth_methods = [[flag[0], flag[1]] for flag in realm.authentication_methods]
-    realm_dict = model_to_dict(realm, exclude="authentication_methods")
+    realm_dict = model_to_dict(realm, exclude=["authentication_methods"])
+    realm_dict["date_created"] = time
     realm_dict["authentication_methods"] = auth_methods
     return [realm_dict]
 
@@ -98,7 +98,7 @@ def build_user_profile(
     is_mirror_dummy: bool,
     realm_id: int,
     short_name: str,
-    timezone: Optional[str],
+    timezone: str,
     is_bot: bool = False,
     bot_type: Optional[int] = None,
 ) -> ZerverFieldsT:
@@ -496,7 +496,6 @@ def build_message(
 ) -> ZerverFieldsT:
     zulip_message = Message(
         rendered_content_version=1,  # this is Zulip specific
-        date_sent=date_sent,
         id=message_id,
         content=content,
         rendered_content=rendered_content,
@@ -511,6 +510,7 @@ def build_message(
     zulip_message_dict["sender"] = user_id
     zulip_message_dict["sending_client"] = 1
     zulip_message_dict["recipient"] = recipient_id
+    zulip_message_dict["date_sent"] = date_sent
 
     return zulip_message_dict
 
@@ -625,9 +625,12 @@ def run_parallel_wrapper(
 ) -> None:
     logging.info("Distributing %s items across %s threads", len(full_items), threads)
 
-    with multiprocessing.Pool(threads) as p:
+    with ProcessPoolExecutor(max_workers=threads) as executor:
         count = 0
-        for out in p.imap_unordered(partial(wrapping_function, f), full_items):
+        for future in as_completed(
+            executor.submit(wrapping_function, f, item) for item in full_items
+        ):
+            future.result()
             count += 1
             if count % 1000 == 0:
                 logging.info("Finished %s items", count)

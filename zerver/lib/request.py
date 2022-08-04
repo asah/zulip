@@ -1,5 +1,4 @@
 import threading
-import weakref
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import wraps
@@ -22,17 +21,20 @@ from typing import (
 )
 
 import orjson
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext as _
 
 import zerver.lib.rate_limiter as rate_limiter
-import zerver.tornado.handlers as handlers
 from zerver.lib.exceptions import ErrorCode, InvalidJSONError, JsonableError
 from zerver.lib.notes import BaseNotes
 from zerver.lib.types import Validator, ViewFuncT
 from zerver.lib.validator import check_anything
 from zerver.models import Client, Realm
+
+if settings.ZILENCER_ENABLED:
+    from zilencer.models import RemoteZulipServer
 
 
 @dataclass
@@ -60,16 +62,15 @@ class RequestNotes(BaseNotes[HttpRequest, "RequestNotes"]):
     realm: Optional[Realm] = None
     has_fetched_realm: bool = False
     set_language: Optional[str] = None
-    ratelimits_applied: List["rate_limiter.RateLimitResult"] = field(default_factory=lambda: [])
+    ratelimits_applied: List[rate_limiter.RateLimitResult] = field(default_factory=lambda: [])
     query: Optional[str] = None
     error_format: Optional[str] = None
     placeholder_open_graph_description: Optional[str] = None
     saved_response: Optional[HttpResponse] = None
-    # tornado_handler is a weak reference to work around a memory leak
-    # in WeakKeyDictionary (https://bugs.python.org/issue44680).
-    tornado_handler: Optional["weakref.ReferenceType[handlers.AsyncDjangoHandler]"] = None
+    tornado_handler_id: Optional[int] = None
     processed_parameters: Set[str] = field(default_factory=set)
     ignored_parameters: Set[str] = field(default_factory=set)
+    remote_server: Optional["RemoteZulipServer"] = None
 
     @classmethod
     def init_notes(cls) -> "RequestNotes":

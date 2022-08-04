@@ -258,7 +258,7 @@ class BaseHandler(web.RequestHandler):
                 method=self.request.method,
                 headers=self._add_request_headers(["upgrade-insecure-requests"]),
                 follow_redirects=False,
-                body=getattr(self.request, "body"),
+                body=self.request.body,
                 allow_nonstandard_methods=True,
                 # use large timeouts to handle polling requests
                 connect_timeout=240.0,
@@ -277,11 +277,9 @@ class BaseHandler(web.RequestHandler):
                     self.add_header(header, v)
             if response.body:
                 self.write(response.body)
-            self.finish()
         except (ConnectionError, httpclient.HTTPError) as e:
             self.set_status(500)
             self.write("Internal server error:\n" + str(e))
-            self.finish()
 
 
 class WebPackHandler(BaseHandler):
@@ -340,7 +338,7 @@ def print_listeners() -> None:
     print()
 
 
-children = []
+children: List["subprocess.Popen[bytes]"] = []
 
 
 async def serve() -> None:

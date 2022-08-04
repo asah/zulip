@@ -184,10 +184,6 @@ p.n-margin {
     margin: 0;
 }
 
-.border-radius {
-    border-radius: 4px;
-}
-
 .history-limited-box {
     color: hsl(16, 60%, 45%);
     border: 1px solid hsl(16, 60%, 45%);
@@ -551,10 +547,6 @@ li,
     margin-left: -8px;
 }
 
-.btn-large {
-    font-size: 115%;
-}
-
 /* Classes for hiding and showing controls */
 
 .notdisplayed {
@@ -649,13 +641,6 @@ strong {
     &:hover {
         opacity: 1;
     }
-}
-
-.message-edit-tooltip-inner {
-    width: 200px;
-    position: absolute;
-    right: 7px;
-    top: -18px;
 }
 
 .narrow-filter {
@@ -886,6 +871,10 @@ td.pointer {
     /* Disable blue link styling for the message timestamp link. */
     color: hsl(0, 0%, 20%);
     transition: background-color 1.5s ease-in, color 1.5s ease-in;
+
+    a& {
+        z-index: 1;
+    }
 }
 
 /* The way this overrides the menus with a background-color and a high
@@ -1065,14 +1054,6 @@ td.pointer {
         display: block;
     }
 
-    /*
-       We can't collapse the floating recipient bar yet, so this is
-       just a temporary hack.
-    */
-    .messages-collapse {
-        display: none;
-    }
-
     .message_header_private_message {
         border-bottom: 0;
         border-left: 0;
@@ -1159,43 +1140,25 @@ td.pointer {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    padding: 8px 8px 8px 14px;
+    column-gap: 10px;
 
     #mark_as_read_turned_off_content {
         margin: 0;
+        flex-grow: 1;
     }
 
-    .mark_as_read_close {
-        margin-top: 6px;
-    }
-}
-
-.summary_row {
-    .message_header {
-        padding: 5px 0 4px 5px;
-        border-radius: 0;
+    #mark_as_read_controls {
+        display: flex;
     }
 
-    &.last_message {
-        .message_header {
-            border-bottom-right-radius: 3px;
-            box-shadow: inset 0 2px 1px -2px hsl(0, 0%, 20%),
-                inset -2px 0 1px -2px hsl(0, 0%, 20%),
-                inset 0 -2px 1px -2px hsl(0, 0%, 20%);
-        }
-
-        .summary_colorblock {
-            border-bottom-left-radius: 3px;
-        }
-    }
-}
-
-.bookend_tr + .summary_row {
-    .message_header {
-        border-top-right-radius: 3px;
-    }
-
-    .summary_colorblock {
-        border-top-left-radius: 3px;
+    #mark_as_read_close {
+        align-self: flex-start;
+        margin-top: -5px;
+        /* override bootstrap */
+        top: 0;
+        right: 0;
+        position: static;
     }
 }
 
@@ -1205,15 +1168,6 @@ td.pointer {
     text-indent: -99999px;
     float: left;
     width: 0;
-}
-
-.summary_row_private_message .summary_colorblock {
-    background-color: hsl(0, 0%, 0%);
-}
-
-.messages-expand,
-.messages-collapse {
-    cursor: pointer;
 }
 
 @keyframes rotate {
@@ -1428,6 +1382,7 @@ td.pointer {
 }
 
 .always_visible_topic_edit,
+.on_hover_topic_read,
 .on_hover_topic_unmute {
     opacity: 0.7;
 
@@ -1438,7 +1393,6 @@ td.pointer {
 }
 
 .on_hover_topic_edit,
-.on_hover_topic_read,
 .on_hover_topic_unresolve,
 .on_hover_topic_resolve,
 .on_hover_topic_mute {
@@ -1477,18 +1431,6 @@ a.dark_background:hover,
 
 .tiny {
     font-size: 60%;
-}
-
-.actions_hovered {
-    .message_time,
-    .info {
-        color: hsl(200, 100%, 40%);
-        cursor: pointer;
-    }
-
-    .actions_link {
-        text-decoration: underline;
-    }
 }
 
 .settings-forgot-password {
@@ -1641,23 +1583,15 @@ div.focused_table {
     justify-content: flex-start;
 }
 
-.select_edit_stream {
-    margin-bottom: 5px !important;
-    border-left: 0;
-    padding-left: 0;
-    border-radius: 3px;
-    margin-left: -10px;
-    text-indent: 10px;
-}
-
 #inline_topic_edit:focus,
 #message_edit_topic:focus {
     outline: none;
 }
 
 .message_edit_topic_propagate {
-    width: auto;
-    margin-bottom: 5px !important;
+    display: inline-block;
+    width: 320px;
+    margin-bottom: 15px !important;
     max-width: 100%;
 }
 
@@ -1745,14 +1679,6 @@ div.focused_table {
 
 .streamname {
     font-weight: bold;
-}
-
-.brand.skinny-user-gravatar {
-    display: table-cell;
-    padding-top: 0;
-    padding-bottom: 0;
-    margin-bottom: 0;
-    white-space: nowrap;
 }
 
 .top-navbar-border {
@@ -2020,12 +1946,15 @@ div.focused_table {
         height: $header_height;
         padding: 0;
         padding-left: 5px;
-        padding-right: 20px;
+        padding-right: 40px;
         border: none;
         border-radius: 0;
         font-family: "Source Sans 3", sans-serif;
         font-weight: 300;
         line-height: $header_height;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
     }
 
     #search_arrows:focus {
@@ -2242,6 +2171,12 @@ div.focused_table {
     }
 }
 
+#gear-menu .zulip-icon-language {
+    position: relative;
+    top: 2.5px;
+    left: -0.5px;
+}
+
 .nav .dropdown-menu a,
 .typeahead.dropdown-menu a {
     color: inherit;
@@ -2297,19 +2232,6 @@ nav {
             margin-top: 8px;
             height: 25px;
             max-width: 200px;
-        }
-
-        .company-name {
-            display: inline-block;
-            vertical-align: top;
-            text-transform: uppercase;
-            margin-top: 12px;
-            margin-left: 8px;
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: hsl(170, 48%, 54%);
-            letter-spacing: 0.1em;
-            cursor: pointer;
         }
     }
 
@@ -2386,11 +2308,6 @@ div.floating_recipient {
     border-radius: 6px;
 }
 
-.table-striped thead th {
-    background-color: hsl(0, 0%, 27%);
-    color: hsl(0, 0%, 100%);
-}
-
 #create_stream_subscribers {
     margin-top: 10px;
 
@@ -2453,10 +2370,6 @@ div.topic_edit_spinner .loading_indicator_spinner {
 .message_edit_spinner .loading_indicator_spinner {
     width: 20px;
     height: 20px;
-}
-
-.topic_move_spinner {
-    margin: 0 auto;
 }
 
 #invitee_emails {
@@ -2603,11 +2516,6 @@ div.topic_edit_spinner .loading_indicator_spinner {
     margin-bottom: 0;
 }
 
-/* Override padding-top on form labels when they label only text */
-.form-horizontal .label_for_text {
-    padding-top: 0;
-}
-
 #pw_change_controls {
     display: none;
 }
@@ -2749,18 +2657,6 @@ div.topic_edit_spinner .loading_indicator_spinner {
     z-index: 20000;
 }
 
-.tutorial-done-button {
-    text-align: right;
-    margin-top: 9px;
-    margin-bottom: 8px;
-}
-
-.btn-skip {
-    position: relative;
-    left: -10px;
-    margin-right: 25px;
-}
-
 .deactivated_user .deactivated-user-icon {
     color: inherit;
     margin-left: 2px;
@@ -2796,16 +2692,8 @@ div.topic_edit_spinner .loading_indicator_spinner {
     display: none !important;
 }
 
-.display-tooltip {
-    display: block !important;
-}
-
 .hotkey-hint {
     opacity: 0.75;
-}
-
-select.inline_select_topic_edit {
-    margin: 0;
 }
 
 .flatpickr-calendar {
@@ -3015,11 +2903,6 @@ select.inline_select_topic_edit {
         margin-right: 0;
     }
 
-    .skinny-user-gravatar {
-        position: absolute;
-        top: 0;
-    }
-
     #streamlist-toggle {
         display: block;
     }
@@ -3226,11 +3109,18 @@ select.inline_select_topic_edit {
 }
 
 #scroll-to-bottom-button-container {
-    display: none;
-    z-index: 3;
+    display: block;
     position: absolute;
     bottom: 41px;
     right: 0;
+    visibility: hidden;
+    opacity: 0;
+    transition: visibility 500ms, opacity 500ms ease-in-out;
+
+    &.show {
+        visibility: visible;
+        opacity: 1;
+    }
 
     #scroll-to-bottom-button-clickable-area {
         width: 60px;

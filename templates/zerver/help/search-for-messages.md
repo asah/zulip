@@ -1,7 +1,7 @@
 # Searching for messages
 
 Zulip has a powerful search engine under its hood. Search for messages using
-the search bar at the top of the screen.
+the search bar at the top of the app.
 
 ## Example
 
@@ -98,3 +98,7 @@ class="emoji-small"/>.
 Note that Zulip ignores common words like `a`, `the`, and about 100
 others. A quirk in Zulip's current implementation means that if all of your
 keywords are ignored, we'll return 0 search results.
+
+## Related articles
+
+* [Configure multi-language search](/help/configure-multi-language-search)

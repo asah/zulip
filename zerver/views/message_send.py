@@ -1,6 +1,7 @@
+import sys
+from email.headerregistry import Address
 from typing import Iterable, Optional, Sequence, Union, cast
 
-import pytz
 from dateutil.parser import parse as dateparser
 from django.core import validators
 from django.core.exceptions import ValidationError
@@ -32,9 +33,13 @@ from zerver.models import (
     Realm,
     RealmDomain,
     UserProfile,
-    email_to_domain,
     get_user_including_cross_realm,
 )
+
+if sys.version_info < (3, 9):  # nocoverage
+    from backports import zoneinfo
+else:  # nocoverage
+    import zoneinfo
 
 
 class InvalidMirrorInput(Exception):
@@ -76,8 +81,8 @@ def create_mirrored_message_users(
     for email in referenced_users:
         create_mirror_user_if_needed(user_profile.realm, email, fullname_function)
 
-    sender = get_user_including_cross_realm(sender_email, user_profile.realm)
-    return sender
+    sender_user_profile = get_user_including_cross_realm(sender_email, user_profile.realm)
+    return sender_user_profile
 
 
 def same_realm_zephyr_user(user_profile: UserProfile, email: str) -> bool:
@@ -92,7 +97,7 @@ def same_realm_zephyr_user(user_profile: UserProfile, email: str) -> bool:
     except ValidationError:
         return False
 
-    domain = email_to_domain(email)
+    domain = Address(addr_spec=email).domain
 
     # Assumes allow_subdomains=False for all RealmDomain's corresponding to
     # these realms.
@@ -111,7 +116,9 @@ def same_realm_irc_user(user_profile: UserProfile, email: str) -> bool:
     except ValidationError:
         return False
 
-    domain = email_to_domain(email).replace("irc.", "")
+    domain = Address(addr_spec=email).domain
+    if domain.startswith("irc."):
+        domain = domain[len("irc.") :]
 
     # Assumes allow_subdomains=False for all RealmDomain's corresponding to
     # these realms.
@@ -126,7 +133,7 @@ def same_realm_jabber_user(user_profile: UserProfile, email: str) -> bool:
 
     # If your Jabber users have a different email domain than the
     # Zulip users, this is where you would do any translation.
-    domain = email_to_domain(email)
+    domain = Address(addr_spec=email).domain
 
     # Assumes allow_subdomains=False for all RealmDomain's corresponding to
     # these realms.
@@ -159,8 +166,8 @@ def handle_deferred_message(
 
     deliver_at_usertz = deliver_at
     if deliver_at_usertz.tzinfo is None:
-        user_tz = pytz.timezone(local_tz)
-        deliver_at_usertz = user_tz.normalize(user_tz.localize(deliver_at))
+        user_tz = zoneinfo.ZoneInfo(local_tz)
+        deliver_at_usertz = deliver_at.replace(tzinfo=user_tz)
     deliver_at = convert_to_UTC(deliver_at_usertz)
 
     if deliver_at <= timezone_now():

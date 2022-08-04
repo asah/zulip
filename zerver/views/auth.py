@@ -1,6 +1,7 @@
 import logging
 import secrets
 import urllib
+from email.headerregistry import Address
 from functools import wraps
 from typing import Any, Dict, List, Mapping, Optional, cast
 from urllib.parse import urlencode
@@ -67,7 +68,7 @@ from zerver.lib.subdomains import get_subdomain, is_subdomain_root_or_alias
 from zerver.lib.types import ViewFuncT
 from zerver.lib.url_encoding import append_url_query_string
 from zerver.lib.user_agent import parse_user_agent
-from zerver.lib.users import get_api_key
+from zerver.lib.users import get_api_key, is_2fa_verified
 from zerver.lib.utils import has_api_key_format
 from zerver.lib.validator import validate_login_email
 from zerver.models import (
@@ -119,6 +120,7 @@ def create_preregistration_user(
     password_required: bool = True,
     full_name: Optional[str] = None,
     full_name_validated: bool = False,
+    multiuse_invite: Optional[MultiuseInvite] = None,
 ) -> PreregistrationUser:
     assert not (realm_creation and realm is not None)
     assert not (realm is None and not realm_creation)
@@ -130,6 +132,7 @@ def create_preregistration_user(
         realm=realm,
         full_name=full_name,
         full_name_validated=full_name_validated,
+        multiuse_invite=multiuse_invite,
     )
 
 
@@ -190,11 +193,14 @@ def maybe_send_to_registration(
     if multiuse_object_key:
         from_multiuse_invite = True
         try:
-            multiuse_obj = get_object_from_key(multiuse_object_key, [Confirmation.MULTIUSE_INVITE])
+            confirmation_obj = get_object_from_key(
+                multiuse_object_key, [Confirmation.MULTIUSE_INVITE], mark_object_used=False
+            )
         except ConfirmationKeyException as exception:
             return render_confirmation_key_error(request, exception)
 
-        assert multiuse_obj is not None
+        assert isinstance(confirmation_obj, MultiuseInvite)
+        multiuse_obj = confirmation_obj
         if realm != multiuse_obj.realm:
             return render(request, "confirmation/link_does_not_exist.html", status=404)
 
@@ -231,6 +237,7 @@ def maybe_send_to_registration(
                 password_required=password_required,
                 full_name=full_name,
                 full_name_validated=full_name_validated,
+                multiuse_invite=multiuse_obj,
             )
 
         if multiuse_obj is not None:
@@ -238,6 +245,7 @@ def maybe_send_to_registration(
             streams_to_subscribe = list(multiuse_obj.streams.all())
             prereg_user.streams.set(streams_to_subscribe)
             prereg_user.invited_as = invited_as
+            prereg_user.multiuse_invite = multiuse_obj
             prereg_user.save()
 
         confirmation_link = create_confirmation_link(prereg_user, Confirmation.USER_REGISTRATION)
@@ -431,6 +439,8 @@ def remote_user_sso(
         user_profile = None
     else:
         user_profile = authenticate(remote_user=remote_user, realm=realm)
+    if user_profile is not None:
+        assert isinstance(user_profile, UserProfile)
 
     email = remote_user_to_email(remote_user)
     data_dict = ExternalAuthDataDict(
@@ -473,7 +483,7 @@ def remote_user_jwt(request: HttpRequest) -> HttpResponse:
     if email_domain is None:
         raise JsonableError(_("No organization specified in JSON web token claims"))
 
-    email = f"{remote_user}@{email_domain}"
+    email = Address(username=remote_user, domain=email_domain).addr_spec
 
     try:
         realm = get_realm(subdomain)
@@ -486,6 +496,7 @@ def remote_user_jwt(request: HttpRequest) -> HttpResponse:
             data_dict={"email": email, "full_name": remote_user, "subdomain": realm.subdomain}
         )
     else:
+        assert isinstance(user_profile, UserProfile)
         result = ExternalAuthResult(user_profile=user_profile)
 
     return login_or_register_remote_user(request, result)
@@ -538,7 +549,7 @@ def oauth_redirect_to_root(
 def handle_desktop_flow(func: ViewFuncT) -> ViewFuncT:
     @wraps(func)
     def wrapper(request: HttpRequest, *args: object, **kwargs: object) -> HttpResponse:
-        user_agent = parse_user_agent(request.META.get("HTTP_USER_AGENT", "Missing User-Agent"))
+        user_agent = parse_user_agent(request.headers.get("User-Agent", "Missing User-Agent"))
         if user_agent["name"] == "ZulipElectron":
             return render(request, "zerver/desktop_login.html")
 
@@ -754,7 +765,7 @@ def login_page(
     # logged-in app.
     is_preview = "preview" in request.GET
     if settings.TWO_FACTOR_AUTHENTICATION_ENABLED:
-        if request.user and request.user.is_verified():
+        if request.user.is_authenticated and is_2fa_verified(request.user):
             return HttpResponseRedirect(request.user.realm.uri)
     elif request.user.is_authenticated and not is_preview:
         return HttpResponseRedirect(request.user.realm.uri)
@@ -806,6 +817,7 @@ def login_page(
         # added in SimpleTemplateResponse class, which is a derived class of
         # HttpResponse. See django.template.response.SimpleTemplateResponse,
         # https://github.com/django/django/blob/2.0/django/template/response.py#L19
+        assert template_response.context_data is not None
         update_login_page_context(request, template_response.context_data)
 
     assert isinstance(template_response, HttpResponse)
@@ -895,6 +907,7 @@ def api_fetch_api_key(
     email_on_new_login(sender=user_profile.__class__, request=request, user=user_profile)
 
     # Mark this request as having a logged-in user for our server logs.
+    assert isinstance(user_profile, UserProfile)
     process_client(request, user_profile)
     RequestNotes.get_notes(request).requestor_for_logs = user_profile.format_requestor_for_logs()
 
@@ -929,7 +942,7 @@ def get_auth_backends_data(request: HttpRequest) -> Dict[str, Any]:
 
 
 def check_server_incompatibility(request: HttpRequest) -> bool:
-    user_agent = parse_user_agent(request.META.get("HTTP_USER_AGENT", "Missing User-Agent"))
+    user_agent = parse_user_agent(request.headers.get("User-Agent", "Missing User-Agent"))
     return user_agent["name"] == "ZulipInvalid"
 
 
@@ -937,7 +950,7 @@ def check_server_incompatibility(request: HttpRequest) -> bool:
 @csrf_exempt
 def api_get_server_settings(request: HttpRequest) -> HttpResponse:
     # Log which client is making this request.
-    process_client(request, request.user, skip_update_user_activity=True)
+    process_client(request)
     result = dict(
         authentication_methods=get_auth_backends_data(request),
         zulip_version=ZULIP_VERSION,

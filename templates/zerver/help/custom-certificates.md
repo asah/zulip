@@ -29,7 +29,7 @@ certificate store, like your web browser.
 
 {start_tabs}
 {tab|mac}
-1. Hit Cmd+Space to bring up Spotlight Search, type **Keychain
+1. Hit `Cmd` + `Space` to bring up Spotlight Search, type **Keychain
    Access**, and press Enter.
 
 2. From the **File** menu, choose **Import Items...**
@@ -96,7 +96,7 @@ server. You'll need to get a certificate file (should end in `.crt` or
 
 {start_tabs}
 
-1. Click on the **gear** (<i class="fa fa-cog"></i>) icon in the lower left corner.
+{!desktop-sidebar-settings-menu.md!}
 
 2. Select the **Organizations** tab.
 

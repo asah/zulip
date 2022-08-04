@@ -36,6 +36,11 @@
             </li>
             {{/unless}}
             <li role="presentation" class="only-visible-for-spectators">
+                <a class="change-language-spectator" role="menuitem">
+                    <i class="zulip-icon zulip-icon-language" aria-hidden="true"></i> {{t 'Select language' }}
+                </a>
+            </li>
+            <li role="presentation" class="only-visible-for-spectators">
                 <a class="dark-theme" role="menuitem">
                     <i class="fa fa-moon-o" aria-hidden="true"></i> {{t 'Switch to dark theme' }}
                 </a>
@@ -140,7 +145,7 @@
             </li>
             {{/if}}
             <li role="presentation" class="only-visible-for-spectators">
-                <a href="/login" role="menuitem">
+                <a href="{{login_link}}" role="menuitem">
                     <i class="fa fa-sign-in" aria-hidden="true"></i> {{t 'Log in' }}
                 </a>
             </li>

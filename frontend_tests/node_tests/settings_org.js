@@ -24,15 +24,6 @@ mock_esm("../../static/js/loading", {
     make_indicator: noop,
     destroy_indicator: noop,
 });
-mock_esm("../../static/js/ui_report", {
-    success(msg, $elem) {
-        $elem.val(msg);
-    },
-
-    error(msg, xhr, $elem) {
-        $elem.val(msg);
-    },
-});
 
 set_global(
     "FormData",
@@ -51,7 +42,7 @@ const settings_org = zrequire("settings_org");
 const dropdown_list_widget = zrequire("dropdown_list_widget");
 
 function test(label, f) {
-    run_test(label, ({override, override_rewire, mock_template}) => {
+    run_test(label, (helpers) => {
         $("#realm-icon-upload-widget .upload-spinner-background").css = () => {};
         page_params.is_admin = false;
         page_params.realm_domains = [
@@ -60,7 +51,7 @@ function test(label, f) {
         ];
         page_params.realm_authentication_methods = {};
         settings_org.reset();
-        f({override, override_rewire, mock_template});
+        f(helpers);
     });
 }
 
@@ -69,59 +60,9 @@ test("unloaded", () => {
     // sure things don't explode before set_up is called.
 
     settings_org.reset();
-    settings_org.populate_realm_domains();
+    settings_org.populate_realm_domains_label();
     settings_org.populate_auth_methods();
 });
-
-function simulate_realm_domains_table() {
-    const $tr_stub = $.create("realm-tr-stub");
-    $("#realm_domains_table tbody").set_find_results("tr", $tr_stub);
-    $tr_stub.remove = () => {};
-
-    let appended;
-    $("#realm_domains_table tbody").append = (html) => {
-        appended = true;
-        assert.equal(html, "stub-domains-list");
-    };
-
-    return function verify() {
-        assert.ok(appended);
-    };
-}
-
-function test_realms_domain_modal(override, add_realm_domain) {
-    const $info = $(".realm_domains_info");
-
-    $("#add-realm-domain-widget").set_find_results(
-        ".new-realm-domain",
-        $.create("new-realm-domain-stub"),
-    );
-
-    $("#add-realm-domain-widget").set_find_results(
-        ".new-realm-domain-allow-subdomains",
-        $.create("new-realm-domain-allow-subdomains-stub"),
-    );
-
-    let posted;
-    let success_callback;
-    let error_callback;
-    override(channel, "post", (req) => {
-        posted = true;
-        assert.equal(req.url, "/json/realm/domains");
-        success_callback = req.success;
-        error_callback = req.error;
-    });
-
-    add_realm_domain();
-
-    assert.ok(posted);
-
-    success_callback();
-    assert.equal($info.val(), "translated HTML: Added successfully!");
-
-    error_callback({});
-    assert.equal($info.val(), "translated HTML: Failed");
-}
 
 function createSaveButtons(subsection) {
     const $stub_save_button_header = $(`#org-${CSS.escape(subsection)}`);
@@ -348,56 +289,6 @@ function test_upload_realm_icon(override, upload_realm_logo_or_icon) {
     assert.ok(posted);
 }
 
-function test_change_allow_subdomains(change_allow_subdomains) {
-    const ev = {
-        stopPropagation: noop,
-    };
-
-    const $info = $(".realm_domains_info");
-    $info.fadeOut = noop;
-    const domain = "example.com";
-    let allow = true;
-
-    let success_callback;
-    let error_callback;
-    channel.patch = (req) => {
-        assert.equal(req.url, "/json/realm/domains/example.com");
-        assert.equal(req.data.allow_subdomains, JSON.stringify(allow));
-        success_callback = req.success;
-        error_callback = req.error;
-    };
-
-    const $domain_obj = $.create("domain object");
-    $domain_obj.text(domain);
-
-    const $elem_obj = $.create("<elem html>");
-    const $parents_obj = $.create("parents object");
-
-    $elem_obj.set_parents_result("tr", $parents_obj);
-    $parents_obj.set_find_results(".domain", $domain_obj);
-    $elem_obj.prop("checked", allow);
-
-    change_allow_subdomains.call($elem_obj, ev);
-
-    success_callback();
-    assert.equal(
-        $info.val(),
-        "translated HTML: Update successful: Subdomains allowed for example.com",
-    );
-
-    error_callback({});
-    assert.equal($info.val(), "translated HTML: Failed");
-
-    allow = false;
-    $elem_obj.prop("checked", allow);
-    change_allow_subdomains.call($elem_obj, ev);
-    success_callback();
-    assert.equal(
-        $info.val(),
-        "translated HTML: Update successful: Subdomains no longer allowed for example.com",
-    );
-}
-
 function test_extract_property_name() {
     $("#id_realm_allow_message_editing").attr("id", "id_realm_allow_message_editing");
     assert.equal(
@@ -615,12 +506,8 @@ function test_discard_changes_button(discard_changes) {
         $message_content_delete_limit_minutes,
     ];
 
-    $("#org-discard-msg-editing").closest = () => $discard_button_parent;
-
-    const stubbed_function = settings_org.change_save_button_state;
-    settings_org.__Rewire__("change_save_button_state", (save_button_controls, state) => {
-        assert.equal(state, "discarded");
-    });
+    const {$discard_button, props} = createSaveButtons("msg-editing");
+    $discard_button.closest = (selector) => $(selector);
 
     discard_changes(ev);
 
@@ -633,14 +520,10 @@ function test_discard_changes_button(discard_changes) {
     assert.equal($message_content_edit_limit_minutes.val(), "60");
     assert.equal($msg_delete_limit_setting.val(), "upto_two_min");
     assert.equal($message_content_delete_limit_minutes.val(), "2");
-
-    settings_org.__Rewire__("change_save_button_state", stubbed_function);
+    assert.ok(props.hidden);
 }
 
-test("set_up", ({override, override_rewire, mock_template}) => {
-    mock_template("settings/admin_realm_domains_list.hbs", false, () => "stub-domains-list");
-
-    const verify_realm_domains = simulate_realm_domains_table();
+test("set_up", ({override, override_rewire}) => {
     page_params.realm_available_video_chat_providers = {
         jitsi_meet: {
             id: 1,
@@ -687,12 +570,9 @@ test("set_up", ({override, override_rewire, mock_template}) => {
 
     // TEST set_up() here, but this mostly just allows us to
     // get access to the click handlers.
-    override_rewire(settings_org, "maybe_disable_widgets", noop);
+    override(page_params, "is_owner", true);
     settings_org.set_up();
 
-    verify_realm_domains();
-
-    test_realms_domain_modal(override, () => $("#submit-add-realm-domain").trigger("click"));
     test_submit_settings_form(
         override,
         $(".admin-realm-form").get_on_handler(
@@ -701,9 +581,6 @@ test("set_up", ({override, override_rewire, mock_template}) => {
         ),
     );
     test_upload_realm_icon(override, upload_realm_logo_or_icon);
-    test_change_allow_subdomains(
-        $("#realm_domains_table").get_on_handler("change", ".allow-subdomains"),
-    );
     test_extract_property_name();
     test_change_save_button_state();
     test_sync_realm_settings();

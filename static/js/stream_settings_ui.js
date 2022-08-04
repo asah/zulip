@@ -24,6 +24,7 @@ import {page_params} from "./page_params";
 import * as people from "./people";
 import * as scroll_util from "./scroll_util";
 import * as search_util from "./search_util";
+import * as settings_config from "./settings_config";
 import * as settings_data from "./settings_data";
 import * as stream_create from "./stream_create";
 import * as stream_data from "./stream_data";
@@ -211,10 +212,12 @@ export function update_stream_privacy(slim_sub, values) {
 
     // Update UI elements
     update_left_panel_row(sub);
+    stream_ui_updates.update_stream_privacy_icon_in_settings(sub);
     stream_ui_updates.update_stream_subscription_type_text(sub);
     stream_ui_updates.update_change_stream_privacy_settings(sub);
     stream_ui_updates.update_settings_button_for_sub(sub);
     stream_ui_updates.update_add_subscriptions_elements(sub);
+    stream_ui_updates.enable_or_disable_subscribers_tab(sub);
     stream_list.redraw_stream_privacy(sub);
 
     const active_data = get_active_data();
@@ -339,7 +342,6 @@ export function update_settings_for_unsubscribed(slim_sub) {
     stream_ui_updates.update_regular_sub_settings(sub);
     stream_ui_updates.update_change_stream_privacy_settings(sub);
 
-    stream_data.update_stream_email_address(sub, "");
     // If user unsubscribed from private stream then user cannot subscribe to
     // stream without invitation and cannot add subscribers to stream.
     if (!stream_data.can_toggle_subscription(sub)) {
@@ -624,8 +626,8 @@ export function setup_page(callback) {
                 settings_data.user_can_create_public_streams() ||
                 settings_data.user_can_create_web_public_streams(),
             hide_all_streams: !should_list_all_streams(),
-            max_name_length: page_params.max_stream_name_length,
-            max_description_length: page_params.max_stream_description_length,
+            max_stream_name_length: page_params.max_stream_name_length,
+            max_stream_description_length: page_params.max_stream_description_length,
             is_owner: page_params.is_owner,
             stream_privacy_policy_values: stream_data.stream_privacy_policy_values,
             stream_privacy_policy,
@@ -635,6 +637,8 @@ export function setup_page(callback) {
                 stream_edit.get_display_text_for_realm_message_retention_setting(),
             upgrade_text_for_wide_organization_logo:
                 page_params.upgrade_text_for_wide_organization_logo,
+            is_business_type_org:
+                page_params.realm_org_type === settings_config.all_org_type_values.business.code,
             disable_message_retention_setting:
                 !page_params.zulip_plan_is_not_limited || !page_params.is_owner,
         };
@@ -1126,14 +1130,4 @@ export function initialize() {
         $(".right").removeClass("show");
         $(".subscriptions-header").removeClass("slide-left");
     });
-
-    {
-        const sel = ".search-container, .streams-list, .subscriptions-header";
-
-        $("#manage_streams_container").on("click", sel, (e) => {
-            if ($(e.target).is(sel)) {
-                stream_edit.open_edit_panel_empty();
-            }
-        });
-    }
 }

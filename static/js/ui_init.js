@@ -7,6 +7,7 @@ import * as fenced_code from "../shared/js/fenced_code";
 import render_compose from "../templates/compose.hbs";
 import render_edit_content_button from "../templates/edit_content_button.hbs";
 import render_left_sidebar from "../templates/left_sidebar.hbs";
+import render_message_feed_bottom_whitespace from "../templates/message_feed_bottom_whitespace.hbs";
 import render_message_feed_errors from "../templates/message_feed_errors.hbs";
 import render_navbar from "../templates/navbar.hbs";
 import render_right_sidebar from "../templates/right_sidebar.hbs";
@@ -16,6 +17,7 @@ import * as activity from "./activity";
 import * as alert_words from "./alert_words";
 import * as blueslip from "./blueslip";
 import * as bot_data from "./bot_data";
+import * as channel from "./channel";
 import * as click_handlers from "./click_handlers";
 import * as common from "./common";
 import * as compose from "./compose";
@@ -146,6 +148,10 @@ function message_hover($message_row) {
     $message_row.find(".edit_content").html(render_edit_content_button(args));
 }
 
+function initialize_bottom_whitespace() {
+    $("#bottom_whitespace").html(render_message_feed_bottom_whitespace());
+}
+
 function initialize_left_sidebar() {
     const rendered_sidebar = render_left_sidebar({
         is_guest: page_params.is_guest,
@@ -157,7 +163,7 @@ function initialize_left_sidebar() {
 function initialize_right_sidebar() {
     const rendered_sidebar = render_right_sidebar({
         can_invite_others_to_realm: settings_data.user_can_invite_others_to_realm(),
-        realm_description: page_params.realm_description,
+        realm_rendered_description: page_params.realm_rendered_description,
     });
 
     $("#right-sidebar-container").html(rendered_sidebar);
@@ -208,6 +214,8 @@ function initialize_compose_box() {
                 : "End",
             narrow_to_compose_recipients_key_html:
                 (common.has_mac_keyboard() ? "⌘" : "Ctrl") + " + .",
+            max_stream_name_length: page_params.max_stream_name_length,
+            max_topic_length: page_params.max_topic_length,
         }),
     );
     $(`.enter_sends_${user_settings.enter_sends}`).show();
@@ -350,14 +358,6 @@ export function initialize_kitchen_sink_stuff() {
 
     $("#main_div").on("mouseleave", ".embed-video a", function () {
         $(this).removeClass("fa fa-play");
-    });
-
-    $("#manage_streams_container").on("mouseover", ".subscription_header", function () {
-        $(this).addClass("active");
-    });
-
-    $("#manage_streams_container").on("mouseout", ".subscription_header", function () {
-        $(this).removeClass("active");
     });
 
     $("#stream_message_recipient_stream").on("change", function () {
@@ -597,7 +597,8 @@ export function initialize_everything() {
     // These components must be initialized early, because other
     // modules' initialization has not been audited for whether they
     // expect DOM elements to always exist (As that did before these
-    // modules were migrated from Django templates to handlebars).
+    // modules were migrated from Django templates to Handlebars).
+    initialize_bottom_whitespace();
     initialize_left_sidebar();
     initialize_right_sidebar();
     initialize_compose_box();
@@ -679,9 +680,29 @@ export function initialize_everything() {
     user_status_ui.initialize();
     fenced_code.initialize(generated_pygments_data);
     message_edit_history.initialize();
+
+    $("#app-loading").addClass("loaded");
 }
 
-$(() => {
+$(async () => {
+    if (page_params.is_spectator) {
+        const data = {
+            apply_markdown: true,
+            client_capabilities: JSON.stringify({
+                notification_settings_null: true,
+                bulk_message_deletion: true,
+                user_avatar_url_field_optional: true,
+                // Set this to true when stream typing notifications are implemented.
+                stream_typing_notifications: false,
+                user_settings_object: true,
+            }),
+            client_gravatar: false,
+        };
+        const {result, msg, ...state} = await new Promise((success, error) => {
+            channel.post({url: "/json/register", data, success, error});
+        });
+        Object.assign(page_params, state);
+    }
     blueslip.measure_time("initialize_everything", () => {
         initialize_everything();
     });

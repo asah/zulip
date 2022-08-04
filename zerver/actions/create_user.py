@@ -77,14 +77,16 @@ def create_historical_user_messages(*, user_id: int, message_ids: List[int]) -> 
 
 
 def send_message_to_signup_notification_stream(
-    sender: UserProfile, realm: Realm, message: str, topic_name: str = _("signups")
+    sender: UserProfile, realm: Realm, message: str
 ) -> None:
     signup_notifications_stream = realm.get_signup_notifications_stream()
     if signup_notifications_stream is None:
         return
 
     with override_language(realm.default_language):
-        internal_send_stream_message(sender, signup_notifications_stream, topic_name, message)
+        topic_name = _("signups")
+
+    internal_send_stream_message(sender, signup_notifications_stream, topic_name, message)
 
 
 def notify_new_user(user_profile: UserProfile) -> None:
@@ -94,9 +96,10 @@ def notify_new_user(user_profile: UserProfile) -> None:
 
     is_first_user = user_count == 1
     if not is_first_user:
-        message = _("{user} just signed up for Zulip. (total: {user_count})").format(
-            user=silent_mention_syntax_for_user(user_profile), user_count=user_count
-        )
+        with override_language(user_profile.realm.default_language):
+            message = _("{user} just signed up for Zulip. (total: {user_count})").format(
+                user=silent_mention_syntax_for_user(user_profile), user_count=user_count
+            )
 
         if settings.BILLING_ENABLED:
             from corporate.lib.registration import generate_licenses_low_warning_message_if_required
@@ -117,9 +120,10 @@ def notify_new_user(user_profile: UserProfile) -> None:
         # Check whether the stream exists
         signups_stream = get_signups_stream(admin_realm)
         # We intentionally use the same strings as above to avoid translation burden.
-        message = _("{user} just signed up for Zulip. (total: {user_count})").format(
-            user=f"{user_profile.full_name} <`{user_profile.email}`>", user_count=user_count
-        )
+        with override_language(admin_realm.default_language):
+            message = _("{user} just signed up for Zulip. (total: {user_count})").format(
+                user=f"{user_profile.full_name} <`{user_profile.email}`>", user_count=user_count
+            )
         internal_send_stream_message(
             admin_realm_sender, signups_stream, user_profile.realm.display_subdomain, message
         )
@@ -235,13 +239,11 @@ def process_new_human_user(
                 ),
             )
 
-    # Revoke all preregistration users except prereg_user, and link prereg_user to
-    # the created user
-    if prereg_user is None:
-        assert not realm_creation, "realm_creation should only happen with a PreregistrationUser"
-
+    # For the sake of tracking the history of UserProfiles,
+    # we want to tie the newly created user to the PreregistrationUser
+    # it was created from.
     if prereg_user is not None:
-        prereg_user.status = confirmation_settings.STATUS_ACTIVE
+        prereg_user.status = confirmation_settings.STATUS_USED
         prereg_user.created_user = user_profile
         prereg_user.save(update_fields=["status", "created_user"])
 
@@ -249,7 +251,7 @@ def process_new_human_user(
     # for us to want to modify - because other realm_creation PreregistrationUsers should be
     # left usable for creating different realms.
     if not realm_creation:
-        # Mark any other PreregistrationUsers in the realm that are STATUS_ACTIVE as
+        # Mark any other PreregistrationUsers in the realm that are STATUS_USED as
         # inactive so we can keep track of the PreregistrationUser we
         # actually used for analytics.
         if prereg_user is not None:

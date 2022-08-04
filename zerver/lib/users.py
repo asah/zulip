@@ -1,7 +1,7 @@
 import re
 import unicodedata
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Sequence, TypedDict, Union, cast
+from typing import Any, Dict, Iterable, List, Optional, Sequence, TypedDict
 
 import dateutil.parser as date_parser
 from django.conf import settings
@@ -9,6 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db.models.query import QuerySet
 from django.forms.models import model_to_dict
 from django.utils.translation import gettext as _
+from django_otp.middleware import is_verified
 from zulip_bots.custom_exceptions import ConfigValidationError
 
 from zerver.lib.avatar import avatar_url, get_avatar_field
@@ -24,7 +25,7 @@ from zerver.lib.exceptions import (
     OrganizationOwnerRequired,
 )
 from zerver.lib.timezone import canonicalize_timezone
-from zerver.lib.types import ProfileDataElementValue
+from zerver.lib.types import ProfileDataElementUpdateDict, ProfileDataElementValue
 from zerver.models import (
     CustomProfileField,
     CustomProfileFieldValue,
@@ -101,7 +102,7 @@ def check_valid_bot_config(bot_type: int, service_name: str, config_data: Dict[s
         for key, validator in config_options.items():
             value = config_data[key]
             error = validator(key, value)
-            if error:
+            if error is not None:
                 raise JsonableError(_("Invalid {} value {} ({})").format(key, value, error))
 
     elif bot_type == UserProfile.EMBEDDED_BOT:
@@ -124,9 +125,9 @@ def check_valid_bot_config(bot_type: int, service_name: str, config_data: Dict[s
 def add_service(
     name: str,
     user_profile: UserProfile,
-    base_url: Optional[str] = None,
-    interface: Optional[int] = None,
-    token: Optional[str] = None,
+    base_url: str,
+    interface: int,
+    token: str,
 ) -> None:
     Service.objects.create(
         name=name, user_profile=user_profile, base_url=base_url, interface=interface, token=token
@@ -164,7 +165,7 @@ def is_administrator_role(role: int) -> bool:
 
 
 def bulk_get_users(
-    emails: List[str], realm: Optional[Realm], base_query: "QuerySet[UserProfile]" = None
+    emails: List[str], realm: Optional[Realm], base_query: Optional[QuerySet[UserProfile]] = None
 ) -> Dict[str, UserProfile]:
     if base_query is None:
         assert realm is not None
@@ -180,7 +181,7 @@ def bulk_get_users(
         query = base_query
         realm_id = 0
 
-    def fetch_users_by_email(emails: List[str]) -> List[UserProfile]:
+    def fetch_users_by_email(emails: List[str]) -> QuerySet[UserProfile]:
         # This should be just
         #
         # UserProfile.objects.select_related("realm").filter(email__iexact__in=emails,
@@ -376,7 +377,7 @@ def validate_user_custom_profile_field(
 
 
 def validate_user_custom_profile_data(
-    realm_id: int, profile_data: List[Dict[str, Union[int, ProfileDataElementValue]]]
+    realm_id: int, profile_data: List[ProfileDataElementUpdateDict]
 ) -> None:
     # This function validate all custom field values according to their field type.
     for item in profile_data:
@@ -387,9 +388,7 @@ def validate_user_custom_profile_data(
             raise JsonableError(_("Field id {id} not found.").format(id=field_id))
 
         try:
-            validate_user_custom_profile_field(
-                realm_id, field, cast(ProfileDataElementValue, item["value"])
-            )
+            validate_user_custom_profile_field(realm_id, field, item["value"])
         except ValidationError as error:
             raise JsonableError(error.message)
 
@@ -554,7 +553,7 @@ def get_cross_realm_dicts() -> List[Dict[str, Any]]:
 
 
 def get_custom_profile_field_values(
-    custom_profile_field_values: List[CustomProfileFieldValue],
+    custom_profile_field_values: Iterable[CustomProfileFieldValue],
 ) -> Dict[int, Dict[str, Any]]:
     profiles_by_user_id: Dict[int, Dict[str, Any]] = defaultdict(dict)
     for profile_field in custom_profile_field_values:
@@ -618,5 +617,19 @@ def get_raw_user_data(
     return result
 
 
-def get_active_bots_owned_by_user(user_profile: UserProfile) -> QuerySet:
+def get_active_bots_owned_by_user(user_profile: UserProfile) -> QuerySet[UserProfile]:
     return UserProfile.objects.filter(is_bot=True, is_active=True, bot_owner=user_profile)
+
+
+def is_2fa_verified(user: UserProfile) -> bool:
+    """
+    It is generally unsafe to call is_verified directly on `request.user` since
+    the attribute `otp_device` does not exist on an `AnonymousUser`, and `is_verified`
+    does not make sense without 2FA being enabled.
+
+    This wraps the checks for all these assumptions to make sure the call is safe.
+    """
+    # Explicitly require the caller to ensure that settings.TWO_FACTOR_AUTHENTICATION_ENABLED
+    # is True before calling `is_2fa_verified`.
+    assert settings.TWO_FACTOR_AUTHENTICATION_ENABLED
+    return is_verified(user)

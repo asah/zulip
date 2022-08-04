@@ -36,23 +36,8 @@
     text-align: center;
 }
 
-.popover-left,
-.popover-right {
-    max-width: 200px;
-}
-
 .sp-container {
     z-index: 106;
-}
-
-.mobile-message-buttons-popover {
-    position: absolute;
-    top: auto !important;
-    right: 8px;
-    bottom: 48px;
-    left: auto !important;
-    width: 175px;
-    height: 65px;
 }
 
 .streams_popover {
@@ -128,38 +113,6 @@ ul {
                 font-size: 12px;
             }
         }
-
-        .admin-separator {
-            display: flex;
-            align-items: center;
-            text-align: center;
-            font-size: 10px;
-
-            &::before,
-            &::after {
-                content: "";
-                flex: 1;
-                border-top: 1px solid hsl(0, 0%, 93%);
-                border-bottom: 1px solid hsl(0, 0%, 100%);
-            }
-
-            &::before {
-                margin-right: 8px;
-            }
-
-            &::after {
-                margin-left: 8px;
-            }
-        }
-    }
-
-    &.remind_me_popover .remind_icon {
-        text-align: center;
-    }
-
-    &.topic-move_popover {
-        max-height: 200px;
-        overflow-y: auto;
     }
 
     &.info_popover_actions i.fa-edit {
@@ -284,14 +237,33 @@ ul {
 
     .name {
         color: hsl(0, 0%, 20%);
-        display: inline-block;
-        min-width: 120px;
+        width: 120px;
         font-weight: 600;
+        margin-right: 10px;
+    }
+
+    .value {
+        vertical-align: top;
     }
 
     #exit-sign {
         font-size: 1.5rem;
         line-height: 1;
+    }
+
+    #profile-tab {
+        margin: 0 5px;
+    }
+
+    .top {
+        display: flex;
+        justify-content: space-between;
+    }
+
+    @media (width < $ml_min) {
+        .top {
+            flex-direction: column-reverse;
+        }
     }
 
     #avatar {
@@ -301,7 +273,6 @@ ul {
         background-size: cover;
         background-position: center;
         border-radius: 5px;
-        margin-right: 10px;
         border: 1px solid hsla(0, 0%, 0%, 0.2);
 
         &.guest-avatar::after {
@@ -324,16 +295,16 @@ ul {
     }
 
     #default-section {
-        display: inline-block;
         vertical-align: top;
 
         .default-field {
-            margin-bottom: 5px;
+            margin-bottom: 10px;
         }
+    }
 
-        #date-joined {
-            margin-bottom: 15px;
-        }
+    #user-status {
+        text-align: center;
+        margin: 0 0 10px;
     }
 
     hr {
@@ -342,10 +313,8 @@ ul {
     }
 
     #content {
-        margin-top: 10px;
-
         .field-section {
-            margin-top: 8px;
+            margin-bottom: 10px;
 
             .name {
                 color: hsl(0, 0%, 20%);
@@ -356,6 +325,19 @@ ul {
                 overflow-wrap: break-word;
             }
         }
+
+        .rendered_markdown p {
+            margin: 0;
+        }
+    }
+
+    .col-left {
+        padding: 0 10px 0 0;
+        word-break: break-all;
+    }
+
+    .col-right {
+        width: fit-content;
     }
 
     &.no-fields {
@@ -407,6 +389,10 @@ ul {
         .stream-search {
             margin-left: auto;
             align-self: center;
+            padding-right: 20px;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
         }
 
         #clear_stream_search {
@@ -655,7 +641,7 @@ ul {
     }
 }
 
-@media (max-width: 768px) {
+@media (width < $md_min) {
     #giphy_grid_in_popover {
         position: static;
         top: 0 !important;
@@ -713,5 +699,21 @@ ul {
             top: 125px;
             left: 40px;
         }
+    }
+}
+
+#language_selection_modal {
+    width: min(750px, 70vw);
+}
+
+.default_language_modal_table {
+    column-count: 3;
+
+    @media (width < $md_min) {
+        column-count: 2;
+    }
+
+    @media (width < $sm_min) {
+        column-count: 1;
     }
 }

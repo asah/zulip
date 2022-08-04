@@ -111,6 +111,7 @@ def fetch_initial_state_data(
     slim_presence: bool = False,
     include_subscribers: bool = True,
     include_streams: bool = True,
+    spectator_requested_language: Optional[str] = None,
 ) -> Dict[str, Any]:
     """When `event_types` is None, fetches the core data powering the
     web app's `page_params` and `/api/v1/register` (for mobile/terminal
@@ -164,7 +165,7 @@ def fetch_initial_state_data(
         # `max_message_id` is primarily used for generating `local_id`
         # values that are higher than this.  We likely can eventually
         # remove this parameter from the API.
-        user_messages = []
+        user_messages = None
         if user_profile is not None:
             user_messages = (
                 UserMessage.objects.filter(user_profile=user_profile)
@@ -297,7 +298,7 @@ def fetch_initial_state_data(
         state["server_inline_url_embed_preview"] = settings.INLINE_URL_EMBED_PREVIEW
         state["server_avatar_changes_disabled"] = settings.AVATAR_CHANGES_DISABLED
         state["server_name_changes_disabled"] = settings.NAME_CHANGES_DISABLED
-        state["server_web_public_streams_enabled"] = realm.web_public_streams_available_for_realm()
+        state["server_web_public_streams_enabled"] = settings.WEB_PUBLIC_STREAMS_ENABLED
         state["giphy_rating_options"] = realm.GIPHY_RATING_OPTIONS
 
         state["server_needs_upgrade"] = is_outdated_server(user_profile)
@@ -372,6 +373,7 @@ def fetch_initial_state_data(
     if user_profile is not None:
         settings_user = user_profile
     else:
+        assert spectator_requested_language is not None
         # When UserProfile=None, we want to serve the values for various
         # settings as the defaults.  Instead of copying the default values
         # from models.py here, we access these default values from a
@@ -392,6 +394,7 @@ def fetch_initial_state_data(
             avatar_source=UserProfile.AVATAR_FROM_GRAVATAR,
             # ID=0 is not used in real Zulip databases, ensuring this is unique.
             id=0,
+            default_language=spectator_requested_language,
         )
     if want("realm_user"):
         state["raw_users"] = get_raw_user_data(
@@ -920,17 +923,22 @@ def apply_event(
         if event["op"] == "update":
             # For legacy reasons, we call stream data 'subscriptions' in
             # the state var here, for the benefit of the JS code.
-            for obj in state["subscriptions"]:
-                if obj["name"].lower() == event["name"].lower():
-                    obj[event["property"]] = event["value"]
-                    if event["property"] == "description":
-                        obj["rendered_description"] = event["rendered_description"]
-                    if event.get("history_public_to_subscribers") is not None:
-                        obj["history_public_to_subscribers"] = event[
-                            "history_public_to_subscribers"
-                        ]
-                    if event.get("is_web_public") is not None:
-                        obj["is_web_public"] = event["is_web_public"]
+            for sub_list in [
+                state["subscriptions"],
+                state["unsubscribed"],
+                state["never_subscribed"],
+            ]:
+                for obj in sub_list:
+                    if obj["name"].lower() == event["name"].lower():
+                        obj[event["property"]] = event["value"]
+                        if event["property"] == "description":
+                            obj["rendered_description"] = event["rendered_description"]
+                        if event.get("history_public_to_subscribers") is not None:
+                            obj["history_public_to_subscribers"] = event[
+                                "history_public_to_subscribers"
+                            ]
+                        if event.get("is_web_public") is not None:
+                            obj["is_web_public"] = event["is_web_public"]
             # Also update the pure streams data
             if "streams" in state:
                 for stream in state["streams"]:
@@ -1249,14 +1257,16 @@ def apply_event(
         elif event["op"] == "add_subgroups":
             for user_group in state["realm_user_groups"]:
                 if user_group["id"] == event["group_id"]:
-                    user_group["subgroups"].extend(event["subgroup_ids"])
-                    user_group["subgroups"].sort()
+                    user_group["direct_subgroup_ids"].extend(event["direct_subgroup_ids"])
+                    user_group["direct_subgroup_ids"].sort()
         elif event["op"] == "remove_subgroups":
             for user_group in state["realm_user_groups"]:
                 if user_group["id"] == event["group_id"]:
-                    subgroups = set(user_group["subgroups"])
-                    user_group["subgroups"] = list(subgroups - set(event["subgroup_ids"]))
-                    user_group["subgroups"].sort()
+                    subgroups = set(user_group["direct_subgroup_ids"])
+                    user_group["direct_subgroup_ids"] = list(
+                        subgroups - set(event["direct_subgroup_ids"])
+                    )
+                    user_group["direct_subgroup_ids"].sort()
         elif event["op"] == "remove":
             state["realm_user_groups"] = [
                 ug for ug in state["realm_user_groups"] if ug["id"] != event["group_id"]
@@ -1316,7 +1326,8 @@ def apply_event(
 
 
 def do_events_register(
-    user_profile: UserProfile,
+    user_profile: Optional[UserProfile],
+    realm: Realm,
     user_client: Client,
     apply_markdown: bool = True,
     client_gravatar: bool = False,
@@ -1329,6 +1340,7 @@ def do_events_register(
     client_capabilities: Dict[str, bool] = {},
     narrow: Collection[Sequence[str]] = [],
     fetch_event_types: Optional[Collection[str]] = None,
+    spectator_requested_language: Optional[str] = None,
 ) -> Dict[str, Any]:
     # Technically we don't need to check this here because
     # build_narrow_filter will check it, but it's nicer from an error
@@ -1343,7 +1355,7 @@ def do_events_register(
     stream_typing_notifications = client_capabilities.get("stream_typing_notifications", False)
     user_settings_object = client_capabilities.get("user_settings_object", False)
 
-    if user_profile.realm.email_address_visibility != Realm.EMAIL_ADDRESS_VISIBILITY_EVERYONE:
+    if realm.email_address_visibility != Realm.EMAIL_ADDRESS_VISIBILITY_EVERYONE:
         # If real email addresses are not available to the user, their
         # clients cannot compute gravatars, so we force-set it to false.
         client_gravatar = False
@@ -1354,6 +1366,34 @@ def do_events_register(
         event_types_set = set(event_types)
     else:
         event_types_set = None
+
+    if user_profile is None:
+        # TODO: Unify this with the below code path once if/when we
+        # support requesting an event queue for spectators.
+        #
+        # Doing so likely has a prerequisite of making this function's
+        # caller enforce client_gravatar=False,
+        # include_subscribers=False and include_streams=False.
+        ret = fetch_initial_state_data(
+            user_profile,
+            realm=realm,
+            event_types=event_types_set,
+            queue_id=None,
+            # Force client_gravatar=False for security reasons.
+            client_gravatar=False,
+            user_avatar_url_field_optional=user_avatar_url_field_optional,
+            user_settings_object=user_settings_object,
+            # slim_presence is a noop, because presence is not included.
+            slim_presence=True,
+            # Force include_subscribers=False for security reasons.
+            include_subscribers=False,
+            # Force include_streams=False for security reasons.
+            include_streams=False,
+            spectator_requested_language=spectator_requested_language,
+        )
+
+        post_process_state(user_profile, ret, notification_settings_null=False)
+        return ret
 
     # Fill up the UserMessage rows if a soft-deactivated user has returned
     reactivate_user_if_soft_deactivated(user_profile)

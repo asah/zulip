@@ -22,7 +22,13 @@ from zerver.actions.realm_domains import (
     do_change_realm_domain,
     do_remove_realm_domain,
 )
+from zerver.actions.realm_emoji import check_add_realm_emoji, do_remove_realm_emoji
 from zerver.actions.realm_icon import do_change_icon_source
+from zerver.actions.realm_linkifiers import (
+    do_add_linkifier,
+    do_remove_linkifier,
+    do_update_linkifier,
+)
 from zerver.actions.realm_playgrounds import do_add_realm_playground, do_remove_realm_playground
 from zerver.actions.realm_settings import (
     do_deactivate_realm,
@@ -48,15 +54,20 @@ from zerver.actions.user_settings import (
     do_regenerate_api_key,
 )
 from zerver.actions.users import do_change_user_role, do_deactivate_user
+from zerver.lib.emoji import get_emoji_file_name, get_emoji_url
 from zerver.lib.message import get_last_message_id
 from zerver.lib.stream_traffic import get_streams_traffic
 from zerver.lib.streams import create_stream_if_needed
 from zerver.lib.test_classes import ZulipTestCase
-from zerver.lib.types import RealmPlaygroundDict
+from zerver.lib.test_helpers import get_test_image_file
+from zerver.lib.types import LinkifierDict, RealmPlaygroundDict
+from zerver.lib.utils import assert_is_not_none
 from zerver.models import (
+    EmojiInfo,
     Message,
     Realm,
     RealmAuditLog,
+    RealmDomainDict,
     RealmPlayground,
     Recipient,
     Subscription,
@@ -65,6 +76,7 @@ from zerver.models import (
     get_realm_domains,
     get_realm_playgrounds,
     get_stream,
+    linkifiers_for_realm,
 )
 
 
@@ -120,7 +132,7 @@ class TestRealmAuditLog(ZulipTestCase):
             event_time__gte=now,
             event_time__lte=now + timedelta(minutes=60),
         ):
-            extra_data = orjson.loads(event.extra_data)
+            extra_data = orjson.loads(assert_is_not_none(event.extra_data))
             self.check_role_count_schema(extra_data[RealmAuditLog.ROLE_COUNT])
             self.assertNotIn(RealmAuditLog.OLD_VALUE, extra_data)
 
@@ -149,7 +161,7 @@ class TestRealmAuditLog(ZulipTestCase):
             event_time__gte=now,
             event_time__lte=now + timedelta(minutes=60),
         ):
-            extra_data = orjson.loads(event.extra_data)
+            extra_data = orjson.loads(assert_is_not_none(event.extra_data))
             self.check_role_count_schema(extra_data[RealmAuditLog.ROLE_COUNT])
             self.assertIn(RealmAuditLog.OLD_VALUE, extra_data)
             self.assertIn(RealmAuditLog.NEW_VALUE, extra_data)
@@ -178,7 +190,8 @@ class TestRealmAuditLog(ZulipTestCase):
             ).count(),
             1,
         )
-        self.assertIsNone(validate_password(password, user))
+        # No error should be raised here
+        validate_password(password, user)
 
     def test_change_email(self) -> None:
         now = timezone_now()
@@ -332,14 +345,14 @@ class TestRealmAuditLog(ZulipTestCase):
         log_entry = RealmAuditLog.objects.get(
             realm=realm, event_type=RealmAuditLog.REALM_DEACTIVATED, acting_user=user
         )
-        extra_data = orjson.loads(log_entry.extra_data)
+        extra_data = orjson.loads(assert_is_not_none(log_entry.extra_data))
         self.check_role_count_schema(extra_data[RealmAuditLog.ROLE_COUNT])
 
         do_reactivate_realm(realm)
         log_entry = RealmAuditLog.objects.get(
             realm=realm, event_type=RealmAuditLog.REALM_REACTIVATED
         )
-        extra_data = orjson.loads(log_entry.extra_data)
+        extra_data = orjson.loads(assert_is_not_none(log_entry.extra_data))
         self.check_role_count_schema(extra_data[RealmAuditLog.ROLE_COUNT])
 
     def test_create_stream_if_needed(self) -> None:
@@ -407,7 +420,7 @@ class TestRealmAuditLog(ZulipTestCase):
             acting_user=user,
         )
         self.assertEqual(realm_audit_logs.count(), 1)
-        extra_data = orjson.loads(realm_audit_logs[0].extra_data)
+        extra_data = orjson.loads(assert_is_not_none(realm_audit_logs[0].extra_data))
         expected_new_value = auth_method_dict
         self.assertEqual(extra_data[RealmAuditLog.OLD_VALUE], expected_old_value)
         self.assertEqual(extra_data[RealmAuditLog.NEW_VALUE], expected_new_value)
@@ -449,7 +462,8 @@ class TestRealmAuditLog(ZulipTestCase):
         ).order_by("id")
         self.assertEqual(realm_audit_logs.count(), 2)
         self.assertEqual(
-            [orjson.loads(entry.extra_data) for entry in realm_audit_logs], values_expected
+            [orjson.loads(assert_is_not_none(entry.extra_data)) for entry in realm_audit_logs],
+            values_expected,
         )
 
     def test_set_realm_notifications_stream(self) -> None:
@@ -682,10 +696,10 @@ class TestRealmAuditLog(ZulipTestCase):
 
         now = timezone_now()
         realm_domain = do_add_realm_domain(user.realm, "zulip.org", False, acting_user=user)
-        added_domain: Dict[str, Union[str, bool]] = {
-            "domain": "zulip.org",
-            "allow_subdomains": False,
-        }
+        added_domain = RealmDomainDict(
+            domain="zulip.org",
+            allow_subdomains=False,
+        )
         expected_extra_data = {
             "realm_domains": initial_domains + [added_domain],
             "added_domain": added_domain,
@@ -703,10 +717,10 @@ class TestRealmAuditLog(ZulipTestCase):
 
         now = timezone_now()
         do_change_realm_domain(realm_domain, True, acting_user=user)
-        changed_domain: Dict[str, Union[str, bool]] = {
-            "domain": "zulip.org",
-            "allow_subdomains": True,
-        }
+        changed_domain = RealmDomainDict(
+            domain="zulip.org",
+            allow_subdomains=True,
+        )
         expected_extra_data = {
             "realm_domains": initial_domains + [changed_domain],
             "changed_domain": changed_domain,
@@ -724,10 +738,10 @@ class TestRealmAuditLog(ZulipTestCase):
 
         now = timezone_now()
         do_remove_realm_domain(realm_domain, acting_user=user)
-        removed_domain = {
-            "domain": "zulip.org",
-            "allow_subdomains": True,
-        }
+        removed_domain = RealmDomainDict(
+            domain="zulip.org",
+            allow_subdomains=True,
+        )
         expected_extra_data = {
             "realm_domains": initial_domains,
             "removed_domain": removed_domain,
@@ -795,6 +809,157 @@ class TestRealmAuditLog(ZulipTestCase):
             RealmAuditLog.objects.filter(
                 realm=user.realm,
                 event_type=RealmAuditLog.REALM_PLAYGROUND_REMOVED,
+                event_time__gte=now,
+                acting_user=user,
+                extra_data=orjson.dumps(expected_extra_data).decode(),
+            ).count(),
+            1,
+        )
+
+    def test_realm_linkifier_entries(self) -> None:
+        user = self.example_user("iago")
+        intial_linkifiers = linkifiers_for_realm(user.realm.id)
+        now = timezone_now()
+        linkifier_id = do_add_linkifier(
+            user.realm,
+            pattern="#(?P<id>[123])",
+            url_format_string="https://realm.com/my_realm_filter/%(id)s",
+            acting_user=user,
+        )
+
+        added_linkfier = LinkifierDict(
+            pattern="#(?P<id>[123])",
+            url_format="https://realm.com/my_realm_filter/%(id)s",
+            id=linkifier_id,
+        )
+        expected_extra_data = {
+            "realm_linkifiers": intial_linkifiers + [added_linkfier],
+            "added_linkifier": added_linkfier,
+        }
+        self.assertEqual(
+            RealmAuditLog.objects.filter(
+                realm=user.realm,
+                event_type=RealmAuditLog.REALM_LINKIFIER_ADDED,
+                event_time__gte=now,
+                acting_user=user,
+                extra_data=orjson.dumps(expected_extra_data).decode(),
+            ).count(),
+            1,
+        )
+
+        now = timezone_now()
+        do_update_linkifier(
+            user.realm,
+            id=linkifier_id,
+            pattern="#(?P<id>[0-9]+)",
+            url_format_string="https://realm.com/my_realm_filter/issues/%(id)s",
+            acting_user=user,
+        )
+        changed_linkifier = LinkifierDict(
+            pattern="#(?P<id>[0-9]+)",
+            url_format="https://realm.com/my_realm_filter/issues/%(id)s",
+            id=linkifier_id,
+        )
+        expected_extra_data = {
+            "realm_linkifiers": intial_linkifiers + [changed_linkifier],
+            "changed_linkifier": changed_linkifier,
+        }
+        self.assertEqual(
+            RealmAuditLog.objects.filter(
+                realm=user.realm,
+                event_type=RealmAuditLog.REALM_LINKIFIER_CHANGED,
+                event_time__gte=now,
+                acting_user=user,
+                extra_data=orjson.dumps(expected_extra_data).decode(),
+            ).count(),
+            1,
+        )
+
+        now = timezone_now()
+        do_remove_linkifier(
+            user.realm,
+            id=linkifier_id,
+            acting_user=user,
+        )
+        removed_linkifier = {
+            "pattern": "#(?P<id>[0-9]+)",
+            "url_format": "https://realm.com/my_realm_filter/issues/%(id)s",
+        }
+        expected_extra_data = {
+            "realm_linkifiers": intial_linkifiers,
+            "removed_linkifier": removed_linkifier,
+        }
+        self.assertEqual(
+            RealmAuditLog.objects.filter(
+                realm=user.realm,
+                event_type=RealmAuditLog.REALM_LINKIFIER_REMOVED,
+                event_time__gte=now,
+                acting_user=user,
+                extra_data=orjson.dumps(expected_extra_data).decode(),
+            ).count(),
+            1,
+        )
+
+    def test_realm_emoji_entries(self) -> None:
+        user = self.example_user("iago")
+        realm_emoji_dict = user.realm.get_emoji()
+        now = timezone_now()
+        with get_test_image_file("img.png") as img_file:
+            # Because we want to verify the IntegrityError handling
+            # logic in check_add_realm_emoji rather than the primary
+            # check in upload_emoji, we need to make this request via
+            # that helper rather than via the API.
+            realm_emoji = check_add_realm_emoji(
+                realm=user.realm, name="test_emoji", author=user, image_file=img_file
+            )
+
+        added_emoji = EmojiInfo(
+            id=str(realm_emoji.id),
+            name="test_emoji",
+            source_url=get_emoji_url(get_emoji_file_name("img.png", realm_emoji.id), user.realm_id),
+            deactivated=False,
+            author_id=user.id,
+            still_url=None,
+        )
+        realm_emoji_dict[str(realm_emoji.id)] = added_emoji
+        expected_extra_data = {
+            "realm_emoji": dict(sorted(realm_emoji_dict.items())),
+            "added_emoji": added_emoji,
+        }
+
+        self.assertEqual(
+            RealmAuditLog.objects.filter(
+                realm=user.realm,
+                event_type=RealmAuditLog.REALM_EMOJI_ADDED,
+                event_time__gte=now,
+                acting_user=user,
+                extra_data=orjson.dumps(expected_extra_data).decode(),
+            ).count(),
+            1,
+        )
+
+        now = timezone_now()
+        do_remove_realm_emoji(user.realm, "test_emoji", acting_user=user)
+
+        deactivated_emoji = EmojiInfo(
+            id=str(realm_emoji.id),
+            name="test_emoji",
+            source_url=get_emoji_url(get_emoji_file_name("img.png", realm_emoji.id), user.realm_id),
+            deactivated=True,
+            author_id=user.id,
+            still_url=None,
+        )
+        realm_emoji_dict[str(realm_emoji.id)] = deactivated_emoji
+
+        expected_extra_data = {
+            "realm_emoji": dict(sorted(realm_emoji_dict.items())),
+            "deactivated_emoji": deactivated_emoji,
+        }
+
+        self.assertEqual(
+            RealmAuditLog.objects.filter(
+                realm=user.realm,
+                event_type=RealmAuditLog.REALM_EMOJI_REMOVED,
                 event_time__gte=now,
                 acting_user=user,
                 extra_data=orjson.dumps(expected_extra_data).decode(),

@@ -3,13 +3,13 @@ import email.policy
 import os
 import subprocess
 from email import message_from_string
+from email.headerregistry import Address
 from email.message import EmailMessage, MIMEPart
-from typing import Any, Callable, Dict, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Mapping, Optional
 from unittest import mock
 
 import orjson
 from django.conf import settings
-from django.http import HttpResponse
 
 from zerver.actions.realm_settings import do_deactivate_realm
 from zerver.actions.streams import do_change_stream_post_policy
@@ -49,6 +49,9 @@ from zerver.models import (
     get_system_bot,
 )
 from zerver.worker.queue_processors import MirrorWorker
+
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
 
 logger_name = "zerver.lib.email_mirror"
 
@@ -232,6 +235,23 @@ class TestFilterFooter(ZulipTestCase):
 
 
 class TestStreamEmailMessagesSuccess(ZulipTestCase):
+    def create_incoming_valid_message(
+        self, msgtext: str, stream: Stream, include_quotes: bool
+    ) -> EmailMessage:
+        address = Address(addr_spec=encode_email_address(stream))
+        email_username = address.username + "+show-sender"
+        if include_quotes:
+            email_username += "+include-quotes"
+        stream_to_address = Address(username=email_username, domain=address.domain).addr_spec
+
+        incoming_valid_message = EmailMessage()
+        incoming_valid_message.set_content(msgtext)
+        incoming_valid_message["Subject"] = "TestStreamEmailMessages subject"
+        incoming_valid_message["From"] = self.example_email("hamlet")
+        incoming_valid_message["To"] = stream_to_address
+        incoming_valid_message["Reply-to"] = self.example_email("othello")
+        return incoming_valid_message
+
     def test_receive_stream_email_messages_success(self) -> None:
 
         # build dummy messages for stream
@@ -536,27 +556,62 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         self.subscribe(user_profile, "Denmark")
         stream = get_stream("Denmark", user_profile.realm)
 
-        stream_to_address = encode_email_address(stream)
-        parts = stream_to_address.split("@")
-        parts[0] += "+show-sender"
-        stream_to_address = "@".join(parts)
-
-        incoming_valid_message = EmailMessage()
-        incoming_valid_message.set_content("TestStreamEmailMessages body")
-        incoming_valid_message["Subject"] = "TestStreamEmailMessages subject"
-        incoming_valid_message["From"] = self.example_email("hamlet")
-        incoming_valid_message["To"] = stream_to_address
-        incoming_valid_message["Reply-to"] = self.example_email("othello")
-
+        msgtext = "TestStreamEmailMessages Body"
+        incoming_valid_message = self.create_incoming_valid_message(
+            msgtext, stream, include_quotes=False
+        )
         process_message(incoming_valid_message)
         message = most_recent_message(user_profile)
 
         self.assertEqual(
             message.content,
-            "(via email) TestStreamEmailMessages body",
+            f"(via email) {msgtext}",
         )
         self.assertEqual(get_display_recipient(message.recipient), stream.name)
         self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
+
+    def test_receive_stream_email_forwarded_success(self) -> None:
+        msgtext = """
+Hello! Here is a message I am forwarding to this list.
+I hope you enjoy reading it!
+-Glen
+
+From: John Doe johndoe@wherever
+To: A Zulip-subscribed mailing list somelist@elsewhere
+Subject: Some subject
+
+Here is the original email. It is full of text
+and other things
+-John
+"""
+        user_profile = self.example_user("hamlet")
+        self.login_user(user_profile)
+        self.subscribe(user_profile, "Denmark")
+        stream = get_stream("Denmark", user_profile.realm)
+
+        def send_and_check_contents(
+            msgtext: str, stream: Stream, include_quotes: bool, expected_body: str
+        ) -> None:
+            incoming_valid_message = self.create_incoming_valid_message(
+                msgtext, stream, include_quotes
+            )
+            process_message(incoming_valid_message)
+            message = most_recent_message(user_profile)
+            expected = "From: {}\n{}".format(self.example_email("hamlet"), expected_body)
+            self.assertEqual(message.content, expected.strip())
+            self.assertEqual(get_display_recipient(message.recipient), stream.name)
+            self.assertEqual(message.topic_name(), incoming_valid_message["Subject"])
+
+        # include_quotes=True: expect the From:... to be preserved
+        send_and_check_contents(msgtext, stream, include_quotes=True, expected_body=msgtext)
+
+        # include_quotes=False: expect the From:... to be stripped
+        send_and_check_contents(
+            msgtext,
+            stream,
+            include_quotes=False,
+            expected_body="Hello! Here is a message I am forwarding to this list.\nI hope you enjoy reading it!\n-Glen",
+        )
 
     def test_receive_stream_email_show_sender_utf8_encoded_sender(self) -> None:
         user_profile = self.example_user("hamlet")
@@ -564,10 +619,9 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         self.subscribe(user_profile, "Denmark")
         stream = get_stream("Denmark", user_profile.realm)
 
-        stream_to_address = encode_email_address(stream)
-        parts = stream_to_address.split("@")
-        parts[0] += "+show-sender"
-        stream_to_address = "@".join(parts)
+        address = Address(addr_spec=encode_email_address(stream))
+        email_username = address.username + "+show-sender"
+        stream_to_address = Address(username=email_username, domain=address.domain).addr_spec
 
         incoming_valid_message = EmailMessage()
         incoming_valid_message.set_content("TestStreamEmailMessages body")
@@ -594,10 +648,9 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         self.subscribe(user_profile, "Denmark")
         stream = get_stream("Denmark", user_profile.realm)
 
-        stream_to_address = encode_email_address(stream)
-        parts = stream_to_address.split("@")
-        parts[0] += "+include-footer"
-        stream_to_address = "@".join(parts)
+        address = Address(addr_spec=encode_email_address(stream))
+        email_username = address.username + "+include-footer"
+        stream_to_address = Address(username=email_username, domain=address.domain).addr_spec
 
         text = """Test message
         --
@@ -623,10 +676,9 @@ Unofficial Networks . 630 Quintana Road . Suite 192 . Morro Bay, Ca 93442 . USA
         self.subscribe(user_profile, "Denmark")
         stream = get_stream("Denmark", user_profile.realm)
 
-        stream_to_address = encode_email_address(stream)
-        parts = stream_to_address.split("@")
-        parts[0] += "+include-quotes"
-        stream_to_address = "@".join(parts)
+        address = Address(addr_spec=encode_email_address(stream))
+        email_username = address.username + "+include-quotes"
+        stream_to_address = Address(username=email_username, domain=address.domain).addr_spec
 
         text = """Reply
 
@@ -725,6 +777,7 @@ class TestEmailMirrorMessagesWithAttachments(ZulipTestCase):
 
         message = most_recent_message(user_profile)
         attachment = Attachment.objects.last()
+        assert attachment is not None
         self.assertEqual(list(attachment.messages.values_list("id", flat=True)), [message.id])
         self.assertEqual(
             message.sender, get_system_bot(settings.EMAIL_GATEWAY_BOT, stream.realm_id)
@@ -1467,6 +1520,7 @@ class TestScriptMTA(ZulipTestCase):
 
         mail_template = self.fixture_data("simple.txt", type="email")
         mail = mail_template.format(stream_to_address=stream_to_address, sender=sender)
+        assert settings.SHARED_SECRET is not None
         subprocess.run(
             [script, "-r", stream_to_address, "-s", settings.SHARED_SECRET, "-t"],
             input=mail,
@@ -1482,6 +1536,7 @@ class TestScriptMTA(ZulipTestCase):
         stream_to_address = encode_email_address(stream)
         mail_template = self.fixture_data("simple.txt", type="email")
         mail = mail_template.format(stream_to_address=stream_to_address, sender=sender)
+        assert settings.SHARED_SECRET is not None
         p = subprocess.run(
             [script, "-s", settings.SHARED_SECRET, "-t"],
             input=mail,
@@ -1514,7 +1569,7 @@ class TestEmailMirrorTornadoView(ZulipTestCase):
         user_message = most_recent_usermessage(user_profile)
         return create_missed_message_address(user_profile, user_message.message)
 
-    def send_offline_message(self, to_address: str, sender: UserProfile) -> HttpResponse:
+    def send_offline_message(self, to_address: str, sender: UserProfile) -> "TestHttpResponse":
         mail_template = self.fixture_data("simple.txt", type="email")
         mail = mail_template.format(stream_to_address=to_address, sender=sender.delivery_email)
         msg_base64 = base64.b64encode(mail.encode()).decode()
@@ -1655,6 +1710,31 @@ class TestContentTypeUnspecifiedCharset(ZulipTestCase):
         self.assertEqual(message.content, "(via email) Email fixture 1.txt body")
 
 
+class TestContentTypeInvalidCharset(ZulipTestCase):
+    def test_unknown_charset(self) -> None:
+        message_as_string = self.fixture_data("1.txt", type="email")
+        message_as_string = message_as_string.replace(
+            'Content-Type: text/plain; charset="us-ascii"',
+            'Content-Type: text/plain; charset="bogus"',
+        )
+        incoming_message = message_from_string(message_as_string, policy=email.policy.default)
+        # https://github.com/python/typeshed/issues/2417
+        assert isinstance(incoming_message, EmailMessage)
+
+        user_profile = self.example_user("hamlet")
+        self.login_user(user_profile)
+        self.subscribe(user_profile, "Denmark")
+        stream = get_stream("Denmark", user_profile.realm)
+        stream_to_address = encode_email_address(stream)
+
+        del incoming_message["To"]
+        incoming_message["To"] = stream_to_address
+        process_message(incoming_message)
+        message = most_recent_message(user_profile)
+
+        self.assertEqual(message.content, "Email fixture 1.txt body")
+
+
 class TestEmailMirrorProcessMessageNoValidRecipient(ZulipTestCase):
     def test_process_message_no_valid_recipient(self) -> None:
         incoming_valid_message = EmailMessage()
@@ -1679,8 +1759,10 @@ class TestEmailMirrorLogAndReport(ZulipTestCase):
         stream = get_stream("Denmark", user_profile.realm)
         stream_to_address = encode_email_address(stream)
 
-        address_parts = stream_to_address.split("@")
-        scrubbed_address = "X" * len(address_parts[0]) + "@" + address_parts[1]
+        address = Address(addr_spec=stream_to_address)
+        scrubbed_address = Address(
+            username="X" * len(address.username), domain=address.domain
+        ).addr_spec
 
         incoming_valid_message = EmailMessage()
         incoming_valid_message.set_content("Test body")
@@ -1742,8 +1824,10 @@ class TestEmailMirrorLogAndReport(ZulipTestCase):
 
         # Test for a stream address:
         stream_to_address = encode_email_address(stream)
-        stream_address_parts = stream_to_address.split("@")
-        scrubbed_stream_address = "X" * len(stream_address_parts[0]) + "@" + stream_address_parts[1]
+        address = Address(addr_spec=stream_to_address)
+        scrubbed_stream_address = Address(
+            username="X" * len(address.username), domain=address.domain
+        ).addr_spec
 
         error_message = "test message {}"
         error_message = error_message.format(stream_to_address)

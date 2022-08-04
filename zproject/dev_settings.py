@@ -1,8 +1,9 @@
 import os
 import pwd
-from typing import Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 from scripts.lib.zulip_tools import deport
+from zerver.lib.types import SCIMConfigDict
 
 ZULIP_ADMINISTRATOR = "desdemona+admin@zulip.com"
 
@@ -76,6 +77,10 @@ TORNADO_PORTS = [9993]
 OPEN_REALM_CREATION = True
 WEB_PUBLIC_STREAMS_ENABLED = True
 INVITES_MIN_USER_AGE_DAYS = 0
+
+# Redirect to /devlogin/ by default in dev mode
+CUSTOM_HOME_NOT_LOGGED_IN = "/devlogin/"
+LOGIN_URL = "/devlogin/"
 
 # For development convenience, configure the ToS/Privacy Policies
 POLICIES_DIRECTORY = "corporate/policies"
@@ -182,7 +187,7 @@ SOCIAL_AUTH_SUBDOMAIN = "auth"
 
 MEMCACHED_USERNAME: Optional[str] = None
 
-SCIM_CONFIG = {
+SCIM_CONFIG: Dict[str, SCIMConfigDict] = {
     "zulip": {
         "bearer_token": "token1234",
         "scim_client_name": "test-scim-client",

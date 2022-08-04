@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
 from unittest import mock
 
 import orjson
@@ -13,6 +13,7 @@ from zerver.lib.external_accounts import DEFAULT_EXTERNAL_ACCOUNTS
 from zerver.lib.markdown import markdown_convert
 from zerver.lib.test_classes import ZulipTestCase
 from zerver.lib.test_helpers import queries_captured
+from zerver.lib.types import ProfileDataElementUpdateDict, ProfileDataElementValue
 from zerver.models import (
     CustomProfileField,
     CustomProfileFieldValue,
@@ -105,8 +106,8 @@ class CreateCustomProfileFieldTest(CustomProfileFieldTestCase):
 
         data["field_data"] = orjson.dumps(
             {
-                "python": {"text": "Python"},
-                "java": {"text": "Java"},
+                "0": {"text": "Python"},
+                "1": {"text": "Java"},
             }
         ).decode()
         result = self.client_post("/json/realm/profile_fields", info=data)
@@ -114,8 +115,8 @@ class CreateCustomProfileFieldTest(CustomProfileFieldTestCase):
 
         data["field_data"] = orjson.dumps(
             {
-                "python": {"text": "Python", "order": ""},
-                "java": {"text": "Java", "order": "2"},
+                "0": {"text": "Python", "order": ""},
+                "1": {"text": "Java", "order": "2"},
             }
         ).decode()
         result = self.client_post("/json/realm/profile_fields", info=data)
@@ -124,7 +125,7 @@ class CreateCustomProfileFieldTest(CustomProfileFieldTestCase):
         data["field_data"] = orjson.dumps(
             {
                 "": {"text": "Python", "order": "1"},
-                "java": {"text": "Java", "order": "2"},
+                "1": {"text": "Java", "order": "2"},
             }
         ).decode()
         result = self.client_post("/json/realm/profile_fields", info=data)
@@ -132,8 +133,8 @@ class CreateCustomProfileFieldTest(CustomProfileFieldTestCase):
 
         data["field_data"] = orjson.dumps(
             {
-                "python": {"text": "Python", "order": 1},
-                "java": {"text": "Java", "order": "2"},
+                "0": {"text": "Python", "order": 1},
+                "1": {"text": "Java", "order": "2"},
             }
         ).decode()
         result = self.client_post("/json/realm/profile_fields", info=data)
@@ -145,8 +146,17 @@ class CreateCustomProfileFieldTest(CustomProfileFieldTestCase):
 
         data["field_data"] = orjson.dumps(
             {
-                "python": {"text": "Python", "order": "1"},
-                "java": {"text": "Java", "order": "2"},
+                "0": {"text": "Duplicate", "order": "1"},
+                "1": {"text": "Duplicate", "order": "2"},
+            }
+        ).decode()
+        result = self.client_post("/json/realm/profile_fields", info=data)
+        self.assert_json_error(result, "Field must not have duplicate choices.")
+
+        data["field_data"] = orjson.dumps(
+            {
+                "0": {"text": "Python", "order": "1"},
+                "1": {"text": "Java", "order": "2"},
             }
         ).decode()
         result = self.client_post("/json/realm/profile_fields", info=data)
@@ -281,7 +291,7 @@ class CreateCustomProfileFieldTest(CustomProfileFieldTestCase):
             }
         ).decode()
         result = self.client_post("/json/realm/profile_fields", info=data)
-        self.assert_json_error(result, "Malformed URL pattern.")
+        self.assert_json_error(result, "URL pattern must contain '%(username)s'.")
 
         data["field_data"] = orjson.dumps(
             {
@@ -290,7 +300,7 @@ class CreateCustomProfileFieldTest(CustomProfileFieldTestCase):
             }
         ).decode()
         result = self.client_post("/json/realm/profile_fields", info=data)
-        self.assert_json_error(result, "Malformed URL pattern.")
+        self.assert_json_error(result, "URL pattern must contain '%(username)s'.")
 
         data["field_data"] = orjson.dumps(
             {
@@ -365,7 +375,7 @@ class DeleteCustomProfileFieldTest(CustomProfileFieldTestCase):
         self.assert_json_error(result, f"Field id {invalid_field_id} not found.")
 
         field = CustomProfileField.objects.get(name="Mentor", realm=realm)
-        data: List[Dict[str, Union[int, str, List[int]]]] = [
+        data: List[ProfileDataElementUpdateDict] = [
             {"id": field.id, "value": [self.example_user("aaron").id]},
         ]
         do_update_user_custom_profile_data_if_changed(iago, data)
@@ -395,7 +405,7 @@ class DeleteCustomProfileFieldTest(CustomProfileFieldTestCase):
         user_profile = self.example_user("iago")
         realm = user_profile.realm
         field = CustomProfileField.objects.get(name="Phone number", realm=realm)
-        data: List[Dict[str, Union[int, str, List[int]]]] = [
+        data: List[ProfileDataElementUpdateDict] = [
             {"id": field.id, "value": "123456"},
         ]
         do_update_user_custom_profile_data_if_changed(user_profile, data)
@@ -487,8 +497,8 @@ class UpdateCustomProfileFieldTest(CustomProfileFieldTestCase):
 
         field_data = orjson.dumps(
             {
-                "vim": "Vim",
-                "emacs": {"order": "2", "text": "Emacs"},
+                "0": "Vim",
+                "1": {"order": "2", "text": "Emacs"},
             }
         ).decode()
         result = self.client_patch(
@@ -499,9 +509,9 @@ class UpdateCustomProfileFieldTest(CustomProfileFieldTestCase):
 
         field_data = orjson.dumps(
             {
-                "vim": {"order": "1", "text": "Vim"},
-                "emacs": {"order": "2", "text": "Emacs"},
-                "notepad": {"order": "3", "text": "Notepad"},
+                "0": {"order": "1", "text": "Vim"},
+                "1": {"order": "2", "text": "Emacs"},
+                "2": {"order": "3", "text": "Notepad"},
             }
         ).decode()
         result = self.client_patch(
@@ -580,18 +590,20 @@ class UpdateCustomProfileFieldTest(CustomProfileFieldTestCase):
     def test_update_profile_data_successfully(self) -> None:
         self.login("iago")
         realm = get_realm("zulip")
-        fields = [
+        fields: List[Tuple[str, Union[str, List[int]]]] = [
             ("Phone number", "*short* text data"),
             ("Biography", "~~short~~ **long** text data"),
             ("Favorite food", "long short text data"),
-            ("Favorite editor", "vim"),
+            ("Favorite editor", "0"),
             ("Birthday", "1909-03-05"),
             ("Favorite website", "https://zulip.com"),
             ("Mentor", [self.example_user("cordelia").id]),
             ("GitHub", "zulip-mobile"),
         ]
 
-        data = []
+        data: List[ProfileDataElementUpdateDict] = []
+        expected_value: Dict[int, ProfileDataElementValue] = {}
+        expected_rendered_value: Dict[int, Optional[str]] = {}
         for i, field_value in enumerate(fields):
             name, value = field_value
             field = CustomProfileField.objects.get(name=name, realm=realm)
@@ -599,8 +611,13 @@ class UpdateCustomProfileFieldTest(CustomProfileFieldTestCase):
                 {
                     "id": field.id,
                     "value": value,
-                    "field": field,
                 }
+            )
+            expected_value[field.id] = value
+            expected_rendered_value[field.id] = (
+                markdown_convert(value).rendered_content
+                if field.is_renderable() and isinstance(value, str)
+                else None
             )
 
         # Update value of field
@@ -611,13 +628,6 @@ class UpdateCustomProfileFieldTest(CustomProfileFieldTestCase):
         self.assert_json_success(result)
 
         iago = self.example_user("iago")
-        expected_value = {f["id"]: f["value"] for f in data}
-        expected_rendered_value: Dict[Union[int, float, str, None], Union[str, None]] = {}
-        for f in data:
-            if f["field"].is_renderable():
-                expected_rendered_value[f["id"]] = markdown_convert(f["value"]).rendered_content
-            else:
-                expected_rendered_value[f["id"]] = None
 
         for field_dict in iago.profile_data():
             self.assertEqual(field_dict["value"], expected_value[field_dict["id"]])
@@ -657,7 +667,7 @@ class UpdateCustomProfileFieldTest(CustomProfileFieldTestCase):
         data = [
             {
                 "id": field.id,
-                "value": "emacs",
+                "value": "1",
             }
         ]
 
@@ -684,7 +694,7 @@ class UpdateCustomProfileFieldTest(CustomProfileFieldTestCase):
         self.assertIsNone(value)
         self.assertIsNone(rendered_value)
 
-        update_dict: Dict[str, Union[int, str, List[int]]] = {
+        update_dict: ProfileDataElementUpdateDict = {
             "id": quote.id,
             "value": "***beware*** of jealousy...",
         }
@@ -704,7 +714,7 @@ class UpdateCustomProfileFieldTest(CustomProfileFieldTestCase):
 
         # Set field value:
         field = CustomProfileField.objects.get(name="Mentor", realm=realm)
-        data: List[Dict[str, Union[int, str, List[int]]]] = [
+        data: List[ProfileDataElementUpdateDict] = [
             {"id": field.id, "value": [self.example_user("aaron").id]},
         ]
         do_update_user_custom_profile_data_if_changed(iago, data)
@@ -717,14 +727,37 @@ class UpdateCustomProfileFieldTest(CustomProfileFieldTestCase):
             do_update_user_custom_profile_data_if_changed(iago, data)
             mock_notify.assert_not_called()
 
+    def test_removing_option_from_select_field(self) -> None:
+        self.login("iago")
+        realm = get_realm("zulip")
+        field = CustomProfileField.objects.get(name="Favorite editor", realm=realm)
+        self.assertTrue(
+            CustomProfileFieldValue.objects.filter(field_id=field.id, value="0").exists()
+        )
+        self.assertTrue(
+            CustomProfileFieldValue.objects.filter(field_id=field.id, value="1").exists()
+        )
+
+        new_options = {"1": {"text": "Emacs", "order": "1"}}
+        result = self.client_patch(
+            f"/json/realm/profile_fields/{field.id}",
+            info={"name": "Favorite editor", "field_data": orjson.dumps(new_options).decode()},
+        )
+        self.assert_json_success(result)
+        self.assertFalse(
+            CustomProfileFieldValue.objects.filter(field_id=field.id, value="0").exists()
+        )
+        self.assertTrue(
+            CustomProfileFieldValue.objects.filter(field_id=field.id, value="1").exists()
+        )
+
 
 class ListCustomProfileFieldTest(CustomProfileFieldTestCase):
     def test_list(self) -> None:
         self.login("iago")
         result = self.client_get("/json/realm/profile_fields")
-        self.assert_json_success(result)
+        content = self.assert_json_success(result)
         self.assertEqual(200, result.status_code)
-        content = result.json()
         self.assert_length(content["custom_fields"], self.original_count)
 
     def test_list_order(self) -> None:
@@ -735,9 +768,12 @@ class ListCustomProfileFieldTest(CustomProfileFieldTestCase):
             .order_by("-order")
             .values_list("order", flat=True)
         )
-        try_reorder_realm_custom_profile_fields(realm, order)
+        # Until https://github.com/typeddjango/django-stubs/issues/444 gets resolved,
+        # we need the cast here to ensure the value list is correctly typed.
+        assert all(isinstance(item, int) for item in order)
+        try_reorder_realm_custom_profile_fields(realm, cast(Iterable[int], order))
         result = self.client_get("/json/realm/profile_fields")
-        content = result.json()
+        content = self.assert_json_success(result)
         self.assertListEqual(
             content["custom_fields"], sorted(content["custom_fields"], key=lambda x: -x["id"])
         )
@@ -746,7 +782,6 @@ class ListCustomProfileFieldTest(CustomProfileFieldTestCase):
         iago = self.example_user("iago")
         test_bot = self.create_test_bot("foo-bot", iago)
         self.login_user(iago)
-        assert test_bot
 
         with queries_captured() as queries:
             response = self.client_get(
@@ -755,8 +790,7 @@ class ListCustomProfileFieldTest(CustomProfileFieldTestCase):
 
         self.assert_length(queries, 4)
 
-        self.assertEqual(response.status_code, 200)
-        raw_users_data = response.json()["members"]
+        raw_users_data = self.assert_json_success(response)["members"]
 
         iago_raw_data = None
         test_bot_raw_data = None
@@ -817,8 +851,7 @@ class ListCustomProfileFieldTest(CustomProfileFieldTestCase):
         self.assertEqual(test_bot_raw_data["bot_owner_id"], iago_raw_data["user_id"])
 
         response = self.client_get("/json/users", {"client_gravatar": "false"})
-        self.assertEqual(response.status_code, 200)
-        raw_users_data = response.json()["members"]
+        raw_users_data = self.assert_json_success(response)["members"]
         for user_dict in raw_users_data:
             with self.assertRaises(KeyError):
                 user_dict["profile_data"]
@@ -849,8 +882,7 @@ class ListCustomProfileFieldTest(CustomProfileFieldTestCase):
 
         url = "/json/users/me"
         response = self.client_get(url)
-        self.assertEqual(response.status_code, 200)
-        raw_user_data = response.json()
+        raw_user_data = self.assert_json_success(response)
         self.assertEqual(set(raw_user_data.keys()), expected_keys)
 
 

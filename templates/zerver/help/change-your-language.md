@@ -1,29 +1,28 @@
 # Change your language
 
-Zulip has been translated or partially translated into dozens of
-languages. You can see which languages Zulip supports, and help add
-support for new languages on **[Transifex](https://www.transifex.com/zulip/zulip/)**.
+{!translation-project-info.md!}
 
-If your organization has a primary language other than American
-English, an administrator should also [set the organization
-notifications language][change-org-lang].
+## Change the language of the Zulip app
 
-[change-org-lang]: change-the-default-language-for-your-organization
-
-### Change your language
+Note that this will not change stream names, topic names, or the language of
+messages you receive.
 
 {start_tabs}
 
+{tab|desktop-web}
+
 {settings_tab|display-settings}
 
-2. Under **Language and time**, click the button next to **Language**.
+1. Under **Language and time**, click the button under **Language**.
 
-3. Click on a language.
+1. Select a language.
 
-4. Click **Reload**.
+1. Click **Reload**.
 
 {end_tabs}
 
-!!! tip ""
+## Related articles
 
-    You can always send and read messages in any language.
+* [Configure organization language for automated messages and invitation emails][org-lang]
+
+[org-lang]: change-the-default-language-for-your-organization

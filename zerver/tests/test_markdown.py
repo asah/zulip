@@ -54,7 +54,6 @@ from zerver.models import (
     Message,
     RealmEmoji,
     RealmFilter,
-    Stream,
     UserGroup,
     UserMessage,
     UserProfile,
@@ -1195,20 +1194,21 @@ class MarkdownTest(ZulipTestCase):
         realm_emoji = RealmEmoji.objects.filter(
             realm=realm, name="green_tick", deactivated=False
         ).get()
+        assert realm_emoji.file_name is not None
         self.assertEqual(
             converted.rendered_content,
             "<p>{}</p>".format(emoji_img(":green_tick:", realm_emoji.file_name, realm.id)),
         )
 
         # Deactivate realm emoji.
-        do_remove_realm_emoji(realm, "green_tick")
+        do_remove_realm_emoji(realm, "green_tick", acting_user=None)
         converted = markdown_convert(":green_tick:", message_realm=realm, message=msg)
         self.assertEqual(converted.rendered_content, "<p>:green_tick:</p>")
 
     def test_deactivated_realm_emoji(self) -> None:
         # Deactivate realm emoji.
         realm = get_realm("zulip")
-        do_remove_realm_emoji(realm, "green_tick")
+        do_remove_realm_emoji(realm, "green_tick", acting_user=None)
 
         msg = Message(sender=self.example_user("hamlet"))
         converted = markdown_convert(":green_tick:", message_realm=realm, message=msg)
@@ -2497,7 +2497,7 @@ class MarkdownTest(ZulipTestCase):
 
     def test_stream_case_sensitivity(self) -> None:
         realm = get_realm("zulip")
-        case_sens = Stream.objects.create(name="CaseSens", realm=realm)
+        case_sens = self.make_stream(stream_name="CaseSens", realm=realm)
         sender_user_profile = self.example_user("othello")
         msg = Message(sender=sender_user_profile, sending_client=get_client("test"))
         content = "#**CaseSens**"
@@ -2513,7 +2513,7 @@ class MarkdownTest(ZulipTestCase):
         currently.  If we change that in the future, we'll need to change this
         test."""
         realm = get_realm("zulip")
-        Stream.objects.create(name="CaseSens", realm=realm)
+        self.make_stream(stream_name="CaseSens", realm=realm)
         sender_user_profile = self.example_user("othello")
         msg = Message(sender=sender_user_profile, sending_client=get_client("test"))
         content = "#**casesens**"
@@ -2588,7 +2588,7 @@ class MarkdownTest(ZulipTestCase):
 
     def test_stream_unicode(self) -> None:
         realm = get_realm("zulip")
-        uni = Stream.objects.create(name="привет", realm=realm)
+        uni = self.make_stream(stream_name="привет", realm=realm)
         sender_user_profile = self.example_user("othello")
         msg = Message(sender=sender_user_profile, sending_client=get_client("test"))
         content = "#**привет**"
@@ -2616,7 +2616,7 @@ class MarkdownTest(ZulipTestCase):
             "<RealmFilter(zulip): #(?P<id>[0-9]{2,8}) https://trac.example.com/ticket/%(id)s>",
         )
         # Create a stream that potentially interferes with the pattern.
-        stream = Stream.objects.create(name="Stream #1234", realm=realm)
+        stream = self.make_stream(stream_name="Stream #1234", realm=realm)
         msg = Message(sender=sender_user_profile, sending_client=get_client("test"))
         content = "#**Stream #1234**"
         href = f"/#narrow/stream/{stream.id}-Stream-.231234"
@@ -2814,9 +2814,9 @@ class MarkdownApiTests(ZulipTestCase):
             "/api/v1/messages/render",
             dict(content=content),
         )
-        self.assert_json_success(result)
+        response_dict = self.assert_json_success(result)
         self.assertEqual(
-            result.json()["rendered"], "<p>That is a <strong>bold</strong> statement</p>"
+            response_dict["rendered"], "<p>That is a <strong>bold</strong> statement</p>"
         )
 
     def test_render_mention_stream_api(self) -> None:
@@ -2827,11 +2827,11 @@ class MarkdownApiTests(ZulipTestCase):
             "/api/v1/messages/render",
             dict(content=content),
         )
-        self.assert_json_success(result)
+        response_dict = self.assert_json_success(result)
         user_id = self.example_user("hamlet").id
         stream_id = get_stream("Denmark", get_realm("zulip")).id
         self.assertEqual(
-            result.json()["rendered"],
+            response_dict["rendered"],
             f'<p>This mentions <a class="stream" data-stream-id="{stream_id}" href="/#narrow/stream/{stream_id}-Denmark">#Denmark</a> and <span class="user-mention" data-user-id="{user_id}">@King Hamlet</span>.</p>',
         )
 

@@ -3,7 +3,9 @@ import re
 import secrets
 import time
 from datetime import timedelta
+from email.headerregistry import Address
 from typing import (
+    TYPE_CHECKING,
     AbstractSet,
     Any,
     Callable,
@@ -24,7 +26,7 @@ import django.contrib.auth
 import orjson
 import re2
 from bitfield import BitField
-from bitfield.types import BitHandler
+from bitfield.types import Bit, BitHandler
 from django.conf import settings
 from django.contrib.auth.models import (
     AbstractBaseUser,
@@ -83,6 +85,7 @@ from zerver.lib.exceptions import JsonableError, RateLimited
 from zerver.lib.pysa import mark_sanitized
 from zerver.lib.timestamp import datetime_to_timestamp
 from zerver.lib.types import (
+    APIStreamDict,
     DisplayRecipientT,
     ExtendedFieldElement,
     ExtendedValidator,
@@ -113,6 +116,11 @@ MAX_LANGUAGE_ID_LENGTH: int = 50
 
 STREAM_NAMES = TypeVar("STREAM_NAMES", Sequence[str], AbstractSet[str])
 
+if TYPE_CHECKING:
+    # We use ModelBackend only for typing. Importing it otherwise causes circular dependency.
+    from django.contrib.auth.backends import ModelBackend
+    from django.db.models.query import _QuerySet as ValuesQuerySet
+
 
 class EmojiInfo(TypedDict):
     id: str
@@ -129,7 +137,7 @@ class AndZero(models.Lookup):
 
     def as_sql(
         self, compiler: SQLCompiler, connection: BaseDatabaseWrapper
-    ) -> Tuple[str, List[object]]:  # nocoverage # currently only used in migrations
+    ) -> Tuple[str, List[Union[str, int]]]:  # nocoverage # currently only used in migrations
         lhs, lhs_params = self.process_lhs(compiler, connection)
         rhs, rhs_params = self.process_rhs(compiler, connection)
         return f"{lhs} & {rhs} = 0", lhs_params + rhs_params
@@ -141,7 +149,7 @@ class AndNonZero(models.Lookup):
 
     def as_sql(
         self, compiler: SQLCompiler, connection: BaseDatabaseWrapper
-    ) -> Tuple[str, List[object]]:  # nocoverage # currently only used in migrations
+    ) -> Tuple[str, List[Union[str, int]]]:  # nocoverage # currently only used in migrations
         lhs, lhs_params = self.process_lhs(compiler, connection)
         rhs, rhs_params = self.process_rhs(compiler, connection)
         return f"{lhs} & {rhs} != 0", lhs_params + rhs_params
@@ -215,10 +223,10 @@ def get_active_realm_emoji_cache_key(realm: "Realm") -> str:
 # these values cannot change in a running production system, but do
 # regularly change within unit tests; we address the latter by calling
 # clear_supported_auth_backends_cache in our standard tearDown code.
-supported_backends: Optional[Set[type]] = None
+supported_backends: Optional[List["ModelBackend"]] = None
 
 
-def supported_auth_backends() -> Set[type]:
+def supported_auth_backends() -> List["ModelBackend"]:
     global supported_backends
     # Caching temporarily disabled for debugging
     supported_backends = django.contrib.auth.get_backends()
@@ -295,7 +303,9 @@ class Realm(models.Model):
 
     # Whether organization has given permission to be advertised in the
     # Zulip communities directory.
-    want_advertise_in_communities_directory: bool = models.BooleanField(default=False)
+    want_advertise_in_communities_directory: bool = models.BooleanField(
+        default=False, db_index=True
+    )
 
     # Whether the organization has enabled inline image and URL previews.
     inline_image_preview: bool = models.BooleanField(default=True)
@@ -405,18 +415,16 @@ class Realm(models.Model):
     WILDCARD_MENTION_POLICY_EVERYONE = 1
     WILDCARD_MENTION_POLICY_MEMBERS = 2
     WILDCARD_MENTION_POLICY_FULL_MEMBERS = 3
-    WILDCARD_MENTION_POLICY_STREAM_ADMINS = 4
     WILDCARD_MENTION_POLICY_ADMINS = 5
     WILDCARD_MENTION_POLICY_NOBODY = 6
     WILDCARD_MENTION_POLICY_MODERATORS = 7
     wildcard_mention_policy: int = models.PositiveSmallIntegerField(
-        default=WILDCARD_MENTION_POLICY_STREAM_ADMINS,
+        default=WILDCARD_MENTION_POLICY_ADMINS,
     )
     WILDCARD_MENTION_POLICY_TYPES = [
         WILDCARD_MENTION_POLICY_EVERYONE,
         WILDCARD_MENTION_POLICY_MEMBERS,
         WILDCARD_MENTION_POLICY_FULL_MEMBERS,
-        WILDCARD_MENTION_POLICY_STREAM_ADMINS,
         WILDCARD_MENTION_POLICY_ADMINS,
         WILDCARD_MENTION_POLICY_NOBODY,
         WILDCARD_MENTION_POLICY_MODERATORS,
@@ -507,7 +515,6 @@ class Realm(models.Model):
             "name": "Unspecified",
             "id": 0,
             "hidden": True,
-            "hidden_for_sponsorship": True,
             "display_order": 0,
         },
         "business": {
@@ -791,7 +798,7 @@ class Realm(models.Model):
 
     def get_admin_users_and_bots(
         self, include_realm_owners: bool = True
-    ) -> Sequence["UserProfile"]:
+    ) -> QuerySet["UserProfile"]:
         """Use this in contexts where we want administrative users as well as
         bots with administrator privileges, like send_event calls for
         notifications to all administrator users.
@@ -801,14 +808,13 @@ class Realm(models.Model):
         else:
             roles = [UserProfile.ROLE_REALM_ADMINISTRATOR]
 
-        # TODO: Change return type to QuerySet[UserProfile]
         return UserProfile.objects.filter(
             realm=self,
             is_active=True,
             role__in=roles,
         )
 
-    def get_human_admin_users(self, include_realm_owners: bool = True) -> QuerySet:
+    def get_human_admin_users(self, include_realm_owners: bool = True) -> QuerySet["UserProfile"]:
         """Use this in contexts where we want only human users with
         administrative privileges, like sending an email to all of a
         realm's administrators (bots don't have real email addresses).
@@ -818,7 +824,6 @@ class Realm(models.Model):
         else:
             roles = [UserProfile.ROLE_REALM_ADMINISTRATOR]
 
-        # TODO: Change return type to QuerySet[UserProfile]
         return UserProfile.objects.filter(
             realm=self,
             is_bot=False,
@@ -826,7 +831,7 @@ class Realm(models.Model):
             role__in=roles,
         )
 
-    def get_human_billing_admin_and_realm_owner_users(self) -> QuerySet:
+    def get_human_billing_admin_and_realm_owner_users(self) -> QuerySet["UserProfile"]:
         return UserProfile.objects.filter(
             Q(role=UserProfile.ROLE_REALM_OWNER) | Q(is_billing_admin=True),
             realm=self,
@@ -834,8 +839,7 @@ class Realm(models.Model):
             is_active=True,
         )
 
-    def get_active_users(self) -> Sequence["UserProfile"]:
-        # TODO: Change return type to QuerySet[UserProfile]
+    def get_active_users(self) -> QuerySet["UserProfile"]:
         return UserProfile.objects.filter(realm=self, is_active=True).select_related()
 
     def get_first_human_user(self) -> Optional["UserProfile"]:
@@ -849,7 +853,7 @@ class Realm(models.Model):
         """
         return UserProfile.objects.filter(realm=self, is_bot=False).order_by("id").first()
 
-    def get_human_owner_users(self) -> QuerySet:
+    def get_human_owner_users(self) -> QuerySet["UserProfile"]:
         return UserProfile.objects.filter(
             realm=self, is_bot=False, role=UserProfile.ROLE_REALM_OWNER, is_active=True
         )
@@ -941,20 +945,11 @@ class Realm(models.Model):
     def presence_disabled(self) -> bool:
         return self.is_zephyr_mirror_realm
 
-    def web_public_streams_available_for_realm(self) -> bool:
-        if self.string_id in settings.WEB_PUBLIC_STREAMS_BETA_SUBDOMAINS:
-            return True
-
+    def web_public_streams_enabled(self) -> bool:
         if not settings.WEB_PUBLIC_STREAMS_ENABLED:
             # To help protect against accidentally web-public streams in
             # self-hosted servers, we require the feature to be enabled at
             # the server level before it is available to users.
-            return False
-
-        return True
-
-    def web_public_streams_enabled(self) -> bool:
-        if not self.web_public_streams_available_for_realm():
             return False
 
         if self.plan_type == Realm.PLAN_TYPE_LIMITED:
@@ -1049,21 +1044,6 @@ class RealmDomain(models.Model):
         unique_together = ("realm", "domain")
 
 
-# These functions should only be used on email addresses that have
-# been validated via django.core.validators.validate_email
-#
-# Note that we need to use some care, since can you have multiple @-signs; e.g.
-# "tabbott@test"@zulip.com
-# is valid email address
-def email_to_username(email: str) -> str:
-    return "@".join(email.split("@")[:-1]).lower()
-
-
-# Returns the raw domain portion of the desired email address
-def email_to_domain(email: str) -> str:
-    return email.split("@")[-1].lower()
-
-
 class DomainNotAllowedForRealmError(Exception):
     pass
 
@@ -1076,7 +1056,12 @@ class EmailContainsPlusError(Exception):
     pass
 
 
-def get_realm_domains(realm: Realm) -> List[Dict[str, Union[str, bool]]]:
+class RealmDomainDict(TypedDict):
+    domain: str
+    allow_subdomains: bool
+
+
+def get_realm_domains(realm: Realm) -> List[RealmDomainDict]:
     return list(realm.realmdomain_set.values("domain", "allow_subdomains"))
 
 
@@ -1560,6 +1545,8 @@ class UserBaseSettings(models.Model):
     send_read_receipts: bool = models.BooleanField(default=True)
 
     display_settings_legacy = dict(
+        # Don't add anything new to this legacy dict.
+        # Instead, see `modern_settings` below.
         color_scheme=int,
         default_language=str,
         default_view=str,
@@ -1577,6 +1564,8 @@ class UserBaseSettings(models.Model):
     )
 
     notification_settings_legacy = dict(
+        # Don't add anything new to this legacy dict.
+        # Instead, see `modern_notification_settings` below.
         desktop_icon_count_display=int,
         email_notifications_batching_period_seconds=int,
         enable_desktop_notifications=bool,
@@ -1599,22 +1588,29 @@ class UserBaseSettings(models.Model):
         wildcard_mentions_notify=bool,
     )
 
+    modern_settings = dict(
+        # Add new general settings here.
+        display_emoji_reaction_users=bool,
+        escape_navigates_to_default_view=bool,
+        send_private_typing_notifications=bool,
+        send_read_receipts=bool,
+        send_stream_typing_notifications=bool,
+    )
+
+    modern_notification_settings: Dict[str, Any] = dict(
+        # Add new notification settings here.
+    )
+
     notification_setting_types = {
-        **notification_settings_legacy
-    }  # Add new notifications settings here.
+        **notification_settings_legacy,
+        **modern_notification_settings,
+    }
 
     # Define the types of the various automatically managed properties
     property_types = {
         **display_settings_legacy,
         **notification_setting_types,
-        **dict(
-            # Add new general settings here.
-            display_emoji_reaction_users=bool,
-            escape_navigates_to_default_view=bool,
-            send_private_typing_notifications=bool,
-            send_read_receipts=bool,
-            send_stream_typing_notifications=bool,
-        ),
+        **modern_settings,
     }
 
     class Meta:
@@ -1797,7 +1793,7 @@ class UserProfile(AbstractBaseUser, PermissionsMixin, UserBaseSettings):
     )
     default_all_public_streams: bool = models.BooleanField(default=False)
 
-    # A time zone name from the `tzdata` database, as found in pytz.all_timezones.
+    # A time zone name from the `tzdata` database, as found in zoneinfo.available_timezones().
     #
     # The longest existing name is 32 characters long, so max_length=40 seems
     # like a safe choice.
@@ -2180,7 +2176,7 @@ class GroupGroupMembership(models.Model):
 
 def remote_user_to_email(remote_user: str) -> str:
     if settings.SSO_APPEND_DOMAIN is not None:
-        remote_user += "@" + settings.SSO_APPEND_DOMAIN
+        return Address(username=remote_user, domain=settings.SSO_APPEND_DOMAIN).addr_spec
     return remote_user
 
 
@@ -2219,7 +2215,7 @@ class PreregistrationUser(models.Model):
     password_required: bool = models.BooleanField(default=True)
 
     # status: whether an object has been confirmed.
-    #   if confirmed, set to confirmation.settings.STATUS_ACTIVE
+    #   if confirmed, set to confirmation.settings.STATUS_USED
     status: int = models.IntegerField(default=0)
 
     # The realm should only ever be None for PreregistrationUser
@@ -2237,6 +2233,10 @@ class PreregistrationUser(models.Model):
     )
     invited_as: int = models.PositiveSmallIntegerField(default=INVITE_AS["MEMBER"])
 
+    multiuse_invite: Optional["MultiuseInvite"] = models.ForeignKey(
+        "MultiuseInvite", null=True, on_delete=models.SET_NULL
+    )
+
     # The UserProfile created upon completion of the registration
     # for this PregistrationUser
     created_user: Optional[UserProfile] = models.ForeignKey(
@@ -2250,17 +2250,17 @@ class PreregistrationUser(models.Model):
 
 
 def filter_to_valid_prereg_users(
-    query: QuerySet,
+    query: QuerySet[PreregistrationUser],
     invite_expires_in_minutes: Union[Optional[int], UnspecifiedValue] = UnspecifiedValue(),
-) -> QuerySet:
+) -> QuerySet[PreregistrationUser]:
     """
     If invite_expires_in_days is specified, we return only those PreregistrationUser
     objects that were created at most that many days in the past.
     """
-    active_value = confirmation_settings.STATUS_ACTIVE
+    used_value = confirmation_settings.STATUS_USED
     revoked_value = confirmation_settings.STATUS_REVOKED
 
-    query = query.exclude(status__in=[active_value, revoked_value])
+    query = query.exclude(status__in=[used_value, revoked_value])
     if invite_expires_in_minutes is None:
         # Since invite_expires_in_minutes is None, we're invitation will never
         # expire, we do not need to check anything else and can simply return
@@ -2295,7 +2295,16 @@ class EmailChangeStatus(models.Model):
     user_profile: UserProfile = models.ForeignKey(UserProfile, on_delete=CASCADE)
 
     # status: whether an object has been confirmed.
-    #   if confirmed, set to confirmation.settings.STATUS_ACTIVE
+    #   if confirmed, set to confirmation.settings.STATUS_USED
+    status: int = models.IntegerField(default=0)
+
+    realm: Realm = models.ForeignKey(Realm, on_delete=CASCADE)
+
+
+class RealmReactivationStatus(models.Model):
+    id: int = models.AutoField(auto_created=True, primary_key=True, verbose_name="ID")
+    # status: whether an object has been confirmed.
+    #   if confirmed, set to confirmation.settings.STATUS_USED
     status: int = models.IntegerField(default=0)
 
     realm: Realm = models.ForeignKey(Realm, on_delete=CASCADE)
@@ -2490,22 +2499,25 @@ class Stream(models.Model):
     ]
 
     @staticmethod
-    def get_client_data(query: QuerySet) -> List[Dict[str, Any]]:
+    def get_client_data(query: QuerySet["Stream"]) -> List[APIStreamDict]:
         query = query.only(*Stream.API_FIELDS)
         return [row.to_dict() for row in query]
 
-    def to_dict(self) -> Dict[str, Any]:
-        result = {}
-        for field_name in self.API_FIELDS:
-            if field_name == "id":
-                result["stream_id"] = self.id
-                continue
-            elif field_name == "date_created":
-                result["date_created"] = datetime_to_timestamp(self.date_created)
-                continue
-            result[field_name] = getattr(self, field_name)
-        result["is_announcement_only"] = self.stream_post_policy == Stream.STREAM_POST_POLICY_ADMINS
-        return result
+    def to_dict(self) -> APIStreamDict:
+        return APIStreamDict(
+            date_created=datetime_to_timestamp(self.date_created),
+            description=self.description,
+            first_message_id=self.first_message_id,
+            history_public_to_subscribers=self.history_public_to_subscribers,
+            invite_only=self.invite_only,
+            is_web_public=self.is_web_public,
+            message_retention_days=self.message_retention_days,
+            name=self.name,
+            rendered_description=self.rendered_description,
+            stream_id=self.id,
+            stream_post_policy=self.stream_post_policy,
+            is_announcement_only=self.stream_post_policy == Stream.STREAM_POST_POLICY_ADMINS,
+        )
 
     class Meta:
         indexes = [
@@ -2634,16 +2646,14 @@ def get_realm_stream(stream_name: str, realm_id: int) -> Stream:
     return Stream.objects.select_related().get(name__iexact=stream_name.strip(), realm_id=realm_id)
 
 
-def get_active_streams(realm: Realm) -> QuerySet:
-    # TODO: Change return type to QuerySet[Stream]
-    # NOTE: Return value is used as a QuerySet, so cannot currently be Sequence[QuerySet]
+def get_active_streams(realm: Realm) -> QuerySet[Stream]:
     """
     Return all streams (including invite-only streams) that have not been deactivated.
     """
     return Stream.objects.filter(realm=realm, deactivated=False)
 
 
-def get_linkable_streams(realm_id: int) -> QuerySet:
+def get_linkable_streams(realm_id: int) -> QuerySet[Stream]:
     """
     This returns the streams that we are allowed to linkify using
     something like "#frontend" in our markup. For now the business
@@ -2667,7 +2677,7 @@ def get_stream_by_id_in_realm(stream_id: int, realm: Realm) -> Stream:
 
 
 def bulk_get_streams(realm: Realm, stream_names: STREAM_NAMES) -> Dict[str, Any]:
-    def fetch_streams_by_name(stream_names: List[str]) -> Sequence[Stream]:
+    def fetch_streams_by_name(stream_names: List[str]) -> QuerySet[Stream]:
         #
         # This should be just
         #
@@ -2706,10 +2716,11 @@ def get_huddle_recipient(user_profile_ids: Set[int]) -> Recipient:
     # we hit another cache to get the recipient.  We may want to
     # unify our caching strategy here.
     huddle = get_huddle(list(user_profile_ids))
+    assert huddle.recipient is not None
     return huddle.recipient
 
 
-def get_huddle_user_ids(recipient: Recipient) -> List[int]:
+def get_huddle_user_ids(recipient: Recipient) -> "ValuesQuerySet[Subscription, int]":
     assert recipient.type == Recipient.HUDDLE
 
     return (
@@ -2918,8 +2929,7 @@ class Message(AbstractMessage):
         ]
 
 
-def get_context_for_message(message: Message) -> Sequence[Message]:
-    # TODO: Change return type to QuerySet[Message]
+def get_context_for_message(message: Message) -> QuerySet[Message]:
     return Message.objects.filter(
         recipient_id=message.recipient_id,
         subject=message.subject,
@@ -3178,14 +3188,7 @@ class AbstractUserMessage(models.Model):
         unique_together = ("user_profile", "message")
 
     @staticmethod
-    def where_unread() -> str:
-        # Use this for Django ORM queries to access unread message.
-        # This custom SQL plays nice with our partial indexes.  Grep
-        # the code for example usage.
-        return "flags & 1 = 0"
-
-    @staticmethod
-    def where_starred() -> str:
+    def where_flag_is_present(flagattr: Bit) -> str:
         # Use this for Django ORM queries to access starred messages.
         # This custom SQL plays nice with our partial indexes.  Grep
         # the code for example usage.
@@ -3193,12 +3196,27 @@ class AbstractUserMessage(models.Model):
         # The key detail is that e.g.
         #   UserMessage.objects.filter(user_profile=user_profile, flags=UserMessage.flags.starred)
         # will generate a query involving `flags & 2 = 2`, which doesn't match our index.
-        return "flags & 2 <> 0"
+        return f"flags & {1 << flagattr.number} <> 0"
+
+    @staticmethod
+    def where_flag_is_absent(flagattr: Bit) -> str:
+        return f"flags & {1 << flagattr.number} = 0"
+
+    @staticmethod
+    def where_unread() -> str:
+        return AbstractUserMessage.where_flag_is_absent(getattr(AbstractUserMessage.flags, "read"))
+
+    @staticmethod
+    def where_starred() -> str:
+        return AbstractUserMessage.where_flag_is_present(
+            getattr(AbstractUserMessage.flags, "starred")
+        )
 
     @staticmethod
     def where_active_push_notification() -> str:
-        # See where_starred for documentation.
-        return "flags & 4096 <> 0"
+        return AbstractUserMessage.where_flag_is_present(
+            getattr(AbstractUserMessage.flags, "active_mobile_push_notification")
+        )
 
     def flags_list(self) -> List[str]:
         flags = int(self.flags)
@@ -3342,6 +3360,16 @@ class ArchivedAttachment(AbstractAttachment):
     """Used as a temporary holding place for deleted Attachment objects
     before they are permanently deleted.  This is an important part of
     a robust 'message retention' feature.
+
+    Unlike the similar archive tables, ArchivedAttachment does not
+    have an ArchiveTransaction foreign key, and thus will not be
+    directly deleted by clean_archived_data. Instead, attachments that
+    were only referenced by now fully deleted messages will leave
+    ArchivedAttachment objects with empty `.messages`.
+
+    A second step, delete_old_unclaimed_attachments, will delete the
+    resulting orphaned ArchivedAttachment objects, along with removing
+    the associated uploaded files from storage.
     """
 
     id: int = models.AutoField(auto_created=True, primary_key=True, verbose_name="ID")
@@ -3485,11 +3513,32 @@ def validate_attachment_request(
     ).exists()
 
 
-def get_old_unclaimed_attachments(weeks_ago: int) -> Sequence[Attachment]:
-    # TODO: Change return type to QuerySet[Attachment]
+def get_old_unclaimed_attachments(
+    weeks_ago: int,
+) -> Tuple[QuerySet[Attachment], QuerySet[ArchivedAttachment]]:
+    """
+    The logic in this function is fairly tricky. The essence is that
+    a file should be cleaned up if and only if it not referenced by any
+    Message or ArchivedMessage. The way to find that out is through the
+    Attachment and ArchivedAttachment tables.
+    The queries are complicated by the fact that an uploaded file
+    may have either only an Attachment row, only an ArchivedAttachment row,
+    or both - depending on whether some, all or none of the messages
+    linking to it have been archived.
+    """
     delta_weeks_ago = timezone_now() - datetime.timedelta(weeks=weeks_ago)
-    old_attachments = Attachment.objects.filter(messages=None, create_time__lt=delta_weeks_ago)
-    return old_attachments
+    old_attachments = Attachment.objects.annotate(
+        has_other_messages=Exists(
+            ArchivedAttachment.objects.filter(id=OuterRef("id")).exclude(messages=None)
+        )
+    ).filter(messages=None, create_time__lt=delta_weeks_ago, has_other_messages=False)
+    old_archived_attachments = ArchivedAttachment.objects.annotate(
+        has_other_messages=Exists(
+            Attachment.objects.filter(id=OuterRef("id")).exclude(messages=None)
+        )
+    ).filter(messages=None, create_time__lt=delta_weeks_ago, has_other_messages=False)
+
+    return old_attachments, old_archived_attachments
 
 
 class Subscription(models.Model):
@@ -3510,16 +3559,6 @@ class Subscription(models.Model):
     # about this explicitly, as in some special cases, such as data import,
     # we may be creating Subscription objects for a user that's deactivated.
     is_user_active: bool = models.BooleanField()
-
-    ROLE_STREAM_ADMINISTRATOR = 20
-    ROLE_MEMBER = 50
-
-    ROLE_TYPES = [
-        ROLE_STREAM_ADMINISTRATOR,
-        ROLE_MEMBER,
-    ]
-
-    role: int = models.PositiveSmallIntegerField(default=ROLE_MEMBER, db_index=True)
 
     # Whether this user had muted this stream.
     is_muted: bool = models.BooleanField(default=False)
@@ -3550,10 +3589,6 @@ class Subscription(models.Model):
     def __str__(self) -> str:
         return f"<Subscription: {self.user_profile} -> {self.recipient}>"
 
-    @property
-    def is_stream_admin(self) -> bool:
-        return self.role == Subscription.ROLE_STREAM_ADMINISTRATOR
-
     # Subscription fields included whenever a Subscription object is provided to
     # Zulip clients via the API.  A few details worth noting:
     # * These fields will generally be merged with Stream.API_FIELDS
@@ -3576,7 +3611,6 @@ class Subscription(models.Model):
         "is_muted",
         "pin_to_top",
         "push_notifications",
-        "role",
         "wildcard_mentions_notify",
     ]
 
@@ -3628,7 +3662,7 @@ def get_user_by_delivery_email(email: str, realm: Realm) -> UserProfile:
     )
 
 
-def get_users_by_delivery_email(emails: Set[str], realm: Realm) -> QuerySet:
+def get_users_by_delivery_email(emails: Set[str], realm: Realm) -> QuerySet[UserProfile]:
     """This is similar to get_user_by_delivery_email, and
     it has the same security caveats.  It gets multiple
     users and returns a QuerySet, since most callers
@@ -3758,6 +3792,7 @@ def bot_owner_user_ids(user_profile: UserProfile) -> Set[int]:
         or user_profile.default_events_register_stream
         and user_profile.default_events_register_stream.invite_only
     )
+    assert user_profile.bot_owner_id is not None
     if is_private_bot:
         return {user_profile.bot_owner_id}
     else:
@@ -4012,7 +4047,7 @@ class DefaultStreamGroup(models.Model):
         )
 
 
-def get_default_stream_groups(realm: Realm) -> List[DefaultStreamGroup]:
+def get_default_stream_groups(realm: Realm) -> QuerySet[DefaultStreamGroup]:
     return DefaultStreamGroup.objects.filter(realm=realm)
 
 
@@ -4218,6 +4253,11 @@ class AbstractRealmAuditLog(models.Model):
     REALM_DOMAIN_REMOVED = 220
     REALM_PLAYGROUND_ADDED = 221
     REALM_PLAYGROUND_REMOVED = 222
+    REALM_LINKIFIER_ADDED = 223
+    REALM_LINKIFIER_CHANGED = 224
+    REALM_LINKIFIER_REMOVED = 225
+    REALM_EMOJI_ADDED = 226
+    REALM_EMOJI_REMOVED = 227
 
     SUBSCRIPTION_CREATED = 301
     SUBSCRIPTION_ACTIVATED = 302
@@ -4457,7 +4497,7 @@ class CustomProfileField(models.Model):
         return f"<CustomProfileField: {self.realm} {self.name} {self.field_type} {self.order}>"
 
 
-def custom_profile_fields_for_realm(realm_id: int) -> List[CustomProfileField]:
+def custom_profile_fields_for_realm(realm_id: int) -> QuerySet[CustomProfileField]:
     return CustomProfileField.objects.filter(realm=realm_id).order_by("order")
 
 
@@ -4561,14 +4601,14 @@ class InvalidFakeEmailDomain(Exception):
 def get_fake_email_domain(realm: Realm) -> str:
     try:
         # Check that realm.host can be used to form valid email addresses.
-        validate_email(f"bot@{realm.host}")
+        validate_email(Address(username="bot", domain=realm.host).addr_spec)
         return realm.host
     except ValidationError:
         pass
 
     try:
         # Check that the fake email domain can be used to form valid email addresses.
-        validate_email("bot@" + settings.FAKE_EMAIL_DOMAIN)
+        validate_email(Address(username="bot", domain=settings.FAKE_EMAIL_DOMAIN).addr_spec)
     except ValidationError:
         raise InvalidFakeEmailDomain(
             settings.FAKE_EMAIL_DOMAIN + " is not a valid domain. "

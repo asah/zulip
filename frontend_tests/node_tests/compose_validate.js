@@ -60,9 +60,9 @@ people.add_cross_realm_user(welcome_bot);
 
 function test_ui(label, f) {
     // The sloppy_$ flag lets us re-use setup from prior tests.
-    run_test(label, ({override, override_rewire, mock_template}) => {
+    run_test(label, (helpers) => {
         $("#compose-textarea").val("some message");
-        f({override, override_rewire, mock_template});
+        f(helpers);
     });
 }
 
@@ -306,7 +306,7 @@ test_ui("test_wildcard_mention_allowed", () => {
     assert.ok(compose_validate.wildcard_mention_allowed());
 
     page_params.realm_wildcard_mention_policy =
-        settings_config.wildcard_mention_policy_values.by_stream_admins_only.code;
+        settings_config.wildcard_mention_policy_values.by_admins_only.code;
     page_params.is_admin = false;
     assert.ok(!compose_validate.wildcard_mention_allowed());
 
@@ -394,7 +394,7 @@ test_ui("test_validate_stream_message_post_policy_admin_only", () => {
     assert.ok(!compose_validate.validate());
     assert.equal(
         $("#compose-error-msg").html(),
-        $t_html({defaultMessage: "Only organization admins are allowed to post to this stream."}),
+        $t_html({defaultMessage: "You do not have permission to post in this stream."}),
     );
 
     // Reset error message.
@@ -408,7 +408,7 @@ test_ui("test_validate_stream_message_post_policy_admin_only", () => {
     assert.ok(!compose_validate.validate());
     assert.equal(
         $("#compose-error-msg").html(),
-        $t_html({defaultMessage: "Only organization admins are allowed to post to this stream."}),
+        $t_html({defaultMessage: "You do not have permission to post in this stream."}),
     );
 });
 
@@ -431,8 +431,7 @@ test_ui("test_validate_stream_message_post_policy_moderators_only", () => {
     assert.equal(
         $("#compose-error-msg").html(),
         $t_html({
-            defaultMessage:
-                "Only organization admins and moderators are allowed to post to this stream.",
+            defaultMessage: "You do not have permission to post in this stream.",
         }),
     );
 
@@ -443,8 +442,7 @@ test_ui("test_validate_stream_message_post_policy_moderators_only", () => {
     assert.equal(
         $("#compose-error-msg").html(),
         $t_html({
-            defaultMessage:
-                "Only organization admins and moderators are allowed to post to this stream.",
+            defaultMessage: "You do not have permission to post in this stream.",
         }),
     );
 });
@@ -465,7 +463,7 @@ test_ui("test_validate_stream_message_post_policy_full_members_only", () => {
     assert.ok(!compose_validate.validate());
     assert.equal(
         $("#compose-error-msg").html(),
-        $t_html({defaultMessage: "Guests are not allowed to post to this stream."}),
+        $t_html({defaultMessage: "You do not have permission to post in this stream."}),
     );
 });
 

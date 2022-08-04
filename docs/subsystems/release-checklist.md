@@ -5,7 +5,7 @@ preparing a new release.
 
 ### A week before the release
 
-- For a major release (e.g. 4.0):
+- _Major releases only (e.g. 4.0):_
   - Upgrade all Python dependencies in
     `requirements` to latest upstream versions so they can burn in (use
     `pip list --outdated`).
@@ -32,9 +32,9 @@ preparing a new release.
 ### Final release preparation
 
 - Update the Paper blog post draft with any new commits.
-- _Except minor releases:_ Download updated translation strings from
+- _Major releases only:_ Download updated translation strings from
   Transifex and commit them.
-- Use `build-release-tarball` to generate a release tarball.
+- Use `build-release-tarball` to generate a pre-release tarball.
 - Test the new tarball extensively, both new install and upgrade from last
   release, on Ubuntu 20.04.
 - Repeat until release is ready.
@@ -51,23 +51,12 @@ preparing a new release.
   - Copy the Markdown release notes for the release into
     `docs/overview/changelog.md`.
   - Verify the changelog passes lint, and has the right release date.
-  - _Except minor releases:_ Adjust the `changelog.md` heading to have
+  - _Major releases only:_ Adjust the `changelog.md` heading to have
     the stable release series boilerplate.
   - Update `ZULIP_VERSION` and `LATEST_RELEASE_VERSION` in `version.py`.
-  - _Except minor releases:_ Update `API_FEATURE_LEVEL` to a feature
+  - _Major releases only:_ Update `API_FEATURE_LEVEL` to a feature
     level for the final release, and document a reserved range.
-- Tag that commit with an unsigned Git tag named the release number.
-- Use `build-release-tarball` to generate a final release tarball.
-- Push the tag and release commit.
-- Upload the tarball using `tools/upload-release`.
-- Post the release by [editing the latest tag on
-  GitHub](https://github.com/zulip/zulip/tags); use the text from
-  `changelog.md` for the release notes.
-
-  **Note:** This will trigger the [GitHub action](https://github.com/zulip/zulip/blob/main/tools/oneclickapps/README.md)
-  for updating DigitalOcean one-click app image. The action uses the latest release
-  tarball published on `download.zulip.com` for creating the image.
-
+- Run `tools/release` with the release version.
 - Update the [Docker image](https://github.com/zulip/docker-zulip):
   - Update `ZULIP_GIT_REF` in `Dockerfile`
   - Update `README.md`
@@ -89,16 +78,7 @@ preparing a new release.
 - The DigitalOcean one-click image will report in an internal channel
   once it is built, and how to test it. Verify it, then publish it
   publish it to DigitalOcean marketplace.
-- Update the CI targets:
-  - _For major releases only:_ In all of the following steps, _also_
-    bump up the series that are being tested.
-  - Update the version in `tools/ci/build-docker-images`
-  - Run `tools/ci/build-docker-images`
-  - Push at least the latest of those, e.g. using `docker push zulip/ci:bullseye-4.11`; update the others at your discretion.
-  - Update the `docker_image` in the `production_upgrade` step of
-    `.github/workflows/production-suite.yml`.
-  - Commit those two changes in a PR.
-- Following a major release (e.g. 4.0):
+- _Major releases only:_
   - Create a release branch (e.g. `4.x`).
   - On the release branch, update `ZULIP_VERSION` in `version.py` to
     the present release with a `+git` suffix, e.g. `4.0+git`.
@@ -109,7 +89,14 @@ preparing a new release.
     number for future Cloud deployments.
   - Consider removing a few old releases from ReadTheDocs; we keep about
     two years of back-versions.
-- Following a minor release (e.g. 3.2):
+  - Update Transifex to add the new `4.x` style release branch
+    resources and archive the previous release branch's resources with
+    the "Translations can't translate this resource" setting.
+  - Add a new CI production upgrade target:
+    - Build a docker image: `cd tools/ci && docker build . -f Dockerfile.prod --build-arg=BASE_IMAGE=zulip/ci:bullseye --build-arg=VERSION=5.0 --tag=zulip/ci:bullseye-5.0 && docker push zulip/ci:bullseye-5.0`
+    - Add a new line to the `production_upgrade` matrix in
+      `.github/workflows/production-suite.yml`.
+- _Minor releases only (e.g. 3.2):_
   - On the release branch, update `ZULIP_VERSION` to the present
     release with a `+git` suffix, e.g. `3.2+git`.
   - On main, update `LATEST_RELEASE_VERSION` with the released version.

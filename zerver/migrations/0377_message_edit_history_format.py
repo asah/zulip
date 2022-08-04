@@ -1,9 +1,9 @@
 import time
-from typing import List, Optional, TypedDict
+from typing import List, Optional, Type, TypedDict
 
 import orjson
 from django.db import migrations, transaction
-from django.db.backends.postgresql.schema import DatabaseSchemaEditor
+from django.db.backends.postgresql.schema import BaseDatabaseSchemaEditor
 from django.db.migrations.state import StateApps
 from django.db.models import Min, Model
 
@@ -37,7 +37,9 @@ class EditHistoryEvent(TypedDict, total=False):
 
 
 @transaction.atomic
-def backfill_message_edit_history_chunk(first_id: int, last_id: int, message_model: Model) -> None:
+def backfill_message_edit_history_chunk(
+    first_id: int, last_id: int, message_model: Type[Model]
+) -> None:
     """
     Migrate edit history events for the messages in the provided range to:
     * Rename prev_subject => prev_topic.
@@ -116,7 +118,7 @@ def backfill_message_edit_history_chunk(first_id: int, last_id: int, message_mod
 
 
 def copy_and_update_message_edit_history(
-    apps: StateApps, schema_editor: DatabaseSchemaEditor
+    apps: StateApps, schema_editor: BaseDatabaseSchemaEditor
 ) -> None:
     Message = apps.get_model("zerver", "Message")
     ArchivedMessage = apps.get_model("zerver", "ArchivedMessage")

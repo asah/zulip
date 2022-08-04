@@ -40,6 +40,7 @@ import * as typing_events from "./typing_events";
 import * as ui_util from "./ui_util";
 import * as unread from "./unread";
 import * as unread_ops from "./unread_ops";
+import * as unread_ui from "./unread_ui";
 import * as util from "./util";
 import * as widgetize from "./widgetize";
 
@@ -155,17 +156,13 @@ function update_narrow_title(filter) {
     }
 }
 
-export function hide_mark_as_read_turned_off_banner() {
-    $("#mark_as_read_turned_off_banner").hide();
-}
-
 export function reset_ui_state() {
     // Resets the state of various visual UI elements that are
     // a function of the current narrow.
     narrow_banner.hide_empty_narrow_message();
     message_scroll.hide_top_of_narrow_notices();
     message_scroll.hide_indicators();
-    hide_mark_as_read_turned_off_banner();
+    unread_ui.reset_mark_as_read_turned_off_banner();
 }
 
 export function handle_middle_pane_transition() {
@@ -860,7 +857,7 @@ export function narrow_to_next_topic() {
 }
 
 export function narrow_to_next_pm_string() {
-    const curr_pm = narrow_state.pm_string();
+    const curr_pm = narrow_state.pm_ids_string();
 
     const next_pm = topic_generator.get_next_unread_pm_string(curr_pm);
 

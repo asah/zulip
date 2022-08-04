@@ -1,7 +1,6 @@
 import logging
 import urllib
-import weakref
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import tornado.web
 from asgiref.sync import sync_to_async
@@ -12,9 +11,10 @@ from django.core.handlers.wsgi import WSGIRequest, get_script_name
 from django.http import HttpRequest, HttpResponse
 from django.urls import set_script_prefix
 from django.utils.cache import patch_vary_headers
+from tornado.iostream import StreamClosedError
 from tornado.wsgi import WSGIContainer
 
-from zerver.lib.response import json_response
+from zerver.lib.response import AsynchronousResponse, json_response
 from zerver.tornado.descriptors import get_descriptor_by_handler_id
 
 current_handler_id = 0
@@ -28,9 +28,9 @@ def get_handler_by_id(handler_id: int) -> "AsyncDjangoHandler":
 def allocate_handler_id(handler: "AsyncDjangoHandler") -> int:
     global current_handler_id
     handlers[current_handler_id] = handler
-    handler.handler_id = current_handler_id
+    handler_id = current_handler_id
     current_handler_id += 1
-    return handler.handler_id
+    return handler_id
 
 
 def clear_handler_by_id(handler_id: int) -> None:
@@ -41,10 +41,7 @@ def handler_stats_string() -> str:
     return f"{len(handlers)} handlers, latest ID {current_handler_id}"
 
 
-def finish_handler(
-    handler_id: int, event_queue_id: str, contents: List[Dict[str, Any]], apply_markdown: bool
-) -> None:
-    err_msg = f"Got error finishing handler for queue {event_queue_id}"
+def finish_handler(handler_id: int, event_queue_id: str, contents: List[Dict[str, Any]]) -> None:
     try:
         # We do the import during runtime to avoid cyclic dependency
         # with zerver.lib.request
@@ -56,6 +53,7 @@ def finish_handler(
         # get_events request has supplanted this request)
         handler = get_handler_by_id(handler_id)
         request = handler._request
+        assert request is not None
         async_request_timer_restart(request)
         log_data = RequestNotes.get_notes(request).log_data
         assert log_data is not None
@@ -68,16 +66,15 @@ def finish_handler(
             handler.zulip_finish,
             dict(result="success", msg="", events=contents, queue_id=event_queue_id),
             request,
-            apply_markdown=apply_markdown,
         )
-    except OSError as e:
-        if str(e) != "Stream is closed":
-            logging.exception(err_msg, stack_info=True)
-    except AssertionError as e:
-        if str(e) != "Request closed":
-            logging.exception(err_msg, stack_info=True)
-    except Exception:
-        logging.exception(err_msg, stack_info=True)
+    except Exception as e:
+        if not (
+            (isinstance(e, OSError) and str(e) == "Stream is closed")
+            or (isinstance(e, AssertionError) and str(e) == "Request closed")
+        ):
+            logging.exception(
+                "Got error finishing handler for queue %s", event_queue_id, stack_info=True
+            )
 
 
 class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
@@ -92,13 +89,15 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
 
         # Handler IDs are allocated here, and the handler ID map must
         # be cleared when the handler finishes its response
-        allocate_handler_id(self)
+        self.handler_id = allocate_handler_id(self)
+
+        self._request: Optional[HttpRequest] = None
 
     def __repr__(self) -> str:
         descriptor = get_descriptor_by_handler_id(self.handler_id)
         return f"AsyncDjangoHandler<{self.handler_id}, {descriptor}>"
 
-    def convert_tornado_request_to_django_request(self) -> HttpRequest:
+    async def convert_tornado_request_to_django_request(self) -> HttpRequest:
         # This takes the WSGI environment that Tornado received (which
         # fully describes the HTTP request that was sent to Tornado)
         # and pass it to Django's WSGIRequest to generate a Django
@@ -111,19 +110,21 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
         # Django's WSGIHandler.__call__ before the call to
         # `get_response()`.
         set_script_prefix(get_script_name(environ))
-        signals.request_started.send(sender=self.__class__)
-        request = WSGIRequest(environ)
+        await sync_to_async(
+            lambda: signals.request_started.send(sender=self.__class__), thread_sensitive=True
+        )()
+        self._request = WSGIRequest(environ)
 
         # We do the import during runtime to avoid cyclic dependency
         from zerver.lib.request import RequestNotes
 
         # Provide a way for application code to access this handler
         # given the HttpRequest object.
-        RequestNotes.get_notes(request).tornado_handler = weakref.ref(self)
+        RequestNotes.get_notes(self._request).tornado_handler_id = self.handler_id
 
-        return request
+        return self._request
 
-    def write_django_response_as_tornado_response(self, response: HttpResponse) -> None:
+    async def write_django_response_as_tornado_response(self, response: HttpResponse) -> None:
         # This takes a Django HttpResponse and copies its HTTP status
         # code, headers, cookies, and content onto this
         # tornado.web.RequestHandler (which is how Tornado prepares a
@@ -146,14 +147,19 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
         self.write(response.content)
 
         # Close the connection.
-        self.finish()
+        try:
+            await self.finish()
+        except StreamClosedError:
+            # While writing the response, we might realize that the
+            # user already closed the connection; that is fine.
+            pass
 
     async def get(self, *args: Any, **kwargs: Any) -> None:
-        request = self.convert_tornado_request_to_django_request()
+        request = await self.convert_tornado_request_to_django_request()
         response = await sync_to_async(lambda: self.get_response(request), thread_sensitive=True)()
 
         try:
-            if hasattr(response, "asynchronous"):
+            if isinstance(response, AsynchronousResponse):
                 # We import async_request_timer_restart during runtime
                 # to avoid cyclic dependency with zerver.lib.request
                 from zerver.middleware import async_request_timer_stop
@@ -175,7 +181,7 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
                 clear_handler_by_id(self.handler_id)
 
                 assert isinstance(response, HttpResponse)
-                self.write_django_response_as_tornado_response(response)
+                await self.write_django_response_as_tornado_response(response)
         finally:
             # Tell Django that we're done processing this request on
             # the Django side; this triggers cleanup work like
@@ -203,18 +209,11 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
         if client_descriptor is not None:
             client_descriptor.disconnect_handler(client_closed=True)
 
-    async def zulip_finish(
-        self, result_dict: Dict[str, Any], old_request: HttpRequest, apply_markdown: bool
-    ) -> None:
+    async def zulip_finish(self, result_dict: Dict[str, Any], old_request: HttpRequest) -> None:
         # Function called when we want to break a long-polled
         # get_events request and return a response to the client.
 
         # Marshall the response data from result_dict.
-        if result_dict["result"] == "success" and "messages" in result_dict and apply_markdown:
-            for msg in result_dict["messages"]:
-                if msg["content_type"] != "text/html":
-                    self.set_status(500)
-                    self.finish("Internal error: bad message format")
         if result_dict["result"] == "error":
             self.set_status(400)
 
@@ -228,7 +227,7 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
         # to automatically return our data in its response, and call
         # Django's main self.get_response() handler to generate an
         # HttpResponse with all Django middleware run.
-        request = self.convert_tornado_request_to_django_request()
+        request = await self.convert_tornado_request_to_django_request()
 
         # We import RequestNotes during runtime to avoid
         # cyclic import
@@ -265,7 +264,7 @@ class AsyncDjangoHandler(tornado.web.RequestHandler, base.BaseHandler):
             # middleware will not have seen a session access
             patch_vary_headers(response, ("Cookie",))
             assert isinstance(response, HttpResponse)
-            self.write_django_response_as_tornado_response(response)
+            await self.write_django_response_as_tornado_response(response)
         finally:
             # Tell Django we're done processing this request
             await sync_to_async(response.close, thread_sensitive=True)()

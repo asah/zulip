@@ -1,5 +1,16 @@
 # Invite new users
 
+You can invite users to join your organization by sending out email invitations,
+or creating reusable invitation links to share.
+
+Prior to inviting users to your organization, it is recommended that administrators:
+
+* Configure [default settings](/help/configure-default-new-user-settings) for
+  new users.
+
+* Configure the [organization language for automated messages and invitation
+  emails][org-lang] for your organization.
+
 When you invite users, you can:
 
 * Set the [role](/help/roles-and-permissions) that they will have when
@@ -8,15 +19,13 @@ When you invite users, you can:
 * Configure which streams they will be added to. The organization's
   [default streams](/help/set-default-streams-for-new-users) will be preselected.
 
-Your organization may also want to configure [default
-settings](/help/configure-default-new-user-settings) for new users.
+Organization administrators can
+[configure](/help/restrict-account-creation#change-who-can-send-invitations)
+which [roles](/help/roles-and-permissions) have permission to invite users to
+the organization. You will only see an **Invite users** menu option if you have
+permission to invite users.
 
-## Send e-mail invitations
-
-!!! warn ""
-    You will only see an **Invite users** option if you
-    [have permission](/help/restrict-account-creation#change-who-can-send-invitations)
-    to invite users to the organization.
+## Send email invitations
 
 {start_tabs}
 
@@ -33,7 +42,6 @@ settings](/help/configure-default-new-user-settings) for new users.
 1. Click **Invite**.
 
 !!! warn ""
-
     **Note**: As an anti-spam measure, the number of email invites you can send in a day is
     limited on the Zulip Cloud Free plan. [Contact support](/help/contact-support)
     if you hit the limit and want to invite more users.
@@ -87,4 +95,7 @@ for invitations for the organization owners role.
 * [Restrict account creation](/help/restrict-account-creation)
 * [Set default streams for new users](/help/set-default-streams-for-new-users)
 * [Configure default new user settings](/help/configure-default-new-user-settings)
+* [Configure organization language for automated messages and invitation emails][org-lang]
 * [Roles and permissions](/help/roles-and-permissions)
+
+[org-lang]: /help/change-the-default-language-for-your-organization

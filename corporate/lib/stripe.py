@@ -504,7 +504,9 @@ def make_end_of_cycle_updates_if_needed(
             standard_plan_last_ledger = (
                 LicenseLedger.objects.filter(plan=standard_plan).order_by("id").last()
             )
+            assert standard_plan_last_ledger is not None
             licenses_for_plus_plan = standard_plan_last_ledger.licenses_at_next_renewal
+            assert licenses_for_plus_plan is not None
             plus_plan_ledger_entry = LicenseLedger.objects.create(
                 plan=plus_plan,
                 is_renewal=True,
@@ -610,7 +612,7 @@ def is_free_trial_offer_enabled() -> bool:
     return settings.FREE_TRIAL_DAYS not in (None, 0)
 
 
-def ensure_realm_does_not_have_active_plan(realm: Customer) -> None:
+def ensure_realm_does_not_have_active_plan(realm: Realm) -> None:
     if get_current_plan_by_realm(realm) is not None:
         # Unlikely race condition from two people upgrading (clicking "Make payment")
         # at exactly the same time. Doesn't fully resolve the race condition, but having
@@ -631,7 +633,7 @@ def do_change_remote_server_plan_type(remote_server: RemoteZulipServer, plan_typ
         event_type=RealmAuditLog.REMOTE_SERVER_PLAN_TYPE_CHANGED,
         server=remote_server,
         event_time=timezone_now(),
-        extra_data={"old_value": old_value, "new_value": plan_type},
+        extra_data=str({"old_value": old_value, "new_value": plan_type}),
     )
 
 
@@ -949,7 +951,7 @@ def attach_discount_to_realm(
         acting_user=acting_user,
         event_type=RealmAuditLog.REALM_DISCOUNT_CHANGED,
         event_time=timezone_now(),
-        extra_data={"old_discount": old_discount, "new_discount": discount},
+        extra_data=str({"old_discount": old_discount, "new_discount": discount}),
     )
 
 
@@ -964,9 +966,7 @@ def update_sponsorship_status(
         acting_user=acting_user,
         event_type=RealmAuditLog.REALM_SPONSORSHIP_PENDING_STATUS_CHANGED,
         event_time=timezone_now(),
-        extra_data={
-            "sponsorship_pending": sponsorship_pending,
-        },
+        extra_data=str({"sponsorship_pending": sponsorship_pending}),
     )
 
 
@@ -1040,6 +1040,7 @@ def estimate_annual_recurring_revenue_by_realm() -> Dict[str, int]:  # nocoverag
         if plan.billing_schedule == CustomerPlan.MONTHLY:
             renewal_cents *= 12
         # TODO: Decimal stuff
+        assert plan.customer.realm is not None
         annual_revenue[plan.customer.realm.string_id] = int(renewal_cents / 100)
     return annual_revenue
 
@@ -1048,6 +1049,7 @@ def get_realms_to_default_discount_dict() -> Dict[str, Decimal]:
     realms_to_default_discount: Dict[str, Any] = {}
     customers = Customer.objects.exclude(default_discount=None).exclude(default_discount=0)
     for customer in customers:
+        assert customer.realm is not None
         realms_to_default_discount[customer.realm.string_id] = assert_is_not_none(
             customer.default_discount
         )
@@ -1116,6 +1118,7 @@ def downgrade_small_realms_behind_on_payments_as_needed() -> None:
     customers = Customer.objects.all().exclude(stripe_customer_id=None)
     for customer in customers:
         realm = customer.realm
+        assert realm is not None
 
         # For larger realms, we generally want to talk to the customer
         # before downgrading or cancelling invoices; so this logic only applies with 5.
@@ -1172,6 +1175,8 @@ def switch_realm_from_standard_to_plus_plan(realm: Realm) -> None:
     standard_plan_last_renewal_ledger = (
         LicenseLedger.objects.filter(is_renewal=True, plan=standard_plan).order_by("id").last()
     )
+    assert standard_plan_last_renewal_ledger is not None
+    assert standard_plan.price_per_license is not None
     standard_plan_last_renewal_amount = (
         standard_plan_last_renewal_ledger.licenses * standard_plan.price_per_license
     )
@@ -1206,7 +1211,5 @@ def update_billing_method_of_current_plan(
             acting_user=acting_user,
             event_type=RealmAuditLog.REALM_BILLING_METHOD_CHANGED,
             event_time=timezone_now(),
-            extra_data={
-                "charge_automatically": charge_automatically,
-            },
+            extra_data=str({"charge_automatically": charge_automatically}),
         )

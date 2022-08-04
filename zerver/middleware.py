@@ -2,18 +2,8 @@ import cProfile
 import logging
 import time
 import traceback
-from typing import (
-    Any,
-    AnyStr,
-    Callable,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    MutableMapping,
-    Optional,
-    Tuple,
-)
+from typing import Any, AnyStr, Callable, Dict, Iterable, List, MutableMapping, Optional, Tuple
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.conf.urls.i18n import is_language_prefix_patterns_used
@@ -41,7 +31,12 @@ from zerver.lib.html_to_text import get_content_description
 from zerver.lib.markdown import get_markdown_requests, get_markdown_time
 from zerver.lib.rate_limiter import RateLimitResult
 from zerver.lib.request import REQ, RequestNotes, has_request_variables, set_request, unset_request
-from zerver.lib.response import json_response, json_response_from_error, json_unauthorized
+from zerver.lib.response import (
+    AsynchronousResponse,
+    json_response,
+    json_response_from_error,
+    json_unauthorized,
+)
 from zerver.lib.subdomains import get_subdomain
 from zerver.lib.types import ViewFuncT
 from zerver.lib.user_agent import parse_user_agent
@@ -321,8 +316,8 @@ def parse_client(
     # USER_AGENT.
     if req_client is not None:
         return req_client, None
-    if "HTTP_USER_AGENT" in request.META:
-        user_agent: Optional[Dict[str, str]] = parse_user_agent(request.META["HTTP_USER_AGENT"])
+    if "User-Agent" in request.headers:
+        user_agent: Optional[Dict[str, str]] = parse_user_agent(request.headers["User-Agent"])
     else:
         user_agent = None
     if user_agent is None:
@@ -400,8 +395,8 @@ class LogRequests(MiddlewareMixin):
     def process_response(
         self, request: HttpRequest, response: HttpResponseBase
     ) -> HttpResponseBase:
-        if getattr(response, "asynchronous", False):
-            # This special Tornado "asynchronous" response is
+        if isinstance(response, AsynchronousResponse):
+            # This special AsynchronousResponse sentinel is
             # discarded after going through this code path as Tornado
             # intends to block, so we stop here to avoid unnecessary work.
             return response
@@ -412,22 +407,20 @@ class LogRequests(MiddlewareMixin):
         request_notes = RequestNotes.get_notes(request)
         requestor_for_logs = request_notes.requestor_for_logs
         if requestor_for_logs is None:
-            # Note that request.user is a Union[RemoteZulipServer, UserProfile, AnonymousUser],
-            # if it is present.
-            if hasattr(request, "user") and hasattr(request.user, "format_requestor_for_logs"):
+            if request_notes.remote_server is not None:
+                requestor_for_logs = request_notes.remote_server.format_requestor_for_logs()
+            elif request.user.is_authenticated:
                 requestor_for_logs = request.user.format_requestor_for_logs()
             else:
                 requestor_for_logs = "unauth@{}".format(get_subdomain(request) or "root")
 
-        if response.streaming:
-            assert isinstance(response, StreamingHttpResponse)
-            content_iter: Optional[Iterator[bytes]] = response.streaming_content
-            content = None
-        else:
-            content = response.content
-            content_iter = None
+        content_iter = (
+            response.streaming_content if isinstance(response, StreamingHttpResponse) else None
+        )
+        content = response.content if isinstance(response, HttpResponse) else None
 
         assert request_notes.client_name is not None and request_notes.log_data is not None
+        assert request.method is not None
         write_log_line(
             request_notes.log_data,
             request.path,
@@ -452,7 +445,7 @@ class JsonErrorHandler(MiddlewareMixin):
         self, request: HttpRequest, exception: Exception
     ) -> Optional[HttpResponse]:
         if isinstance(exception, MissingAuthenticationError):
-            if "text/html" in request.META.get("HTTP_ACCEPT", ""):
+            if "text/html" in request.headers.get("Accept", ""):
                 # If this looks like a request from a top-level page in a
                 # browser, send the user to the login page.
                 #
@@ -460,7 +453,9 @@ class JsonErrorHandler(MiddlewareMixin):
                 # execute the likely intent for intentionally visiting
                 # an API endpoint without authentication in a browser,
                 # but that's an unlikely to be done intentionally often.
-                return HttpResponseRedirect(f"{settings.HOME_NOT_LOGGED_IN}?next={request.path}")
+                return HttpResponseRedirect(
+                    f"{settings.HOME_NOT_LOGGED_IN}?{urlencode({'next': request.path})}"
+                )
             if request.path.startswith("/api"):
                 # For API routes, ask for HTTP basic auth (email:apiKey).
                 return json_unauthorized()
@@ -470,7 +465,7 @@ class JsonErrorHandler(MiddlewareMixin):
 
         if isinstance(exception, JsonableError):
             return json_response_from_error(exception)
-        if RequestNotes.get_notes(request).error_format == "JSON":
+        if RequestNotes.get_notes(request).error_format == "JSON" and not settings.TEST_SUITE:
             capture_exception(exception)
             json_error_logger = logging.getLogger("zerver.middleware.json_error_handler")
             json_error_logger.error(traceback.format_exc(), extra=dict(request=request))
@@ -629,9 +624,9 @@ class SetRemoteAddrFromRealIpHeader(MiddlewareMixin):
 
     def process_request(self, request: HttpRequest) -> None:
         try:
-            real_ip = request.META["HTTP_X_REAL_IP"]
+            real_ip = request.headers["X-Real-IP"]
         except KeyError:
-            return None
+            pass
         else:
             request.META["REMOTE_ADDR"] = real_ip
 
@@ -650,11 +645,10 @@ def alter_content(request: HttpRequest, content: bytes) -> bytes:
 
 class FinalizeOpenGraphDescription(MiddlewareMixin):
     def process_response(
-        self, request: HttpRequest, response: StreamingHttpResponse
-    ) -> StreamingHttpResponse:
-
+        self, request: HttpRequest, response: HttpResponseBase
+    ) -> HttpResponseBase:
         if RequestNotes.get_notes(request).placeholder_open_graph_description is not None:
-            assert not response.streaming
+            assert isinstance(response, HttpResponse)
             response.content = alter_content(request, response.content)
         return response
 

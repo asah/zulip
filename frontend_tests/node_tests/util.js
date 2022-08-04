@@ -4,7 +4,7 @@ const {strict: assert} = require("assert");
 
 const _ = require("lodash");
 
-const {set_global, with_field, zrequire} = require("../zjsunit/namespace");
+const {set_global, zrequire} = require("../zjsunit/namespace");
 const {run_test} = require("../zjsunit/test");
 
 set_global("document", {});
@@ -100,36 +100,27 @@ run_test("same_recipient", () => {
     assert.ok(!util.same_recipient(undefined, undefined));
 });
 
-run_test("robust_uri_decode", () => {
+run_test("robust_uri_decode", ({override}) => {
     assert.equal(util.robust_uri_decode("xxx%3Ayyy"), "xxx:yyy");
     assert.equal(util.robust_uri_decode("xxx%3"), "xxx");
 
-    let error_message;
-    with_field(
-        global,
-        "decodeURIComponent",
+    override(global, "decodeURIComponent", () => {
+        throw new Error("foo");
+    });
+    assert.throws(
         () => {
-            throw new Error("foo");
+            util.robust_uri_decode("%E0%A4%A");
         },
-        () => {
-            try {
-                util.robust_uri_decode("%E0%A4%A");
-            } catch (error) {
-                error_message = error.message;
-            }
-        },
+        {name: "Error", message: "foo"},
     );
-
-    assert.equal(error_message, "foo");
 });
 
-run_test("dumb_strcmp", () => {
-    with_field(Intl, "Collator", undefined, () => {
-        const strcmp = util.make_strcmp();
-        assert.equal(strcmp("a", "b"), -1);
-        assert.equal(strcmp("c", "c"), 0);
-        assert.equal(strcmp("z", "y"), 1);
-    });
+run_test("dumb_strcmp", ({override}) => {
+    override(Intl, "Collator", undefined);
+    const strcmp = util.make_strcmp();
+    assert.equal(strcmp("a", "b"), -1);
+    assert.equal(strcmp("c", "c"), 0);
+    assert.equal(strcmp("z", "y"), 1);
 });
 
 run_test("get_edit_event_orig_topic", () => {
@@ -296,4 +287,31 @@ run_test("clean_user_content_links", () => {
             '<a href="http://zulip.zulipdev.com/user_uploads/w/ha/tever/inline.png" target="_blank" rel="noopener noreferrer" aria-label="inline image">upload</a> ' +
             "</div>",
     );
+});
+
+run_test("filter_by_word_prefix_match", () => {
+    const strings = ["stream-hyphen_underscore/slash", "three word stream"];
+    const values = [0, 1];
+    const item_to_string = (idx) => strings[idx];
+
+    // Default settings will match words with a space delimiter before them.
+    assert.deepEqual(util.filter_by_word_prefix_match(values, "stream", item_to_string), [0, 1]);
+    assert.deepEqual(util.filter_by_word_prefix_match(values, "word stream", item_to_string), [1]);
+
+    // Since - appears before `hyphen` in
+    // stream-hyphen_underscore/slash, we require `-` in the set of
+    // characters for it to match.
+    assert.deepEqual(util.filter_by_word_prefix_match(values, "hyphe", item_to_string), []);
+    assert.deepEqual(util.filter_by_word_prefix_match(values, "hyphe", item_to_string, /[\s/_-]/), [
+        0,
+    ]);
+    assert.deepEqual(util.filter_by_word_prefix_match(values, "hyphe", item_to_string, /[\s-]/), [
+        0,
+    ]);
+
+    // Similarly `_` must be in the set of allowed characters to match "underscore".
+    assert.deepEqual(util.filter_by_word_prefix_match(values, "unders", item_to_string, /[\s_]/), [
+        0,
+    ]);
+    assert.deepEqual(util.filter_by_word_prefix_match(values, "unders", item_to_string, /\s/), []);
 });

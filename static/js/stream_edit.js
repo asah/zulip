@@ -497,7 +497,11 @@ export function initialize() {
                 get_display_text_for_realm_message_retention_setting(),
             upgrade_text_for_wide_organization_logo:
                 page_params.upgrade_text_for_wide_organization_logo,
+            is_business_type_org:
+                page_params.realm_org_type === settings_config.all_org_type_values.business.code,
             is_stream_edit: true,
+            max_stream_name_length: page_params.max_stream_name_length,
+            max_stream_description_length: page_params.max_stream_description_length,
         };
         const change_privacy_modal = render_stream_types(template_data);
 
@@ -639,7 +643,7 @@ export function initialize() {
         const stream_id = get_stream_id(e.target);
         if (!stream_id) {
             ui_report.client_error(
-                $t_html({defaultMessage: "Invalid stream id"}),
+                $t_html({defaultMessage: "Invalid stream ID"}),
                 $(".stream_change_property_info"),
             );
             return;
@@ -649,7 +653,7 @@ export function initialize() {
             const stream_id = $(".dialog_submit_button").data("stream-id");
             if (!stream_id) {
                 ui_report.client_error(
-                    $t_html({defaultMessage: "Invalid stream id"}),
+                    $t_html({defaultMessage: "Invalid stream ID"}),
                     $(".stream_change_property_info"),
                 );
                 return;

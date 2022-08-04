@@ -33,10 +33,6 @@
             overflow: hidden;
             white-space: nowrap;
             text-overflow: ellipsis;
-
-            .compose_reply_button_recipient_label {
-                color: hsl(215, 47%, 30%);
-            }
         }
     }
 
@@ -65,10 +61,6 @@
     display: flex;
     flex-flow: column;
     box-sizing: border-box;
-}
-
-.ztable_comp_col1 {
-    width: 10px;
 }
 
 .message_comp {
@@ -262,10 +254,11 @@
 
     button {
         background: transparent;
+        color: inherit;
         font-size: 15px;
         font-weight: normal;
         line-height: 20px;
-        opacity: 0.6;
+        opacity: 0.7;
         border: 0;
         padding: 0;
         margin-left: 4px;
@@ -287,7 +280,6 @@
 .compose_invite_user,
 .compose_private_stream_alert,
 .compose-all-everyone,
-.compose-announce,
 .compose_not_subscribed {
     padding: 4px 0;
     display: flex;
@@ -313,7 +305,6 @@
 
 .compose_resolved_topic_user_controls,
 .compose-all-everyone-controls,
-.compose-announce-controls,
 .compose_invite_user_controls,
 .compose_private_stream_alert_controls {
     float: right;
@@ -550,10 +541,6 @@ input.recipient_box {
     }
 }
 
-.compose_left_wrapper {
-    margin-right: auto;
-}
-
 #stream-message,
 #private-message {
     display: flex;
@@ -670,10 +657,6 @@ a.compose_control_button.hide {
     top: 23px;
     position: relative;
     cursor: ns-resize;
-}
-
-.inline-subscribe-error {
-    margin-left: 5px;
 }
 
 .preview_message_area {

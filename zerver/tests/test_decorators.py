@@ -4,12 +4,11 @@ import re
 import uuid
 from collections import defaultdict
 from functools import lru_cache
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Tuple
 from unittest import mock, skipUnless
 
 import orjson
 from django.conf import settings
-from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ValidationError
 from django.http import HttpRequest, HttpResponse
 from django.utils.timezone import now as timezone_now
@@ -34,6 +33,7 @@ from zerver.decorator import (
     validate_api_key,
     webhook_view,
     zulip_login_required,
+    zulip_otp_required_if_logged_in,
 )
 from zerver.forms import OurAuthenticationForm
 from zerver.lib.cache import dict_to_items_tuple, ignore_unhashable_lru_cache, items_tuple_to_dict
@@ -56,7 +56,7 @@ from zerver.lib.request import (
 )
 from zerver.lib.response import json_response, json_success
 from zerver.lib.test_classes import ZulipTestCase
-from zerver.lib.test_helpers import DummyHandler, HostRequestMock
+from zerver.lib.test_helpers import HostRequestMock, dummy_handler
 from zerver.lib.types import Validator
 from zerver.lib.user_agent import parse_user_agent
 from zerver.lib.users import get_api_key
@@ -90,39 +90,49 @@ from zerver.models import Realm, UserProfile, get_realm, get_user
 if settings.ZILENCER_ENABLED:
     from zilencer.models import RemoteZulipServer
 
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
+
 
 class DecoratorTestCase(ZulipTestCase):
     def test_parse_client(self) -> None:
         req = HostRequestMock()
         self.assertEqual(parse_client(req), ("Unspecified", None))
 
+        req = HostRequestMock()
         req.META[
             "HTTP_USER_AGENT"
         ] = "ZulipElectron/4.0.3 Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_3) AppleWebKit/537.36 (KHTML, like Gecko) Zulip/4.0.3 Chrome/66.0.3359.181 Electron/3.1.10 Safari/537.36"
         self.assertEqual(parse_client(req), ("ZulipElectron", "4.0.3"))
 
+        req = HostRequestMock()
         req.META["HTTP_USER_AGENT"] = "ZulipDesktop/0.4.4 (Mac)"
         self.assertEqual(parse_client(req), ("ZulipDesktop", "0.4.4"))
 
+        req = HostRequestMock()
         req.META["HTTP_USER_AGENT"] = "ZulipMobile/26.22.145 (Android 10)"
         self.assertEqual(parse_client(req), ("ZulipMobile", "26.22.145"))
 
+        req = HostRequestMock()
         req.META["HTTP_USER_AGENT"] = "ZulipMobile/26.22.145 (iOS 13.3.1)"
         self.assertEqual(parse_client(req), ("ZulipMobile", "26.22.145"))
 
         # TODO: This should ideally be Firefox.
+        req = HostRequestMock()
         req.META[
             "HTTP_USER_AGENT"
         ] = "Mozilla/5.0 (X11; Linux x86_64; rv:73.0) Gecko/20100101 Firefox/73.0"
         self.assertEqual(parse_client(req), ("Mozilla", None))
 
         # TODO: This should ideally be Chrome.
+        req = HostRequestMock()
         req.META[
             "HTTP_USER_AGENT"
         ] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.43 Safari/537.36"
         self.assertEqual(parse_client(req), ("Mozilla", None))
 
         # TODO: This should ideally be Mobile Safari if we had better user-agent parsing.
+        req = HostRequestMock()
         req.META[
             "HTTP_USER_AGENT"
         ] = "Mozilla/5.0 (Linux; Android 8.0.0; SM-G930F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.132 Mobile Safari/537.36"
@@ -145,7 +155,7 @@ class DecoratorTestCase(ZulipTestCase):
         with mock.patch(
             "zerver.middleware.parse_client", side_effect=JsonableError("message")
         ) as m, self.assertLogs(level="ERROR"):
-            LogRequests.process_request(self, request)
+            LogRequests(lambda request: HttpResponse()).process_request(request)
         request_notes = RequestNotes.get_notes(request)
         self.assertEqual(request_notes.client_name, "Unparsable")
         m.assert_called_once()
@@ -318,8 +328,8 @@ class DecoratorTestCase(ZulipTestCase):
             my_webhook(request)
 
         # Start a valid request here
+        request = HostRequestMock()
         request.POST["api_key"] = webhook_bot_api_key
-
         with self.assertLogs(level="WARNING") as m:
             with self.assertRaisesRegex(
                 JsonableError, "Account is not associated with this subdomain"
@@ -334,6 +344,8 @@ class DecoratorTestCase(ZulipTestCase):
             ],
         )
 
+        request = HostRequestMock()
+        request.POST["api_key"] = webhook_bot_api_key
         with self.assertLogs(level="WARNING") as m:
             with self.assertRaisesRegex(
                 JsonableError, "Account is not associated with this subdomain"
@@ -349,11 +361,13 @@ class DecoratorTestCase(ZulipTestCase):
             ],
         )
 
-        request.host = "zulip.testserver"
         # Test when content_type is application/json and request.body
         # is valid JSON; exception raised in the webhook function
         # should be re-raised
 
+        request = HostRequestMock()
+        request.host = "zulip.testserver"
+        request.POST["api_key"] = webhook_bot_api_key
         with self.assertLogs("zulip.zerver.webhooks", level="INFO") as log:
             with self.assertRaisesRegex(Exception, "raised by webhook function"):
                 request.body = b"{}"
@@ -363,6 +377,9 @@ class DecoratorTestCase(ZulipTestCase):
         # Test when content_type is not application/json; exception raised
         # in the webhook function should be re-raised
 
+        request = HostRequestMock()
+        request.host = "zulip.testserver"
+        request.POST["api_key"] = webhook_bot_api_key
         with self.assertLogs("zulip.zerver.webhooks", level="INFO") as log:
             with self.assertRaisesRegex(Exception, "raised by webhook function"):
                 request.body = b"notjson"
@@ -372,6 +389,9 @@ class DecoratorTestCase(ZulipTestCase):
         # Test when content_type is application/json but request.body
         # is not valid JSON; invalid JSON should be logged and the
         # exception raised in the webhook function should be re-raised
+        request = HostRequestMock()
+        request.host = "zulip.testserver"
+        request.POST["api_key"] = webhook_bot_api_key
         with self.assertLogs("zulip.zerver.webhooks", level="ERROR") as log:
             with self.assertRaisesRegex(Exception, "raised by webhook function"):
                 request.body = b"invalidjson"
@@ -384,6 +404,9 @@ class DecoratorTestCase(ZulipTestCase):
         )
 
         # Test when an unsupported webhook event occurs
+        request = HostRequestMock()
+        request.host = "zulip.testserver"
+        request.POST["api_key"] = webhook_bot_api_key
         exception_msg = "The 'test_event' event isn't currently supported by the ClientName webhook"
         with self.assertLogs("zulip.zerver.webhooks.unsupported", level="ERROR") as log:
             with self.assertRaisesRegex(UnsupportedWebhookEventType, exception_msg):
@@ -396,6 +419,9 @@ class DecoratorTestCase(ZulipTestCase):
             self.logger_output(exception_msg, "error", "webhooks.unsupported"), log.output[0]
         )
 
+        request = HostRequestMock()
+        request.host = "zulip.testserver"
+        request.POST["api_key"] = webhook_bot_api_key
         with self.settings(RATE_LIMITING=True):
             with mock.patch("zerver.decorator.rate_limit_user") as rate_limit_mock:
                 api_result = orjson.loads(my_webhook(request).content).get("msg")
@@ -410,6 +436,9 @@ class DecoratorTestCase(ZulipTestCase):
 
         # Now deactivate the user
         change_user_is_active(webhook_bot, False)
+        request = HostRequestMock()
+        request.host = "zulip.testserver"
+        request.POST["api_key"] = webhook_bot_api_key
         with self.assertRaisesRegex(JsonableError, "Account is deactivated"):
             my_webhook(request)
 
@@ -417,6 +446,9 @@ class DecoratorTestCase(ZulipTestCase):
         change_user_is_active(webhook_bot, True)
         webhook_bot.realm.deactivated = True
         webhook_bot.realm.save()
+        request = HostRequestMock()
+        request.host = "zulip.testserver"
+        request.POST["api_key"] = webhook_bot_api_key
         with self.assertRaisesRegex(JsonableError, "This organization has been deactivated"):
             my_webhook(request)
 
@@ -439,6 +471,10 @@ class SkipRateLimitingTest(ZulipTestCase):
 
         self.assert_json_success(result)
         self.assertFalse(rate_limit_mock.called)
+
+        request = HostRequestMock(host="zulip.testserver")
+        request.META["HTTP_AUTHORIZATION"] = self.encode_email(self.example_email("hamlet"))
+        request.method = "POST"
         with mock.patch("zerver.decorator.rate_limit") as rate_limit_mock:
             result = my_rate_limited_view(request)
 
@@ -462,6 +498,10 @@ class SkipRateLimitingTest(ZulipTestCase):
 
         self.assert_json_success(result)
         self.assertFalse(rate_limit_mock.called)
+
+        request = HostRequestMock(host="zulip.testserver")
+        request.method = "POST"
+        request.POST["api_key"] = get_api_key(self.example_user("hamlet"))
         with mock.patch("zerver.decorator.rate_limit") as rate_limit_mock:
             result = my_rate_limited_view(request)
 
@@ -483,6 +523,10 @@ class SkipRateLimitingTest(ZulipTestCase):
 
         self.assert_json_success(result)
         self.assertFalse(rate_limit_mock.called)
+
+        request = HostRequestMock(host="zulip.testserver")
+        request.method = "POST"
+        request.user = self.example_user("hamlet")
         with mock.patch("zerver.decorator.rate_limit") as rate_limit_mock:
             result = my_rate_limited_view(request)
 
@@ -605,9 +649,8 @@ class RateLimitTestCase(ZulipTestCase):
 
     def test_internal_local_clients_skip_rate_limiting(self) -> None:
         META = {"REMOTE_ADDR": "127.0.0.1"}
-        user = AnonymousUser()
 
-        request = HostRequestMock(client_name="internal", user_profile=user, meta_data=META)
+        request = HostRequestMock(client_name="internal", meta_data=META)
 
         f = self.get_ratelimited_view()
 
@@ -623,9 +666,8 @@ class RateLimitTestCase(ZulipTestCase):
 
     def test_debug_clients_skip_rate_limiting(self) -> None:
         META = {"REMOTE_ADDR": "3.3.3.3"}
-        user = AnonymousUser()
 
-        req = HostRequestMock(client_name="internal", user_profile=user, meta_data=META)
+        req = HostRequestMock(client_name="internal", meta_data=META)
 
         f = self.get_ratelimited_view()
 
@@ -684,7 +726,7 @@ class RateLimitTestCase(ZulipTestCase):
         )
         META = {"REMOTE_ADDR": "3.3.3.3"}
 
-        req = HostRequestMock(client_name="external", user_profile=server, meta_data=META)
+        req = HostRequestMock(client_name="external", remote_server=server, meta_data=META)
 
         f = self.get_ratelimited_view()
 
@@ -697,9 +739,8 @@ class RateLimitTestCase(ZulipTestCase):
 
     def test_rate_limiting_happens_by_ip_if_unauthed(self) -> None:
         META = {"REMOTE_ADDR": "3.3.3.3"}
-        user = AnonymousUser()
 
-        req = HostRequestMock(client_name="external", user_profile=user, meta_data=META)
+        req = HostRequestMock(client_name="external", meta_data=META)
 
         f = self.get_ratelimited_view()
 
@@ -1506,7 +1547,6 @@ class TestInternalNotifyView(ZulipTestCase):
         request = HostRequestMock(
             post_data=dict(secret=secret),
             meta_data=dict(REMOTE_ADDR="127.0.0.1"),
-            tornado_handler=None,
         )
 
         with self.settings(SHARED_SECRET=secret):
@@ -1520,7 +1560,11 @@ class TestInternalNotifyView(ZulipTestCase):
             with self.assertRaises(RuntimeError):
                 self.internal_notify(True, request)
 
-        RequestNotes.get_notes(request).tornado_handler = DummyHandler()
+        request = HostRequestMock(
+            post_data=dict(secret=secret),
+            meta_data=dict(REMOTE_ADDR="127.0.0.1"),
+            tornado_handler=dummy_handler,
+        )
         with self.settings(SHARED_SECRET=secret):
             self.assertTrue(authenticate_notify(request))
             self.assertEqual(
@@ -1533,6 +1577,21 @@ class TestInternalNotifyView(ZulipTestCase):
                 self.internal_notify(False, request)
 
     def test_internal_requests_with_broken_secret(self) -> None:
+        request = HostRequestMock(
+            post_data=dict(data="something"),
+            meta_data=dict(REMOTE_ADDR="127.0.0.1"),
+        )
+
+        with self.settings(SHARED_SECRET="random"):
+            with self.assertRaises(RequestVariableMissingError) as context:
+                self.internal_notify(True, request)
+            self.assertEqual(context.exception.http_status_code, 400)
+
+        with self.settings(SHARED_SECRET=None):
+            with self.assertRaises(RequestVariableMissingError) as context:
+                self.internal_notify(True, request)
+            self.assertEqual(context.exception.http_status_code, 400)
+
         secret = "random"
         request = HostRequestMock(
             post_data=dict(secret=secret),
@@ -1541,9 +1600,9 @@ class TestInternalNotifyView(ZulipTestCase):
 
         with self.settings(SHARED_SECRET="broken"):
             self.assertFalse(authenticate_notify(request))
-            with self.assertRaises(AccessDeniedError) as context:
+            with self.assertRaises(AccessDeniedError) as access_denied_error:
                 self.internal_notify(True, request)
-            self.assertEqual(context.exception.http_status_code, 403)
+            self.assertEqual(access_denied_error.exception.http_status_code, 403)
 
     def test_external_requests(self) -> None:
         secret = "random"
@@ -1726,7 +1785,7 @@ class TestAuthenticatedJsonPostViewDecorator(ZulipTestCase):
         )
         do_reactivate_realm(user_profile.realm)
 
-    def _do_test(self, user: UserProfile) -> HttpResponse:
+    def _do_test(self, user: UserProfile) -> "TestHttpResponse":
         stream_name = "stream name"
         self.common_subscribe_to_streams(user, [stream_name], allow_fail=True)
         data = {"password": initial_password(user.email), "stream": stream_name}
@@ -1769,7 +1828,7 @@ class TestAuthenticatedJsonViewDecorator(ZulipTestCase):
             ],
         )
 
-    def _do_test(self, user_email: str) -> HttpResponse:
+    def _do_test(self, user_email: str) -> "TestHttpResponse":
         data = {"password": initial_password(user_email)}
         return self.client_post(r"/accounts/webathena_kerberos_login/", data)
 
@@ -1801,20 +1860,18 @@ class TestZulipLoginRequiredDecorator(ZulipTestCase):
             "PATH_INFO": "",
         }
         user = hamlet = self.example_user("hamlet")
-        user.is_verified = lambda: False
         self.login_user(hamlet)
         request = HostRequestMock(
             client_name="", user_profile=user, meta_data=meta_data, host="zulip.testserver"
         )
         request.session = self.client.session
 
-        response = test_view(request)
-        content = getattr(response, "content")
-        self.assertEqual(content.decode(), "Success")
+        with mock.patch("zerver.lib.users.is_verified", lambda _: False):
+            response = test_view(request)
+            self.assertEqual(response.content.decode(), "Success")
 
         with self.settings(TWO_FACTOR_AUTHENTICATION_ENABLED=True):
             user = hamlet = self.example_user("hamlet")
-            user.is_verified = lambda: False
             self.login_user(hamlet)
             request = HostRequestMock(
                 client_name="", user_profile=user, meta_data=meta_data, host="zulip.testserver"
@@ -1823,13 +1880,12 @@ class TestZulipLoginRequiredDecorator(ZulipTestCase):
             assert type(request.user) is UserProfile
             self.create_default_device(request.user)
 
-            response = test_view(request)
+            with mock.patch("zerver.lib.users.is_verified", lambda _: False):
+                response = test_view(request)
 
-            status_code = getattr(response, "status_code")
-            self.assertEqual(status_code, 302)
+            self.assertEqual(response.status_code, 302)
 
-            url = getattr(response, "url")
-            response_url = url.split("?")[0]
+            response_url = response["Location"].split("?")[0]
             self.assertEqual(response_url, settings.HOME_NOT_LOGGED_IN)
 
     def test_2fa_success(self) -> None:
@@ -1844,7 +1900,6 @@ class TestZulipLoginRequiredDecorator(ZulipTestCase):
                 "PATH_INFO": "",
             }
             user = hamlet = self.example_user("hamlet")
-            user.is_verified = lambda: True
             self.login_user(hamlet)
             request = HostRequestMock(
                 client_name="", user_profile=user, meta_data=meta_data, host="zulip.testserver"
@@ -1853,9 +1908,19 @@ class TestZulipLoginRequiredDecorator(ZulipTestCase):
             assert type(request.user) is UserProfile
             self.create_default_device(request.user)
 
+            with mock.patch("zerver.lib.users.is_verified", lambda _: True):
+                response = test_view(request)
+                self.assertEqual(response.content.decode(), "Success")
+
+    def test_otp_not_authenticated(self) -> None:
+        @zulip_otp_required_if_logged_in()
+        def test_view(request: HttpRequest) -> HttpResponse:
+            return HttpResponse("Success")
+
+        with self.settings(TWO_FACTOR_AUTHENTICATION_ENABLED=True):
+            request = HostRequestMock()
             response = test_view(request)
-            content = getattr(response, "content")
-            self.assertEqual(content.decode(), "Success")
+            self.assertEqual(response.content.decode(), "Success")
 
 
 class TestRequireDecorators(ZulipTestCase):
@@ -1937,12 +2002,12 @@ class RestAPITest(ZulipTestCase):
 
         result = self.client_options("/json/streams/15")
         self.assertEqual(result.status_code, 204)
-        self.assertEqual(str(result["Allow"]), "DELETE, PATCH")
+        self.assertEqual(str(result["Allow"]), "DELETE, GET, HEAD, PATCH")
 
     def test_http_accept_redirect(self) -> None:
         result = self.client_get("/json/users", HTTP_ACCEPT="text/html")
         self.assertEqual(result.status_code, 302)
-        self.assertTrue(result["Location"].endswith("/login/?next=/json/users"))
+        self.assertTrue(result["Location"].endswith("/login/?next=%2Fjson%2Fusers"))
 
 
 class CacheTestCase(ZulipTestCase):
@@ -2040,48 +2105,38 @@ class TestIgnoreUnhashableLRUCache(ZulipTestCase):
         def f(arg: Any) -> Any:
             return arg
 
-        def get_cache_info() -> Tuple[int, int, int]:
-            info = getattr(f, "cache_info")()
-            hits = getattr(info, "hits")
-            misses = getattr(info, "misses")
-            currsize = getattr(info, "currsize")
-            return hits, misses, currsize
-
-        def clear_cache() -> None:
-            getattr(f, "cache_clear")()
-
         # Check hashable argument.
         result = f(1)
-        hits, misses, currsize = get_cache_info()
+        info = f.cache_info()
         # First one should be a miss.
-        self.assertEqual(hits, 0)
-        self.assertEqual(misses, 1)
-        self.assertEqual(currsize, 1)
+        self.assertEqual(info.hits, 0)
+        self.assertEqual(info.misses, 1)
+        self.assertEqual(info.currsize, 1)
         self.assertEqual(result, 1)
 
         result = f(1)
-        hits, misses, currsize = get_cache_info()
+        info = f.cache_info()
         # Second one should be a hit.
-        self.assertEqual(hits, 1)
-        self.assertEqual(misses, 1)
-        self.assertEqual(currsize, 1)
+        self.assertEqual(info.hits, 1)
+        self.assertEqual(info.misses, 1)
+        self.assertEqual(info.currsize, 1)
         self.assertEqual(result, 1)
 
         # Check unhashable argument.
         result = f({1: 2})
-        hits, misses, currsize = get_cache_info()
+        info = f.cache_info()
         # Cache should not be used.
-        self.assertEqual(hits, 1)
-        self.assertEqual(misses, 1)
-        self.assertEqual(currsize, 1)
+        self.assertEqual(info.hits, 1)
+        self.assertEqual(info.misses, 1)
+        self.assertEqual(info.currsize, 1)
         self.assertEqual(result, {1: 2})
 
         # Clear cache.
-        clear_cache()
-        hits, misses, currsize = get_cache_info()
-        self.assertEqual(hits, 0)
-        self.assertEqual(misses, 0)
-        self.assertEqual(currsize, 0)
+        f.cache_clear()
+        info = f.cache_info()
+        self.assertEqual(info.hits, 0)
+        self.assertEqual(info.misses, 0)
+        self.assertEqual(info.currsize, 0)
 
     def test_cache_hit_dict_args(self) -> None:
         @ignore_unhashable_lru_cache()
@@ -2089,60 +2144,50 @@ class TestIgnoreUnhashableLRUCache(ZulipTestCase):
         def g(arg: Any) -> Any:
             return arg
 
-        def get_cache_info() -> Tuple[int, int, int]:
-            info = getattr(g, "cache_info")()
-            hits = getattr(info, "hits")
-            misses = getattr(info, "misses")
-            currsize = getattr(info, "currsize")
-            return hits, misses, currsize
-
-        def clear_cache() -> None:
-            getattr(g, "cache_clear")()
-
-        # Not used as a decorator on the definition to allow defining
-        # get_cache_info and clear_cache
+        # Not used as a decorator on the definition to allow calling
+        # cache_info and cache_clear
         f = dict_to_items_tuple(g)
 
         # Check hashable argument.
         result = f(1)
-        hits, misses, currsize = get_cache_info()
+        info = g.cache_info()
         # First one should be a miss.
-        self.assertEqual(hits, 0)
-        self.assertEqual(misses, 1)
-        self.assertEqual(currsize, 1)
+        self.assertEqual(info.hits, 0)
+        self.assertEqual(info.misses, 1)
+        self.assertEqual(info.currsize, 1)
         self.assertEqual(result, 1)
 
         result = f(1)
-        hits, misses, currsize = get_cache_info()
+        info = g.cache_info()
         # Second one should be a hit.
-        self.assertEqual(hits, 1)
-        self.assertEqual(misses, 1)
-        self.assertEqual(currsize, 1)
+        self.assertEqual(info.hits, 1)
+        self.assertEqual(info.misses, 1)
+        self.assertEqual(info.currsize, 1)
         self.assertEqual(result, 1)
 
         # Check dict argument.
         result = f({1: 2})
-        hits, misses, currsize = get_cache_info()
+        info = g.cache_info()
         # First one is a miss
-        self.assertEqual(hits, 1)
-        self.assertEqual(misses, 2)
-        self.assertEqual(currsize, 2)
+        self.assertEqual(info.hits, 1)
+        self.assertEqual(info.misses, 2)
+        self.assertEqual(info.currsize, 2)
         self.assertEqual(result, {1: 2})
 
         result = f({1: 2})
-        hits, misses, currsize = get_cache_info()
+        info = g.cache_info()
         # Second one should be a hit.
-        self.assertEqual(hits, 2)
-        self.assertEqual(misses, 2)
-        self.assertEqual(currsize, 2)
+        self.assertEqual(info.hits, 2)
+        self.assertEqual(info.misses, 2)
+        self.assertEqual(info.currsize, 2)
         self.assertEqual(result, {1: 2})
 
         # Clear cache.
-        clear_cache()
-        hits, misses, currsize = get_cache_info()
-        self.assertEqual(hits, 0)
-        self.assertEqual(misses, 0)
-        self.assertEqual(currsize, 0)
+        g.cache_clear()
+        info = g.cache_info()
+        self.assertEqual(info.hits, 0)
+        self.assertEqual(info.misses, 0)
+        self.assertEqual(info.currsize, 0)
 
 
 class TestRequestNotes(ZulipTestCase):

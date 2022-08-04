@@ -1,5 +1,5 @@
 import time
-from typing import Any, List, Mapping, Optional
+from typing import Any, Dict, List, Optional
 
 import markdown
 import markdown.extensions.admonition
@@ -10,6 +10,7 @@ import orjson
 from django.conf import settings
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.template import Library, engines
+from django.template.backends.jinja2 import Jinja2
 from django.utils.safestring import mark_safe
 from jinja2.exceptions import TemplateNotFound
 
@@ -65,8 +66,8 @@ def display_list(values: List[str], display_limit: int) -> str:
     return display_string
 
 
-md_extensions: Optional[List[Any]] = None
-md_macro_extension: Optional[Any] = None
+md_extensions: Optional[List[markdown.Extension]] = None
+md_macro_extension: Optional[markdown.Extension] = None
 # Prevent the automatic substitution of macros in these docs. If
 # they contain a macro, it is always used literally for documenting
 # the macro system.
@@ -82,13 +83,15 @@ docs_without_macros = [
 @items_tuple_to_dict
 @register.filter(name="render_markdown_path", is_safe=True)
 def render_markdown_path(
-    markdown_file_path: str, context: Mapping[str, Any] = {}, pure_markdown: bool = False
+    markdown_file_path: str, context: Optional[Dict[str, Any]] = None, pure_markdown: bool = False
 ) -> str:
     """Given a path to a Markdown file, return the rendered HTML.
 
     Note that this assumes that any HTML in the Markdown file is
     trusted; it is intended to be used for documentation, not user
     data."""
+    if context is None:
+        context = {}
 
     # We set this global hackishly
     from zerver.lib.markdown.help_settings_links import set_relative_settings_links
@@ -154,6 +157,7 @@ def render_markdown_path(
         # By default, we do both Jinja2 templating and Markdown
         # processing on the file, to make it easy to use both Jinja2
         # context variables and markdown includes in the file.
+        assert isinstance(jinja, Jinja2)
         markdown_string = jinja.env.loader.get_source(jinja.env, markdown_file_path)[0]
     except TemplateNotFound as e:
         if pure_markdown:

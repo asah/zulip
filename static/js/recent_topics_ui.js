@@ -29,6 +29,7 @@ import * as sub_store from "./sub_store";
 import * as timerender from "./timerender";
 import * as top_left_corner from "./top_left_corner";
 import * as unread from "./unread";
+import * as unread_ui from "./unread_ui";
 
 let topics_widget;
 // Sets the number of avatars to display.
@@ -87,7 +88,12 @@ export function save_filters() {
 }
 
 export function load_filters() {
-    filters = new Set(ls.get(ls_key));
+    if (!page_params.is_spectator) {
+        // A user may have a stored filter and can log out
+        // to see web public view. This ensures no filters are
+        // selected for spectators.
+        filters = new Set(ls.get(ls_key));
+    }
 }
 
 export function set_default_focus() {
@@ -309,6 +315,7 @@ function format_topic(topic_data) {
         topic_key: get_topic_key(stream_id, topic),
         unread_count,
         last_msg_time,
+        last_msg_url: hash_util.by_conversation_and_time_url(last_msg),
         topic_url: hash_util.by_stream_topic_url(stream_id, topic),
         senders: senders_info,
         other_senders_count: Math.max(0, all_senders.length - MAX_AVATAR),
@@ -645,7 +652,7 @@ export function show() {
     $("#message_view_header_underpadding").hide();
     $(".header").css("padding-bottom", "0px");
 
-    narrow.hide_mark_as_read_turned_off_banner();
+    unread_ui.hide_mark_as_read_turned_off_banner();
 
     // We want to show `new stream message` instead of
     // `new topic`, which we are already doing in this

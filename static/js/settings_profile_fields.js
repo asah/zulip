@@ -1,12 +1,16 @@
 import $ from "jquery";
 import {Sortable} from "sortablejs";
 
+import render_confirm_delete_profile_field_option from "../templates/confirm_dialog/confirm_delete_profile_field_option.hbs";
 import render_admin_profile_field_list from "../templates/settings/admin_profile_field_list.hbs";
 import render_settings_profile_field_choice from "../templates/settings/profile_field_choice.hbs";
 
 import * as channel from "./channel";
+import * as confirm_dialog from "./confirm_dialog";
+import {$t_html} from "./i18n";
 import * as loading from "./loading";
 import {page_params} from "./page_params";
+import * as people from "./people";
 import * as settings_ui from "./settings_ui";
 
 const meta = {
@@ -66,15 +70,31 @@ function delete_profile_field(e) {
     update_profile_fields_table_element();
 }
 
-function read_select_field_data_from_form(field_elem) {
+function read_select_field_data_from_form(field_elem, old_field_data) {
     const field_data = {};
     let field_order = 1;
+
+    const old_option_value_map = new Map();
+    if (old_field_data !== undefined) {
+        for (const [value, choice] of Object.entries(old_field_data)) {
+            old_option_value_map.set(choice.text, value);
+        }
+    }
+
     $(field_elem)
         .find("div.choice-row")
         .each(function () {
             const text = $(this).find("input")[0].value;
             if (text) {
-                field_data[field_order - 1] = {text, order: field_order.toString()};
+                if (old_option_value_map.get(text) !== undefined) {
+                    // Resetting the data-value in the form is
+                    // important if the user removed an option string
+                    // and then added it back again before saving
+                    // changes.
+                    $(this).attr("data-value", old_option_value_map.get(text));
+                }
+                const value = $(this).attr("data-value");
+                field_data[value] = {text, order: field_order.toString()};
                 field_order += 1;
             }
         });
@@ -105,8 +125,23 @@ function update_choice_delete_btn($container, display_flag) {
     }
 }
 
+function get_value_for_new_option(container) {
+    const $choice_rows = $(container).find(".choice-row");
+    if ($choice_rows.length === 0) {
+        // Value for the first option is 0.
+        return 0;
+    }
+
+    const existing_option_values = [];
+    $choice_rows.each(function () {
+        existing_option_values.push(Number.parseInt($(this).attr("data-value"), 10));
+    });
+    existing_option_values.sort();
+    return existing_option_values[existing_option_values.length - 1] + 1;
+}
+
 function create_choice_row(container) {
-    const context = {};
+    const context = {value: get_value_for_new_option(container)};
     const row = render_settings_profile_field_choice(context);
     $(container).append(row);
 }
@@ -153,11 +188,11 @@ function set_up_create_field_form() {
     }
 }
 
-function read_field_data_from_form(field_type_id, field_elem) {
+function read_field_data_from_form(field_type_id, field_elem, old_field_data) {
     // Only read field data if we are creating a select field
     // or external account field.
     if (field_type_id === field_types.SELECT.id) {
-        return read_select_field_data_from_form(field_elem);
+        return read_select_field_data_from_form(field_elem, old_field_data);
     } else if (field_type_id === field_types.EXTERNAL_ACCOUNT.id) {
         return read_external_account_field_data(field_elem);
     }
@@ -211,6 +246,27 @@ function delete_choice_row(e) {
     update_choice_delete_btn($container, false);
 }
 
+function show_modal_for_deleting_options(field, deleted_values, update_profile_field) {
+    const active_user_ids = people.get_active_user_ids();
+    let users_count_with_deleted_option_selected = 0;
+    for (const user_id of active_user_ids) {
+        const field_value = people.get_custom_profile_data(user_id, field.id);
+        if (field_value && deleted_values.has(field_value.value)) {
+            users_count_with_deleted_option_selected += 1;
+        }
+    }
+    const html_body = render_confirm_delete_profile_field_option({
+        count: users_count_with_deleted_option_selected,
+        field_name: field.name,
+    });
+
+    confirm_dialog.launch({
+        html_heading: $t_html({defaultMessage: "Delete option"}),
+        html_body,
+        on_click: update_profile_field,
+    });
+}
+
 function get_profile_field_info(id) {
     const info = {};
     info.$row = $(`tr.profile-field-row[data-profile-field-id='${CSS.escape(id)}']`);
@@ -231,7 +287,7 @@ export function parse_field_choices_from_field_data(field_data) {
             order: choice.order,
         });
     }
-
+    choices.sort((a, b) => a.order - b.order);
     return choices;
 }
 
@@ -260,6 +316,7 @@ function set_up_select_field_edit_form(profile_field, field_data) {
         $choice_list.append(
             render_settings_profile_field_choice({
                 text: choice.text,
+                value: choice.value,
             }),
         );
     }
@@ -300,6 +357,10 @@ function open_edit_form(e) {
     profile_field.$form.find("input[name=hint]").val(field.hint);
 
     profile_field.$form.find(".reset").on("click", () => {
+        // If we do not turn off the click handler, the code is called twice in case
+        // when the edit form is closed and then opened again. And in such case two
+        // modals are opened and one of them is shown randomly.
+        profile_field.$form.find(".submit").off("click");
         profile_field.$form.hide();
         profile_field.$row.show();
     });
@@ -316,16 +377,37 @@ function open_edit_form(e) {
 
         data.name = profile_field.$form.find("input[name=name]").val();
         data.hint = profile_field.$form.find("input[name=hint]").val();
-        data.field_data = JSON.stringify(
-            read_field_data_from_form(Number.parseInt(field.type, 10), profile_field.$form),
-        );
 
-        settings_ui.do_settings_change(
-            channel.patch,
-            "/json/realm/profile_fields/" + field_id,
-            data,
-            $profile_field_status,
+        const new_field_data = read_field_data_from_form(
+            Number.parseInt(field.type, 10),
+            profile_field.$form,
+            field_data,
         );
+        data.field_data = JSON.stringify(new_field_data);
+
+        function update_profile_field() {
+            settings_ui.do_settings_change(
+                channel.patch,
+                "/json/realm/profile_fields/" + field_id,
+                data,
+                $profile_field_status,
+            );
+        }
+
+        if (field.type === field_types.SELECT.id) {
+            const old_values = new Set(Object.keys(field_data));
+            const new_values = new Set(Object.keys(new_field_data));
+            const deleted_values = new Set(
+                [...old_values].filter((value) => !new_values.has(value)),
+            );
+
+            if (deleted_values.size !== 0) {
+                show_modal_for_deleting_options(field, deleted_values, update_profile_field);
+                return;
+            }
+        }
+
+        update_profile_field();
     });
 
     profile_field.$form

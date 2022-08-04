@@ -3,7 +3,7 @@
     helps us align it at various screens sizes with
     minimal css and no JS. We keep it `position: absolute` to prevent
     it changing compose box layout in any way. --}}
-    <div id="scroll-to-bottom-button-container">
+    <div id="scroll-to-bottom-button-container" aria-hidden="true">
         <div id="scroll-to-bottom-button-clickable-area" data-tooltip-template-id="scroll-to-bottom-button-tooltip">
             <div id="scroll-to-bottom-button">
                 <i class="fa fa-chevron-down"></i>
@@ -55,7 +55,6 @@
         <div id="compose_resolved_topic" class="alert home-error-bar"></div>
         <div id="compose_invite_users" class="alert home-error-bar"></div>
         <div id="compose-all-everyone" class="alert home-error-bar"></div>
-        <div id="compose-announce" class="alert home-error-bar"></div>
         <div id="compose_not_subscribed" class="alert home-error-bar"></div>
         <div id="compose_private_stream_alert" class="alert home-error-bar"></div>
         <div id="out-of-view-notification" class="notification-alert"></div>
@@ -65,7 +64,7 @@
                 <div class="compose_table">
                     <div id="compose_top">
                         <div id="compose_top_right" class="order-2">
-                            <button type="button" class="expand_composebox_button fa fa-chevron-up" aria-label="{{t 'Expand compose' }}" title="{{t 'Expand compose' }}"></button>
+                            <button type="button" class="expand_composebox_button fa fa-chevron-up" aria-label="{{t 'Expand compose' }}" data-tippy-content="{{t 'Expand compose' }}"></button>
                             <button type="button" class="collapse_composebox_button fa fa-chevron-down" aria-label="{{t 'Collapse compose' }}" data-tippy-content="{{t 'Collapse compose' }}"></button>
                             <button type="button" class="close fa fa-times" id='compose_close' data-tooltip-template-id="compose_close_tooltip"></button>
                             <template id="compose_close_tooltip">{{t 'Cancel compose' }} <span class="hotkey-hint">(Esc)</span></template>
@@ -81,9 +80,9 @@
                                 </span>
                                 <a role="button" class="narrow_to_compose_recipients zulip-icon zulip-icon-arrow-left-circle order-1" data-tooltip-template-id="narrow_to_compose_recipients_tooltip" tabindex="0">
                                 </a>
-                                <input type="text" class="recipient_box" name="stream_message_recipient_stream" id="stream_message_recipient_stream" maxlength="30" value="" placeholder="{{t 'Stream' }}" autocomplete="off" tabindex="0" aria-label="{{t 'Stream' }}" />
+                                <input type="text" class="recipient_box" name="stream_message_recipient_stream" id="stream_message_recipient_stream" maxlength="{{ max_stream_name_length }}" value="" placeholder="{{t 'Stream' }}" autocomplete="off" tabindex="0" aria-label="{{t 'Stream' }}" />
                                 <i class="fa fa-angle-right" aria-hidden="true"></i>
-                                <input type="text" class="recipient_box" name="stream_message_recipient_topic" id="stream_message_recipient_topic" maxlength="60" value="" placeholder="{{t 'Topic' }}" autocomplete="off" tabindex="0" aria-label="{{t 'Topic' }}" />
+                                <input type="text" class="recipient_box" name="stream_message_recipient_topic" id="stream_message_recipient_topic" maxlength="{{ max_topic_length }}" value="" placeholder="{{t 'Topic' }}" autocomplete="off" tabindex="0" aria-label="{{t 'Topic' }}" />
                             </div>
                         </div>
                         <div id="private-message" class="order-1">

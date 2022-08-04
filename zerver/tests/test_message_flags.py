@@ -1,9 +1,8 @@
-from typing import Any, List, Mapping, Set
+from typing import TYPE_CHECKING, Any, List, Mapping, Set
 from unittest import mock
 
 import orjson
 from django.db import connection
-from django.http import HttpResponse
 
 from zerver.actions.message_flags import do_update_message_flags
 from zerver.actions.streams import do_change_stream_permission
@@ -34,6 +33,9 @@ from zerver.models import (
     get_realm,
     get_stream,
 )
+
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
 
 
 def check_flags(flags: List[str], expected: Set[str]) -> None:
@@ -275,7 +277,7 @@ class UnreadCountTests(ZulipTestCase):
                 "stream_id": invalid_stream_id,
             },
         )
-        self.assert_json_error(result, "Invalid stream id")
+        self.assert_json_error(result, "Invalid stream ID")
 
     def test_mark_all_topics_unread_with_invalid_stream_name(self) -> None:
         self.login("hamlet")
@@ -287,7 +289,7 @@ class UnreadCountTests(ZulipTestCase):
                 "topic_name": "whatever",
             },
         )
-        self.assert_json_error(result, "Invalid stream id")
+        self.assert_json_error(result, "Invalid stream ID")
 
     def test_mark_all_in_stream_topic_read(self) -> None:
         self.login("hamlet")
@@ -1019,7 +1021,9 @@ class MessageAccessTests(ZulipTestCase):
         )
         self.assert_json_error(result, "Invalid message flag operation: 'bogus'")
 
-    def change_star(self, messages: List[int], add: bool = True, **kwargs: Any) -> HttpResponse:
+    def change_star(
+        self, messages: List[int], add: bool = True, **kwargs: Any
+    ) -> "TestHttpResponse":
         return self.client_post(
             "/json/messages/flags",
             {
@@ -1404,7 +1408,7 @@ class PersonalMessagesFlagTest(ZulipTestCase):
 
 
 class MarkUnreadTest(ZulipTestCase):
-    def mute_stream(self, stream_name: str, user: int) -> None:
+    def mute_stream(self, stream_name: str, user: UserProfile) -> None:
         realm = get_realm("zulip")
         stream = get_stream(stream_name, realm)
         recipient = stream.recipient
@@ -1913,7 +1917,7 @@ class MarkUnreadTest(ZulipTestCase):
         unread_message_ids = {str(message_id) for message_id in messages_to_unread}
         self.assertSetEqual(set(event["message_details"].keys()), unread_message_ids)
         for message_id in event["message_details"]:
-            self.assertNotIn("mentioned", event["message_details"][message_id]),
+            self.assertNotIn("mentioned", event["message_details"][message_id])
 
         for message_id in messages_to_unread:
             um = UserMessage.objects.get(
@@ -1979,7 +1983,7 @@ class MarkUnreadTest(ZulipTestCase):
         unread_message_ids = {str(message_id) for message_id in messages_to_unread}
         self.assertSetEqual(set(event["message_details"].keys()), unread_message_ids)
         for message_id in event["message_details"]:
-            self.assertEqual(event["message_details"][message_id]["mentioned"], True),
+            self.assertEqual(event["message_details"][message_id]["mentioned"], True)
 
         for message_id in messages_to_unread:
             um = UserMessage.objects.get(

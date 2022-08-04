@@ -1,7 +1,9 @@
 import datetime
 import logging
 from collections import defaultdict
+from email.headerregistry import Address
 from typing import (
+    TYPE_CHECKING,
     AbstractSet,
     Any,
     Callable,
@@ -86,13 +88,16 @@ from zerver.models import (
 )
 from zerver.tornado.django_api import send_event
 
+if TYPE_CHECKING:
+    from django.db.models.query import _QuerySet as ValuesQuerySet
+
 
 def compute_irc_user_fullname(email: str) -> str:
-    return email.split("@")[0] + " (IRC)"
+    return Address(addr_spec=email).username + " (IRC)"
 
 
 def compute_jabber_user_fullname(email: str) -> str:
-    return email.split("@")[0] + " (XMPP)"
+    return Address(addr_spec=email).username + " (XMPP)"
 
 
 def get_user_profile_delivery_email_cache_key(
@@ -128,7 +133,6 @@ def create_mirror_user_if_needed(
 def render_incoming_message(
     message: Message,
     content: str,
-    user_ids: Set[int],
     realm: Realm,
     mention_data: Optional[MentionData] = None,
     url_embed_data: Optional[Dict[str, Optional[UrlEmbedData]]] = None,
@@ -166,6 +170,16 @@ class RecipientInfoResult(TypedDict):
     all_bot_user_ids: Set[int]
 
 
+class ActiveUserDict(TypedDict):
+    id: int
+    enable_online_push_notifications: bool
+    enable_offline_email_notifications: bool
+    enable_offline_push_notifications: bool
+    long_term_idle: bool
+    is_bot: bool
+    bot_type: Optional[int]
+
+
 def get_recipient_info(
     *,
     realm_id: int,
@@ -183,7 +197,7 @@ def get_recipient_info(
     if recipient.type == Recipient.PERSONAL:
         # The sender and recipient may be the same id, so
         # de-duplicate using a set.
-        message_to_user_ids = list({recipient.type_id, sender_id})
+        message_to_user_ids: Collection[int] = list({recipient.type_id, sender_id})
         assert len(message_to_user_ids) in [1, 2]
 
     elif recipient.type == Recipient.STREAM:
@@ -279,7 +293,9 @@ def get_recipient_info(
     user_ids |= possibly_mentioned_user_ids
 
     if user_ids:
-        query = UserProfile.objects.filter(is_active=True).values(
+        query: ValuesQuerySet[UserProfile, ActiveUserDict] = UserProfile.objects.filter(
+            is_active=True
+        ).values(
             "id",
             "enable_online_push_notifications",
             "enable_offline_email_notifications",
@@ -314,12 +330,9 @@ def get_recipient_info(
         #         to-do.
         rows = []
 
-    def get_ids_for(f: Callable[[Dict[str, Any]], bool]) -> Set[int]:
+    def get_ids_for(f: Callable[[ActiveUserDict], bool]) -> Set[int]:
         """Only includes users on the explicit message to line"""
         return {row["id"] for row in rows if f(row)} & message_to_user_id_set
-
-    def is_service_bot(row: Dict[str, Any]) -> bool:
-        return row["is_bot"] and (row["bot_type"] in UserProfile.SERVICE_BOT_TYPES)
 
     active_user_ids = get_ids_for(lambda r: True)
     online_push_user_ids = get_ids_for(
@@ -338,7 +351,7 @@ def get_recipient_info(
 
     # Service bots don't get UserMessage rows.
     um_eligible_user_ids = get_ids_for(
-        lambda r: not is_service_bot(r),
+        lambda r: not r["is_bot"] or r["bot_type"] not in UserProfile.SERVICE_BOT_TYPES,
     )
 
     long_term_idle_user_ids = get_ids_for(
@@ -359,7 +372,11 @@ def get_recipient_info(
         row["id"] for row in rows if row["is_bot"] and row["bot_type"] == UserProfile.DEFAULT_BOT
     }
 
-    service_bot_tuples = [(row["id"], row["bot_type"]) for row in rows if is_service_bot(row)]
+    service_bot_tuples = [
+        (row["id"], row["bot_type"])
+        for row in rows
+        if row["is_bot"] and row["bot_type"] in UserProfile.SERVICE_BOT_TYPES
+    ]
 
     # We also need the user IDs of all bots, to avoid trying to send push/email
     # notifications to them. This set will be directly sent to the event queue code
@@ -528,7 +545,6 @@ def build_message_send_dict(
     rendering_result = render_incoming_message(
         message,
         message.content,
-        info["active_user_ids"],
         realm,
         mention_data=mention_data,
         email_gateway=email_gateway,
@@ -802,7 +818,7 @@ def do_send_messages(
 
             ums.extend(user_messages)
 
-            send_request.message.service_queue_events = get_service_bot_events(
+            send_request.service_queue_events = get_service_bot_events(
                 sender=send_request.message.sender,
                 service_bot_tuples=send_request.service_bot_tuples,
                 mentioned_user_ids=mentioned_user_ids,
@@ -967,7 +983,8 @@ def do_send_messages(
 
                 send_welcome_bot_response(send_request)
 
-        for queue_name, events in send_request.message.service_queue_events.items():
+        assert send_request.service_queue_events is not None
+        for queue_name, events in send_request.service_queue_events.items():
             for event in events:
                 queue_json_publish(
                     queue_name,
@@ -1398,7 +1415,7 @@ def check_message(
 
     elif addressee.is_private():
         user_profiles = addressee.user_profiles()
-        mirror_message = client and client.name in [
+        mirror_message = client.name in [
             "zephyr_mirror",
             "irc_mirror",
             "jabber_mirror",

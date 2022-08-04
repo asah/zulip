@@ -1,18 +1,17 @@
 import datetime
 from operator import itemgetter
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 from unittest import mock
 
 import orjson
 from django.db import IntegrityError
-from django.http import HttpResponse
 from django.utils.timezone import now as timezone_now
 
 from zerver.actions.message_edit import (
     check_update_message,
     do_delete_messages,
     do_update_message,
-    get_user_info_for_message_updates,
+    get_mentions_for_message_updates,
 )
 from zerver.actions.reactions import do_add_reaction
 from zerver.actions.realm_settings import do_change_realm_plan_type, do_set_realm_property
@@ -28,7 +27,11 @@ from zerver.lib.user_topics import (
     set_topic_mutes,
     topic_is_muted,
 )
+from zerver.lib.utils import assert_is_not_none
 from zerver.models import Message, Realm, Stream, UserMessage, UserProfile, get_realm, get_stream
+
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
 
 
 class EditMessageTestCase(ZulipTestCase):
@@ -98,9 +101,9 @@ class EditMessageTestCase(ZulipTestCase):
 
         self.login(user_email)
         stream = self.make_stream(old_stream)
-        new_stream = self.make_stream(new_stream)
+        stream_to = self.make_stream(new_stream)
         self.subscribe(user_profile, stream.name)
-        self.subscribe(user_profile, new_stream.name)
+        self.subscribe(user_profile, stream_to.name)
         msg_id = self.send_stream_message(
             user_profile, stream.name, topic_name=topic, content="First"
         )
@@ -110,7 +113,7 @@ class EditMessageTestCase(ZulipTestCase):
 
         self.send_stream_message(user_profile, stream.name, topic_name=topic, content="third")
 
-        return (user_profile, stream, new_stream, msg_id, msg_id_lt)
+        return (user_profile, stream, stream_to, msg_id, msg_id_lt)
 
 
 class EditMessagePayloadTest(EditMessageTestCase):
@@ -316,10 +319,10 @@ class EditMessageTest(EditMessageTestCase):
             content="Personal message",
         )
         result = self.client_get("/json/messages/" + str(msg_id))
-        self.assert_json_success(result)
-        self.assertEqual(result.json()["raw_content"], "Personal message")
-        self.assertEqual(result.json()["message"]["id"], msg_id)
-        self.assertEqual(result.json()["message"]["flags"], [])
+        response_dict = self.assert_json_success(result)
+        self.assertEqual(response_dict["raw_content"], "Personal message")
+        self.assertEqual(response_dict["message"]["id"], msg_id)
+        self.assertEqual(response_dict["message"]["flags"], [])
 
         # Send message to web-public stream where hamlet is not subscribed.
         # This will test case of user having no `UserMessage` but having access
@@ -330,28 +333,28 @@ class EditMessageTest(EditMessageTestCase):
             self.example_user("cordelia"), web_public_stream.name, content="web-public message"
         )
         result = self.client_get("/json/messages/" + str(web_public_stream_msg_id))
-        self.assert_json_success(result)
-        self.assertEqual(result.json()["raw_content"], "web-public message")
-        self.assertEqual(result.json()["message"]["id"], web_public_stream_msg_id)
-        self.assertEqual(result.json()["message"]["flags"], ["read", "historical"])
+        response_dict = self.assert_json_success(result)
+        self.assertEqual(response_dict["raw_content"], "web-public message")
+        self.assertEqual(response_dict["message"]["id"], web_public_stream_msg_id)
+        self.assertEqual(response_dict["message"]["flags"], ["read", "historical"])
 
         # Spectator should be able to fetch message in web-public stream.
         self.logout()
         result = self.client_get("/json/messages/" + str(web_public_stream_msg_id))
-        self.assert_json_success(result)
-        self.assertEqual(result.json()["raw_content"], "web-public message")
-        self.assertEqual(result.json()["message"]["id"], web_public_stream_msg_id)
+        response_dict = self.assert_json_success(result)
+        self.assertEqual(response_dict["raw_content"], "web-public message")
+        self.assertEqual(response_dict["message"]["id"], web_public_stream_msg_id)
 
         # Verify default is apply_markdown=True
-        self.assertEqual(result.json()["message"]["content"], "<p>web-public message</p>")
+        self.assertEqual(response_dict["message"]["content"], "<p>web-public message</p>")
 
         # Verify apply_markdown=False works correctly.
         result = self.client_get(
             "/json/messages/" + str(web_public_stream_msg_id), {"apply_markdown": "false"}
         )
-        self.assert_json_success(result)
-        self.assertEqual(result.json()["raw_content"], "web-public message")
-        self.assertEqual(result.json()["message"]["content"], "web-public message")
+        response_dict = self.assert_json_success(result)
+        self.assertEqual(response_dict["raw_content"], "web-public message")
+        self.assertEqual(response_dict["message"]["content"], "web-public message")
 
         with self.settings(WEB_PUBLIC_STREAMS_ENABLED=False):
             result = self.client_get("/json/messages/" + str(web_public_stream_msg_id))
@@ -413,12 +416,18 @@ class EditMessageTest(EditMessageTestCase):
 
         # Verify success with web-public stream and default SELF_HOSTED plan type.
         result = self.client_get("/json/messages/" + str(web_public_stream_msg_id))
-        self.assert_json_success(result)
-        self.assertEqual(result.json()["raw_content"], "web-public message")
-        self.assertEqual(result.json()["message"]["flags"], ["read"])
+        response_dict = self.assert_json_success(result)
+        self.assertEqual(response_dict["raw_content"], "web-public message")
+        self.assertEqual(response_dict["message"]["flags"], ["read"])
 
         # Verify LIMITED plan type does not allow web-public access.
         do_change_realm_plan_type(user_profile.realm, Realm.PLAN_TYPE_LIMITED, acting_user=None)
+        result = self.client_get("/json/messages/" + str(web_public_stream_msg_id))
+        self.assert_json_error(
+            result, "Not logged in: API authentication or user session required", 401
+        )
+
+        do_set_realm_property(user_profile.realm, "enable_spectator_access", True, acting_user=None)
         result = self.client_get("/json/messages/" + str(web_public_stream_msg_id))
         self.assert_json_error(
             result, "Not logged in: API authentication or user session required", 401
@@ -429,8 +438,8 @@ class EditMessageTest(EditMessageTestCase):
             user_profile.realm, Realm.PLAN_TYPE_STANDARD_FREE, acting_user=None
         )
         result = self.client_get("/json/messages/" + str(web_public_stream_msg_id))
-        self.assert_json_success(result)
-        self.assertEqual(result.json()["raw_content"], "web-public message")
+        response_dict = self.assert_json_success(result)
+        self.assertEqual(response_dict["raw_content"], "web-public message")
 
         # Verify private messages are rejected.
         result = self.client_get("/json/messages/" + str(private_message_id))
@@ -725,12 +734,10 @@ class EditMessageTest(EditMessageTestCase):
 
         result = self.client_get(f"/json/messages/{msg_id}/history")
 
-        self.assert_json_success(result)
-
-        message_history = result.json()["message_history"]
+        message_history = self.assert_json_success(result)["message_history"]
         self.assert_length(message_history, 1)
 
-    def test_user_info_for_updates(self) -> None:
+    def test_mentions_for_message_updates(self) -> None:
         hamlet = self.example_user("hamlet")
         cordelia = self.example_user("cordelia")
 
@@ -742,12 +749,7 @@ class EditMessageTest(EditMessageTestCase):
             hamlet, "Denmark", content="@**Cordelia, Lear's daughter**"
         )
 
-        user_info = get_user_info_for_message_updates(msg_id)
-        message_user_ids = user_info["message_user_ids"]
-        self.assertIn(hamlet.id, message_user_ids)
-        self.assertIn(cordelia.id, message_user_ids)
-
-        mention_user_ids = user_info["mention_user_ids"]
+        mention_user_ids = get_mentions_for_message_updates(msg_id)
         self.assertEqual(mention_user_ids, {cordelia.id})
 
     def test_edit_cases(self) -> None:
@@ -772,7 +774,7 @@ class EditMessageTest(EditMessageTestCase):
             },
         )
         self.assert_json_success(result)
-        history = orjson.loads(Message.objects.get(id=msg_id).edit_history)
+        history = orjson.loads(assert_is_not_none(Message.objects.get(id=msg_id).edit_history))
         self.assertEqual(history[0]["prev_content"], "content 1")
         self.assertEqual(history[0]["user_id"], hamlet.id)
         self.assertEqual(
@@ -793,7 +795,7 @@ class EditMessageTest(EditMessageTestCase):
             },
         )
         self.assert_json_success(result)
-        history = orjson.loads(Message.objects.get(id=msg_id).edit_history)
+        history = orjson.loads(assert_is_not_none(Message.objects.get(id=msg_id).edit_history))
         self.assertEqual(history[0]["prev_topic"], "topic 1")
         self.assertEqual(history[0]["topic"], "topic 2")
         self.assertEqual(history[0]["user_id"], hamlet.id)
@@ -810,7 +812,7 @@ class EditMessageTest(EditMessageTestCase):
             },
         )
         self.assert_json_success(result)
-        history = orjson.loads(Message.objects.get(id=msg_id).edit_history)
+        history = orjson.loads(assert_is_not_none(Message.objects.get(id=msg_id).edit_history))
         self.assertEqual(history[0]["prev_stream"], stream_1.id)
         self.assertEqual(history[0]["stream"], stream_2.id)
         self.assertEqual(history[0]["user_id"], self.example_user("iago").id)
@@ -825,7 +827,7 @@ class EditMessageTest(EditMessageTestCase):
             },
         )
         self.assert_json_success(result)
-        history = orjson.loads(Message.objects.get(id=msg_id).edit_history)
+        history = orjson.loads(assert_is_not_none(Message.objects.get(id=msg_id).edit_history))
         self.assertEqual(history[0]["prev_content"], "content 2")
         self.assertEqual(history[0]["prev_topic"], "topic 2")
         self.assertEqual(history[0]["topic"], "topic 3")
@@ -850,7 +852,7 @@ class EditMessageTest(EditMessageTestCase):
             },
         )
         self.assert_json_success(result)
-        history = orjson.loads(Message.objects.get(id=msg_id).edit_history)
+        history = orjson.loads(assert_is_not_none(Message.objects.get(id=msg_id).edit_history))
         self.assertEqual(history[0]["prev_content"], "content 3")
         self.assertEqual(history[0]["user_id"], hamlet.id)
 
@@ -863,7 +865,7 @@ class EditMessageTest(EditMessageTestCase):
             },
         )
         self.assert_json_success(result)
-        history = orjson.loads(Message.objects.get(id=msg_id).edit_history)
+        history = orjson.loads(assert_is_not_none(Message.objects.get(id=msg_id).edit_history))
         self.assertEqual(history[0]["prev_topic"], "topic 3")
         self.assertEqual(history[0]["topic"], "topic 4")
         self.assertEqual(history[0]["prev_stream"], stream_2.id)
@@ -883,7 +885,7 @@ class EditMessageTest(EditMessageTestCase):
 
         # Now, we verify that all of the edits stored in the message.edit_history
         # have the correct data structure
-        history = orjson.loads(Message.objects.get(id=msg_id).edit_history)
+        history = orjson.loads(assert_is_not_none(Message.objects.get(id=msg_id).edit_history))
 
         self.assertEqual(history[0]["prev_topic"], "topic 3")
         self.assertEqual(history[0]["topic"], "topic 4")
@@ -1593,7 +1595,9 @@ class EditMessageTest(EditMessageTestCase):
                 # Since edit history is being generated by do_update_message,
                 # it's contents can vary over time; So, to keep this test
                 # future proof, we only verify it's length.
-                self.assert_length(orjson.loads(msg.edit_history), len_edit_history)
+                self.assert_length(
+                    orjson.loads(assert_is_not_none(msg.edit_history)), len_edit_history
+                )
 
             for msg_id in [id3, id4]:
                 msg = Message.objects.get(id=msg_id)
@@ -1647,18 +1651,20 @@ class EditMessageTest(EditMessageTestCase):
         msg2 = Message.objects.get(id=id2)
         msg3 = Message.objects.get(id=id3)
 
-        msg1_edit_history = orjson.loads(msg1.edit_history)
+        msg1_edit_history = orjson.loads(assert_is_not_none(msg1.edit_history))
         self.assertTrue("prev_content" in msg1_edit_history[0].keys())
 
         for msg in [msg2, msg3]:
-            self.assertFalse("prev_content" in orjson.loads(msg.edit_history)[0].keys())
+            self.assertFalse(
+                "prev_content" in orjson.loads(assert_is_not_none(msg.edit_history))[0].keys()
+            )
 
         for msg in [msg1, msg2, msg3]:
             self.assertEqual(
                 new_topic,
                 msg.topic_name(),
             )
-            self.assert_length(orjson.loads(msg.edit_history), 1)
+            self.assert_length(orjson.loads(assert_is_not_none(msg.edit_history)), 1)
 
     def test_propagate_topic_forward(self) -> None:
         self.login("hamlet")
@@ -1783,7 +1789,7 @@ class EditMessageTest(EditMessageTestCase):
             },
         )
 
-        self.assert_json_error(result, "Invalid stream id")
+        self.assert_json_error(result, "Invalid stream ID")
 
     def test_move_message_realm_admin_cant_move_to_private_stream_without_subscription(
         self,
@@ -1803,7 +1809,7 @@ class EditMessageTest(EditMessageTestCase):
             },
         )
 
-        self.assert_json_error(result, "Invalid stream id")
+        self.assert_json_error(result, "Invalid stream ID")
 
     def test_move_message_realm_admin_cant_move_from_private_stream_without_subscription(
         self,
@@ -2732,17 +2738,17 @@ class DeleteMessageTest(ZulipTestCase):
             )
             self.assert_json_success(result)
 
-        def test_delete_message_by_admin(msg_id: int) -> HttpResponse:
+        def test_delete_message_by_admin(msg_id: int) -> "TestHttpResponse":
             self.login("iago")
             result = self.client_delete(f"/json/messages/{msg_id}")
             return result
 
-        def test_delete_message_by_owner(msg_id: int) -> HttpResponse:
+        def test_delete_message_by_owner(msg_id: int) -> "TestHttpResponse":
             self.login("hamlet")
             result = self.client_delete(f"/json/messages/{msg_id}")
             return result
 
-        def test_delete_message_by_other_user(msg_id: int) -> HttpResponse:
+        def test_delete_message_by_other_user(msg_id: int) -> "TestHttpResponse":
             self.login("cordelia")
             result = self.client_delete(f"/json/messages/{msg_id}")
             return result

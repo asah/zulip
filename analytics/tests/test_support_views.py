@@ -1,14 +1,18 @@
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Optional
 from unittest import mock
 
 import orjson
-from django.http import HttpResponse
 from django.utils.timezone import now as timezone_now
 
 from corporate.lib.stripe import add_months, update_sponsorship_status
 from corporate.models import Customer, CustomerPlan, LicenseLedger, get_customer_by_realm
 from zerver.actions.invites import do_create_multiuse_invite_link
-from zerver.actions.realm_settings import do_send_realm_reactivation_email, do_set_realm_property
+from zerver.actions.realm_settings import (
+    do_change_realm_org_type,
+    do_send_realm_reactivation_email,
+    do_set_realm_property,
+)
 from zerver.lib.test_classes import ZulipTestCase
 from zerver.lib.test_helpers import reset_emails_in_zulip_realm
 from zerver.models import (
@@ -21,13 +25,20 @@ from zerver.models import (
     get_realm,
 )
 
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
+
 
 class TestSupportEndpoint(ZulipTestCase):
     def test_search(self) -> None:
         reset_emails_in_zulip_realm()
+        lear_user = self.lear_user("king")
+        lear_user.is_staff = True
+        lear_user.save(update_fields=["is_staff"])
+        lear_realm = get_realm("lear")
 
         def assert_user_details_in_html_response(
-            html_response: HttpResponse, full_name: str, email: str, role: str
+            html_response: "TestHttpResponse", full_name: str, email: str, role: str
         ) -> None:
             self.assert_in_success_response(
                 [
@@ -40,7 +51,22 @@ class TestSupportEndpoint(ZulipTestCase):
                 html_response,
             )
 
-        def check_hamlet_user_query_result(result: HttpResponse) -> None:
+        def create_invitation(
+            stream: str, invitee_email: str, realm: Optional[Realm] = None
+        ) -> None:
+            invite_expires_in_minutes = 10 * 24 * 60
+            self.client_post(
+                "/json/invites",
+                {
+                    "invitee_emails": [invitee_email],
+                    "stream_ids": orjson.dumps([self.get_stream_id(stream, realm)]).decode(),
+                    "invite_expires_in_minutes": invite_expires_in_minutes,
+                    "invite_as": PreregistrationUser.INVITE_AS["MEMBER"],
+                },
+                subdomain=realm.string_id if realm is not None else "zulip",
+            )
+
+        def check_hamlet_user_query_result(result: "TestHttpResponse") -> None:
             assert_user_details_in_html_response(
                 result, "King Hamlet", self.example_email("hamlet"), "Member"
             )
@@ -56,17 +82,22 @@ class TestSupportEndpoint(ZulipTestCase):
                 result,
             )
 
-        def check_othello_user_query_result(result: HttpResponse) -> None:
+        def check_lear_user_query_result(result: "TestHttpResponse") -> None:
+            assert_user_details_in_html_response(
+                result, lear_user.full_name, lear_user.email, "Member"
+            )
+
+        def check_othello_user_query_result(result: "TestHttpResponse") -> None:
             assert_user_details_in_html_response(
                 result, "Othello, the Moor of Venice", self.example_email("othello"), "Member"
             )
 
-        def check_polonius_user_query_result(result: HttpResponse) -> None:
+        def check_polonius_user_query_result(result: "TestHttpResponse") -> None:
             assert_user_details_in_html_response(
                 result, "Polonius", self.example_email("polonius"), "Guest"
             )
 
-        def check_zulip_realm_query_result(result: HttpResponse) -> None:
+        def check_zulip_realm_query_result(result: "TestHttpResponse") -> None:
             zulip_realm = get_realm("zulip")
             first_human_user = zulip_realm.get_first_human_user()
             assert first_human_user is not None
@@ -87,8 +118,7 @@ class TestSupportEndpoint(ZulipTestCase):
                 result,
             )
 
-        def check_lear_realm_query_result(result: HttpResponse) -> None:
-            lear_realm = get_realm("lear")
+        def check_lear_realm_query_result(result: "TestHttpResponse") -> None:
             self.assert_in_success_response(
                 [
                     f'<input type="hidden" name="realm_id" value="{lear_realm.id}"',
@@ -113,7 +143,7 @@ class TestSupportEndpoint(ZulipTestCase):
             )
 
         def check_preregistration_user_query_result(
-            result: HttpResponse, email: str, invite: bool = False
+            result: "TestHttpResponse", email: str, invite: bool = False
         ) -> None:
             self.assert_in_success_response(
                 [
@@ -127,7 +157,7 @@ class TestSupportEndpoint(ZulipTestCase):
                 self.assert_in_success_response(
                     [
                         "<b>Expires in</b>: 1\xa0week, 3\xa0days",
-                        "<b>Status</b>: Link has never been clicked",
+                        "<b>Status</b>: Link has not been used",
                     ],
                     result,
                 )
@@ -137,12 +167,12 @@ class TestSupportEndpoint(ZulipTestCase):
                 self.assert_in_success_response(
                     [
                         "<b>Expires in</b>: 1\xa0day",
-                        "<b>Status</b>: Link has never been clicked",
+                        "<b>Status</b>: Link has not been used",
                     ],
                     result,
                 )
 
-        def check_realm_creation_query_result(result: HttpResponse, email: str) -> None:
+        def check_realm_creation_query_result(result: "TestHttpResponse", email: str) -> None:
             self.assert_in_success_response(
                 [
                     '<span class="label">preregistration user</span>\n',
@@ -153,7 +183,7 @@ class TestSupportEndpoint(ZulipTestCase):
                 result,
             )
 
-        def check_multiuse_invite_link_query_result(result: HttpResponse) -> None:
+        def check_multiuse_invite_link_query_result(result: "TestHttpResponse") -> None:
             self.assert_in_success_response(
                 [
                     '<span class="label">multiuse invite</span>\n',
@@ -163,7 +193,7 @@ class TestSupportEndpoint(ZulipTestCase):
                 result,
             )
 
-        def check_realm_reactivation_link_query_result(result: HttpResponse) -> None:
+        def check_realm_reactivation_link_query_result(result: "TestHttpResponse") -> None:
             self.assert_in_success_response(
                 [
                     '<span class="label">realm reactivation</span>\n',
@@ -172,6 +202,13 @@ class TestSupportEndpoint(ZulipTestCase):
                 ],
                 result,
             )
+
+        def get_check_query_result(
+            query: str, count: int, subdomain: str = "zulip"
+        ) -> "TestHttpResponse":
+            result = self.client_get("/activity/support", {"q": query}, subdomain=subdomain)
+            self.assertEqual(result.content.decode().count("support-query-result"), count)
+            return result
 
         self.login("cordelia")
 
@@ -188,7 +225,7 @@ class TestSupportEndpoint(ZulipTestCase):
             acting_user=None,
         )
 
-        customer = Customer.objects.create(realm=get_realm("lear"), stripe_customer_id="cus_123")
+        customer = Customer.objects.create(realm=lear_realm, stripe_customer_id="cus_123")
         now = datetime(2016, 1, 2, tzinfo=timezone.utc)
         plan = CustomerPlan.objects.create(
             customer=customer,
@@ -211,39 +248,43 @@ class TestSupportEndpoint(ZulipTestCase):
             ['<input type="text" name="q" class="input-xxlarge search-query"'], result
         )
 
-        result = self.client_get("/activity/support", {"q": self.example_email("hamlet")})
+        result = get_check_query_result(self.example_email("hamlet"), 1)
         check_hamlet_user_query_result(result)
         check_zulip_realm_query_result(result)
 
-        result = self.client_get("/activity/support", {"q": self.example_email("polonius")})
+        result = get_check_query_result(lear_user.email, 1)
+        check_lear_user_query_result(result)
+        check_lear_realm_query_result(result)
+
+        result = get_check_query_result(self.example_email("polonius"), 1)
         check_polonius_user_query_result(result)
         check_zulip_realm_query_result(result)
 
-        result = self.client_get("/activity/support", {"q": "lear"})
+        result = get_check_query_result("lear", 1)
         check_lear_realm_query_result(result)
 
-        result = self.client_get("/activity/support", {"q": "http://lear.testserver"})
+        result = get_check_query_result("http://lear.testserver", 1)
         check_lear_realm_query_result(result)
 
         with self.settings(REALM_HOSTS={"zulip": "localhost"}):
-            result = self.client_get("/activity/support", {"q": "http://localhost"})
+            result = get_check_query_result("http://localhost", 1)
             check_zulip_realm_query_result(result)
 
-        result = self.client_get("/activity/support", {"q": "hamlet@zulip.com, lear"})
+        result = get_check_query_result("hamlet@zulip.com, lear", 2)
         check_hamlet_user_query_result(result)
         check_zulip_realm_query_result(result)
         check_lear_realm_query_result(result)
 
-        result = self.client_get("/activity/support", {"q": "King hamlet,lear"})
+        result = get_check_query_result("King hamlet,lear", 2)
         check_hamlet_user_query_result(result)
         check_zulip_realm_query_result(result)
         check_lear_realm_query_result(result)
 
-        result = self.client_get("/activity/support", {"q": "Othello, the Moor of Venice"})
+        result = get_check_query_result("Othello, the Moor of Venice", 1)
         check_othello_user_query_result(result)
         check_zulip_realm_query_result(result)
 
-        result = self.client_get("/activity/support", {"q": "lear, Hamlet <hamlet@zulip.com>"})
+        result = get_check_query_result("lear, Hamlet <hamlet@zulip.com>", 2)
         check_hamlet_user_query_result(result)
         check_zulip_realm_query_result(result)
         check_lear_realm_query_result(result)
@@ -254,49 +295,73 @@ class TestSupportEndpoint(ZulipTestCase):
         ):
             self.client_post("/accounts/home/", {"email": self.nonreg_email("test")})
             self.login("iago")
-            result = self.client_get("/activity/support", {"q": self.nonreg_email("test")})
+            result = get_check_query_result(self.nonreg_email("test"), 1)
             check_preregistration_user_query_result(result, self.nonreg_email("test"))
             check_zulip_realm_query_result(result)
 
-            invite_expires_in_minutes = 10 * 24 * 60
-            stream_ids = [self.get_stream_id("Denmark")]
-            invitee_emails = [self.nonreg_email("test1")]
-            self.client_post(
-                "/json/invites",
-                {
-                    "invitee_emails": invitee_emails,
-                    "stream_ids": orjson.dumps(stream_ids).decode(),
-                    "invite_expires_in_minutes": invite_expires_in_minutes,
-                    "invite_as": PreregistrationUser.INVITE_AS["MEMBER"],
-                },
-            )
-            result = self.client_get("/activity/support", {"q": self.nonreg_email("test1")})
+            create_invitation("Denmark", self.nonreg_email("test1"))
+            result = get_check_query_result(self.nonreg_email("test1"), 1)
             check_preregistration_user_query_result(result, self.nonreg_email("test1"), invite=True)
             check_zulip_realm_query_result(result)
 
             email = self.nonreg_email("alice")
             self.client_post("/new/", {"email": email})
-            result = self.client_get("/activity/support", {"q": email})
+            result = get_check_query_result(email, 1)
             check_realm_creation_query_result(result, email)
 
+            invite_expires_in_minutes = 10 * 24 * 60
             do_create_multiuse_invite_link(
                 self.example_user("hamlet"),
                 invited_as=1,
                 invite_expires_in_minutes=invite_expires_in_minutes,
             )
-            result = self.client_get("/activity/support", {"q": "zulip"})
+            result = get_check_query_result("zulip", 2)
             check_multiuse_invite_link_query_result(result)
             check_zulip_realm_query_result(result)
             MultiuseInvite.objects.all().delete()
 
             do_send_realm_reactivation_email(get_realm("zulip"), acting_user=None)
-            result = self.client_get("/activity/support", {"q": "zulip"})
+            result = get_check_query_result("zulip", 2)
             check_realm_reactivation_link_query_result(result)
             check_zulip_realm_query_result(result)
+
+            lear_nonreg_email = "newguy@lear.org"
+            self.client_post("/accounts/home/", {"email": lear_nonreg_email}, subdomain="lear")
+            result = get_check_query_result(lear_nonreg_email, 1)
+            check_preregistration_user_query_result(result, lear_nonreg_email)
+            check_lear_realm_query_result(result)
+
+            self.login_user(lear_user)
+            create_invitation("general", "newguy2@lear.org", lear_realm)
+            result = get_check_query_result("newguy2@lear.org", 1, lear_realm.string_id)
+            check_preregistration_user_query_result(result, "newguy2@lear.org", invite=True)
+            check_lear_realm_query_result(result)
 
     def test_get_org_type_display_name(self) -> None:
         self.assertEqual(get_org_type_display_name(Realm.ORG_TYPES["business"]["id"]), "Business")
         self.assertEqual(get_org_type_display_name(883), "")
+
+    def test_unspecified_org_type_correctly_displayed(self) -> None:
+        """
+        Unspecified org type is special in that it is marked to not be shown
+        on the registration page (because organitions are not meant to be able to choose it),
+        but should be correctly shown at the /support endpoint.
+        """
+        realm = get_realm("zulip")
+
+        do_change_realm_org_type(realm, 0, acting_user=None)
+        self.assertEqual(realm.org_type, 0)
+
+        self.login("iago")
+
+        result = self.client_get("/activity/support", {"q": "zulip"}, subdomain="zulip")
+        self.assert_in_success_response(
+            [
+                f'<input type="hidden" name="realm_id" value="{realm.id}"',
+                '<option value="0" selected>',
+            ],
+            result,
+        )
 
     @mock.patch("analytics.views.support.update_billing_method_of_current_plan")
     def test_change_billing_method(self, m: mock.Mock) -> None:

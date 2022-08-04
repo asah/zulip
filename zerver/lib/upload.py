@@ -19,7 +19,7 @@ import botocore
 from boto3.session import Session
 from botocore.client import Config
 from django.conf import settings
-from django.core.files import File
+from django.core.files.uploadedfile import UploadedFile
 from django.core.signing import BadSignature, TimestampSigner
 from django.http import HttpRequest
 from django.urls import reverse
@@ -331,7 +331,7 @@ class ZulipUploadBackend:
 
 def get_bucket(bucket_name: str, session: Optional[Session] = None) -> Bucket:
     if session is None:
-        session = boto3.Session(settings.S3_KEY, settings.S3_SECRET_KEY)
+        session = Session(settings.S3_KEY, settings.S3_SECRET_KEY)
     bucket = session.resource(
         "s3", region_name=settings.S3_REGION, endpoint_url=settings.S3_ENDPOINT_URL
     ).Bucket(bucket_name)
@@ -374,9 +374,10 @@ def check_upload_within_quota(realm: Realm, uploaded_file_size: int) -> None:
         raise RealmUploadQuotaError(_("Upload would exceed your organization's upload quota."))
 
 
-def get_file_info(request: HttpRequest, user_file: File) -> Tuple[str, int, Optional[str]]:
+def get_file_info(request: HttpRequest, user_file: UploadedFile) -> Tuple[str, Optional[str]]:
 
     uploaded_file_name = user_file.name
+    assert uploaded_file_name is not None
     content_type = request.GET.get("mimetype")
     if content_type is None:
         guessed_type = guess_type(uploaded_file_name)[0]
@@ -388,9 +389,8 @@ def get_file_info(request: HttpRequest, user_file: File) -> Tuple[str, int, Opti
             uploaded_file_name = uploaded_file_name + extension
 
     uploaded_file_name = urllib.parse.unquote(uploaded_file_name)
-    uploaded_file_size = user_file.size
 
-    return uploaded_file_name, uploaded_file_size, content_type
+    return uploaded_file_name, content_type
 
 
 def get_signed_upload_url(path: str, download: bool = False) -> str:
@@ -418,7 +418,7 @@ def get_signed_upload_url(path: str, download: bool = False) -> str:
 
 class S3UploadBackend(ZulipUploadBackend):
     def __init__(self) -> None:
-        self.session = boto3.Session(settings.S3_KEY, settings.S3_SECRET_KEY)
+        self.session = Session(settings.S3_KEY, settings.S3_SECRET_KEY)
         self.avatar_bucket = get_bucket(settings.S3_AVATAR_BUCKET, self.session)
         self.uploads_bucket = get_bucket(settings.S3_AUTH_UPLOADS_BUCKET, self.session)
 
@@ -715,7 +715,6 @@ class S3UploadBackend(ZulipUploadBackend):
         )
 
         image_data = emoji_file.read()
-        resized_image_data, is_animated, still_image_data = resize_emoji(image_data)
         upload_image_to_s3(
             self.avatar_bucket,
             ".".join((emoji_path, "original")),
@@ -723,6 +722,8 @@ class S3UploadBackend(ZulipUploadBackend):
             user_profile,
             image_data,
         )
+
+        resized_image_data, is_animated, still_image_data = resize_emoji(image_data)
         upload_image_to_s3(
             self.avatar_bucket,
             emoji_path,
@@ -988,8 +989,8 @@ class LocalUploadBackend(ZulipUploadBackend):
         )
 
         image_data = emoji_file.read()
-        resized_image_data, is_animated, still_image_data = resize_emoji(image_data)
         write_local_file("avatars", ".".join((emoji_path, "original")), image_data)
+        resized_image_data, is_animated, still_image_data = resize_emoji(image_data)
         write_local_file("avatars", emoji_path, resized_image_data)
         if is_animated:
             assert still_image_data is not None
@@ -1149,11 +1150,11 @@ def create_attachment(
 
 
 def upload_message_image_from_request(
-    request: HttpRequest, user_file: File, user_profile: UserProfile
+    request: HttpRequest, user_file: UploadedFile, user_profile: UserProfile, user_file_size: int
 ) -> str:
-    uploaded_file_name, uploaded_file_size, content_type = get_file_info(request, user_file)
+    uploaded_file_name, content_type = get_file_info(request, user_file)
     return upload_message_file(
-        uploaded_file_name, uploaded_file_size, content_type, user_file.read(), user_profile
+        uploaded_file_name, user_file_size, content_type, user_file.read(), user_profile
     )
 
 
@@ -1201,6 +1202,7 @@ def handle_reupload_emojis_event(realm: Realm, logger: logging.Logger) -> None: 
     for realm_emoji in query:
         logger.info("Processing emoji %s", realm_emoji.id)
         emoji_filename = realm_emoji.file_name
+        assert emoji_filename is not None
         emoji_url = get_emoji_url(emoji_filename, realm_emoji.realm_id)
         if emoji_url.startswith("/"):
             emoji_url = urljoin(realm_emoji.realm.uri, emoji_url)

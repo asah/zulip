@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Sequence
+from typing import TYPE_CHECKING, Dict, Iterable, List, Sequence, TypedDict
 
 from django.db import transaction
 from django.db.models import QuerySet
@@ -7,6 +7,18 @@ from django_cte import With
 
 from zerver.lib.exceptions import JsonableError
 from zerver.models import GroupGroupMembership, Realm, UserGroup, UserGroupMembership, UserProfile
+
+if TYPE_CHECKING:
+    from django.db.models.query import _QuerySet as ValuesQuerySet
+
+
+class UserGroupDict(TypedDict):
+    id: int
+    name: str
+    description: str
+    members: List[int]
+    direct_subgroup_ids: List[int]
+    is_system_group: bool
 
 
 def access_user_group_by_id(
@@ -48,21 +60,21 @@ def access_user_groups_as_potential_subgroups(
     return list(user_groups)
 
 
-def user_groups_in_realm_serialized(realm: Realm) -> List[Dict[str, Any]]:
+def user_groups_in_realm_serialized(realm: Realm) -> List[UserGroupDict]:
     """This function is used in do_events_register code path so this code
     should be performant.  We need to do 2 database queries because
     Django's ORM doesn't properly support the left join between
     UserGroup and UserGroupMembership that we need.
     """
     realm_groups = UserGroup.objects.filter(realm=realm)
-    group_dicts: Dict[str, Any] = {}
+    group_dicts: Dict[int, UserGroupDict] = {}
     for user_group in realm_groups:
         group_dicts[user_group.id] = dict(
             id=user_group.id,
             name=user_group.name,
             description=user_group.description,
             members=[],
-            subgroups=[],
+            direct_subgroup_ids=[],
             is_system_group=user_group.is_system_group,
         )
 
@@ -76,11 +88,11 @@ def user_groups_in_realm_serialized(realm: Realm) -> List[Dict[str, Any]]:
         "subgroup_id", "supergroup_id"
     )
     for (subgroup_id, supergroup_id) in group_membership:
-        group_dicts[supergroup_id]["subgroups"].append(subgroup_id)
+        group_dicts[supergroup_id]["direct_subgroup_ids"].append(subgroup_id)
 
     for group_dict in group_dicts.values():
         group_dict["members"] = sorted(group_dict["members"])
-        group_dict["subgroups"] = sorted(group_dict["subgroups"])
+        group_dict["direct_subgroup_ids"] = sorted(group_dict["direct_subgroup_ids"])
 
     return sorted(group_dicts.values(), key=lambda group_dict: group_dict["id"])
 
@@ -114,13 +126,15 @@ def create_user_group(
         return user_group
 
 
-def get_user_group_direct_member_ids(user_group: UserGroup) -> List[int]:
+def get_user_group_direct_member_ids(
+    user_group: UserGroup,
+) -> "ValuesQuerySet[UserGroupMembership, int]":
     return UserGroupMembership.objects.filter(user_group=user_group).values_list(
         "user_profile_id", flat=True
     )
 
 
-def get_user_group_direct_members(user_group: UserGroup) -> "QuerySet[UserGroup]":
+def get_user_group_direct_members(user_group: UserGroup) -> QuerySet[UserProfile]:
     return user_group.direct_members.all()
 
 
@@ -141,7 +155,7 @@ def get_direct_memberships_of_users(user_group: UserGroup, members: List[UserPro
 # https://code.djangoproject.com/ticket/28919
 
 
-def get_recursive_subgroups(user_group: UserGroup) -> "QuerySet[UserGroup]":
+def get_recursive_subgroups(user_group: UserGroup) -> QuerySet[UserGroup]:
     cte = With.recursive(
         lambda cte: UserGroup.objects.filter(id=user_group.id)
         .values("id")
@@ -150,11 +164,11 @@ def get_recursive_subgroups(user_group: UserGroup) -> "QuerySet[UserGroup]":
     return cte.join(UserGroup, id=cte.col.id).with_cte(cte)
 
 
-def get_recursive_group_members(user_group: UserGroup) -> "QuerySet[UserProfile]":
+def get_recursive_group_members(user_group: UserGroup) -> QuerySet[UserProfile]:
     return UserProfile.objects.filter(direct_groups__in=get_recursive_subgroups(user_group))
 
 
-def get_recursive_membership_groups(user_profile: UserProfile) -> "QuerySet[UserGroup]":
+def get_recursive_membership_groups(user_profile: UserProfile) -> QuerySet[UserGroup]:
     cte = With.recursive(
         lambda cte: user_profile.direct_groups.values("id").union(
             cte.join(UserGroup, direct_subgroups=cte.col.id).values("id")
@@ -176,7 +190,7 @@ def get_user_group_member_ids(
     user_group: UserGroup, *, direct_member_only: bool = False
 ) -> List[int]:
     if direct_member_only:
-        member_ids = get_user_group_direct_member_ids(user_group)
+        member_ids: Iterable[int] = get_user_group_direct_member_ids(user_group)
     else:
         member_ids = get_recursive_group_members(user_group).values_list("id", flat=True)
 
@@ -198,7 +212,7 @@ def get_subgroup_ids(user_group: UserGroup, *, direct_subgroup_only: bool = Fals
 
 def create_system_user_groups_for_realm(realm: Realm) -> Dict[int, UserGroup]:
     """Any changes to this function likely require a migration to adjust
-    existing realms.  See e.g. migration 0375_create_role_based_system_groups.py,
+    existing realms.  See e.g. migration 0382_create_role_based_system_groups.py,
     which is a copy of this function from when we introduced system groups.
     """
     role_system_groups_dict: Dict[int, UserGroup] = {}

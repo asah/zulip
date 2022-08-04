@@ -29,7 +29,7 @@
 import logging
 import time
 from datetime import timedelta
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Type, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Type, Union
 
 from django.conf import settings
 from django.db import connection, transaction
@@ -109,14 +109,11 @@ def move_rows(
     fields = [field for field in base_model._meta.fields if field not in EXCLUDE_FIELDS]
     src_fields = [Identifier(src_db_table, field.column) for field in fields]
     dst_fields = [Identifier(field.column) for field in fields]
-    sql_args = {
-        "src_fields": SQL(",").join(src_fields),
-        "dst_fields": SQL(",").join(dst_fields),
-    }
-    sql_args.update(kwargs)
     with connection.cursor() as cursor:
         cursor.execute(
-            raw_query.format(**sql_args),
+            raw_query.format(
+                src_fields=SQL(",").join(src_fields), dst_fields=SQL(",").join(dst_fields), **kwargs
+            )
         )
         if returning_id:
             return [id for (id,) in cursor.fetchall()]  # return list of row ids
@@ -147,8 +144,9 @@ def run_archiving_in_chunks(
             new_chunk = move_rows(
                 Message,
                 query,
+                src_db_table=None,
                 chunk_size=Literal(chunk_size),
-                returning_id=Literal(True),
+                returning_id=True,
                 archive_transaction_id=Literal(archive_transaction.id),
                 **kwargs,
             )
@@ -420,6 +418,7 @@ def archive_stream_messages(
     recipients = [stream.recipient for stream in streams]
     message_count = 0
     for recipient in recipients:
+        assert recipient is not None
         message_count += archive_messages_by_recipient(
             recipient,
             retention_policy_dict[recipient.type_id],
@@ -538,7 +537,7 @@ def restore_messages_from_archive(archive_transaction_id: int) -> List[int]:
         Message,
         query,
         src_db_table="zerver_archivedmessage",
-        returning_id=Literal(True),
+        returning_id=True,
         archive_transaction_id=Literal(archive_transaction_id),
     )
 
@@ -627,7 +626,7 @@ def restore_data_from_archive(archive_transaction: ArchiveTransaction) -> int:
 
 
 def restore_data_from_archive_by_transactions(
-    archive_transactions: List[ArchiveTransaction],
+    archive_transactions: Iterable[ArchiveTransaction],
 ) -> int:
     # Looping over the list of ids means we're batching the restoration process by the size of the
     # transactions:
@@ -674,6 +673,23 @@ def restore_retention_policy_deletions_for_stream(stream: Stream) -> None:
 
 
 def clean_archived_data() -> None:
+    """This function deletes archived data that was archived at least
+    settings.ARCHIVED_DATA_VACUUMING_DELAY_DAYS days ago.
+
+    It works by deleting ArchiveTransaction objects that are
+    sufficiently old. We've configured most archive tables, like
+    ArchiveMessage, with on_delete=CASCADE, so that deleting an
+    ArchiveTransaction entails deleting associated objects, including
+    ArchivedMessage, ArchivedUserMessage, ArchivedReaction.
+
+    The exception to this rule is ArchivedAttachment. Archive
+    attachment objects that were only referenced by ArchivedMessage
+    objects that have now been deleted will be left with an empty
+    `.messages` relation. A separate step,
+    delete_old_unclaimed_attachments, will delete those
+    ArchivedAttachment objects (and delete the files themselves from
+    the storage).
+    """
     logger.info("Cleaning old archive data.")
     check_date = timezone_now() - timedelta(days=settings.ARCHIVED_DATA_VACUUMING_DELAY_DAYS)
     # Associated archived objects will get deleted through the on_delete=CASCADE property:

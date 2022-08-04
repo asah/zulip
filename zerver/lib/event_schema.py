@@ -45,7 +45,7 @@ from zerver.lib.data_types import (
     make_checker,
 )
 from zerver.lib.topic import ORIG_TOPIC, TOPIC_LINKS, TOPIC_NAME
-from zerver.models import Realm, RealmUserDefault, Stream, Subscription, UserProfile
+from zerver.models import Realm, RealmUserDefault, Stream, UserProfile
 
 # These fields are used for "stream" events, and are included in the
 # larger "subscription" events that also contain personal settings.
@@ -75,7 +75,6 @@ subscription_fields: Sequence[Tuple[str, object]] = [
     ("is_muted", bool),
     ("pin_to_top", bool),
     ("push_notifications", OptionalType(bool)),
-    ("role", EnumType(Subscription.ROLE_TYPES)),
     ("stream_weekly_traffic", OptionalType(int)),
     # We may try to remove subscribers from some events in
     # the future for clients that don't want subscriber
@@ -1676,7 +1675,7 @@ group_type = DictType(
         ("id", int),
         ("name", str),
         ("members", ListType(int)),
-        ("subgroups", ListType(int)),
+        ("direct_subgroup_ids", ListType(int)),
         ("description", str),
         ("is_system_group", bool),
     ]
@@ -1753,7 +1752,7 @@ user_group_add_subgroups_event = event_dict_type(
         ("type", Equals("user_group")),
         ("op", Equals("add_subgroups")),
         ("group_id", int),
-        ("subgroup_ids", ListType(int)),
+        ("direct_subgroup_ids", ListType(int)),
     ]
 )
 check_user_group_add_subgroups = make_checker(user_group_add_subgroups_event)
@@ -1764,7 +1763,7 @@ user_group_remove_subgroups_event = event_dict_type(
         ("type", Equals("user_group")),
         ("op", Equals("remove_subgroups")),
         ("group_id", int),
-        ("subgroup_ids", ListType(int)),
+        ("direct_subgroup_ids", ListType(int)),
     ]
 )
 check_user_group_remove_subgroups = make_checker(user_group_remove_subgroups_event)

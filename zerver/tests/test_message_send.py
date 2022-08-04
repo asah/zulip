@@ -1,12 +1,12 @@
 import datetime
-from typing import Any, List, Mapping, Optional, Set
+import sys
+from email.headerregistry import Address
+from typing import TYPE_CHECKING, Any, List, Mapping, Optional, Set
 from unittest import mock
 
 import orjson
-import pytz
 from django.conf import settings
 from django.db.models import Q
-from django.http import HttpResponse
 from django.test import override_settings
 from django.utils.timezone import now as timezone_now
 
@@ -65,6 +65,14 @@ from zerver.models import (
     get_user,
 )
 from zerver.views.message_send import InvalidMirrorInput
+
+if sys.version_info < (3, 9):  # nocoverage
+    from backports import zoneinfo
+else:  # nocoverage
+    import zoneinfo
+
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
 
 
 class MessagePOSTTest(ZulipTestCase):
@@ -1350,7 +1358,7 @@ class ScheduledMessageTest(ZulipTestCase):
         tz_guess: str = "",
         delivery_type: str = "send_later",
         realm_str: str = "zulip",
-    ) -> HttpResponse:
+    ) -> "TestHttpResponse":
         self.login("hamlet")
 
         topic_name = ""
@@ -1430,8 +1438,8 @@ class ScheduledMessageTest(ZulipTestCase):
         message = self.last_scheduled_message()
         self.assert_json_success(result)
         self.assertEqual(message.content, "Test message 6")
-        local_tz = pytz.timezone(tz_guess)
-        utz_defer_until = local_tz.normalize(local_tz.localize(defer_until))
+        local_tz = zoneinfo.ZoneInfo(tz_guess)
+        utz_defer_until = defer_until.replace(tzinfo=local_tz)
         self.assertEqual(message.scheduled_timestamp, convert_to_UTC(utz_defer_until))
         self.assertEqual(message.delivery_type, ScheduledMessage.SEND_LATER)
 
@@ -1444,8 +1452,8 @@ class ScheduledMessageTest(ZulipTestCase):
         message = self.last_scheduled_message()
         self.assert_json_success(result)
         self.assertEqual(message.content, "Test message 7")
-        local_tz = pytz.timezone(user.timezone)
-        utz_defer_until = local_tz.normalize(local_tz.localize(defer_until))
+        local_tz = zoneinfo.ZoneInfo(user.timezone)
+        utz_defer_until = defer_until.replace(tzinfo=local_tz)
         self.assertEqual(message.scheduled_timestamp, convert_to_UTC(utz_defer_until))
         self.assertEqual(message.delivery_type, ScheduledMessage.SEND_LATER)
 
@@ -1544,6 +1552,7 @@ class StreamMessagesTest(ZulipTestCase):
         stream = get_stream("Denmark", realm)
         topic_name = "lunch"
         recipient = stream.recipient
+        assert recipient is not None
         sending_client = make_client(name="test suite")
 
         for i in range(num_extra_users):
@@ -1834,18 +1843,6 @@ class StreamMessagesTest(ZulipTestCase):
         cordelia.date_joined = timezone_now() - datetime.timedelta(days=11)
         cordelia.save()
         self.send_and_verify_wildcard_mention_message("cordelia")
-
-        do_set_realm_property(
-            realm,
-            "wildcard_mention_policy",
-            Realm.WILDCARD_MENTION_POLICY_STREAM_ADMINS,
-            acting_user=None,
-        )
-        # TODO: Change this when we implement stream administrators
-        self.send_and_verify_wildcard_mention_message("cordelia", test_fails=True)
-        # There is no restriction on small streams.
-        self.send_and_verify_wildcard_mention_message("cordelia", sub_count=10)
-        self.send_and_verify_wildcard_mention_message("iago")
 
         do_set_realm_property(
             realm,
@@ -2312,7 +2309,7 @@ class TestCrossRealmPMs(ZulipTestCase):
         return realm
 
     def create_user(self, email: str) -> UserProfile:
-        subdomain = email.split("@")[1]
+        subdomain = Address(addr_spec=email).domain
         self.register(email, "test", subdomain=subdomain)
         # self.register has the side-effect of ending up with a logged in session
         # for the new user. We don't want that in these tests.

@@ -1,21 +1,21 @@
 import logging
 import urllib
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_backends
-from django.contrib.sessions.models import Session
+from django.contrib.sessions.backends.base import SessionBase
 from django.core import validators
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils.translation import get_language
 from django.utils.translation import gettext as _
 from django_auth_ldap.backend import LDAPBackend, _LDAPUser
 
-from confirmation import settings as confirmation_settings
 from confirmation.models import (
     Confirmation,
     ConfirmationKeyException,
@@ -135,10 +135,12 @@ def check_prereg_key(request: HttpRequest, confirmation_key: str) -> Preregistra
         Confirmation.REALM_CREATION,
     ]
 
-    prereg_user = get_object_from_key(confirmation_key, confirmation_types, activate_object=False)
+    prereg_user = get_object_from_key(confirmation_key, confirmation_types, mark_object_used=False)
+    assert isinstance(prereg_user, PreregistrationUser)
 
-    if prereg_user.status == confirmation_settings.STATUS_REVOKED:
-        raise ConfirmationKeyException(ConfirmationKeyException.EXPIRED)
+    # Defensive assert to make sure no mix-up in how .status is set leading to re-use
+    # of a PreregistrationUser object.
+    assert prereg_user.created_user is None
 
     return prereg_user
 
@@ -383,7 +385,7 @@ def accounts_register(
             # prereg_user.realm_creation carries the information about whether
             # we're in realm creation mode, and the ldap flow will handle
             # that and create the user with the appropriate parameters.
-            user_profile = authenticate(
+            user = authenticate(
                 request=request,
                 username=email,
                 password=password,
@@ -391,7 +393,7 @@ def accounts_register(
                 prereg_user=prereg_user,
                 return_data=return_data,
             )
-            if user_profile is None:
+            if user is None:
                 can_use_different_backend = email_auth_enabled(realm) or (
                     len(get_external_method_dicts(realm)) > 0
                 )
@@ -419,13 +421,14 @@ def accounts_register(
                     query = urlencode({"email": email})
                     redirect_url = append_url_query_string(view_url, query)
                     return HttpResponseRedirect(redirect_url)
-            elif not realm_creation:
-                # Since we'll have created a user, we now just log them in.
-                return login_and_go_to_home(request, user_profile)
             else:
+                assert isinstance(user, UserProfile)
+                user_profile = user
+                if not realm_creation:
+                    # Since we'll have created a user, we now just log them in.
+                    return login_and_go_to_home(request, user_profile)
                 # With realm_creation=True, we're going to return further down,
                 # after finishing up the creation process.
-                pass
 
         if existing_user_profile is not None and existing_user_profile.is_mirror_dummy:
             user_profile = existing_user_profile
@@ -485,6 +488,7 @@ def accounts_register(
             )
             return redirect("/")
 
+        assert isinstance(auth_result, UserProfile)
         return login_and_go_to_home(request, auth_result)
 
     return render(
@@ -538,18 +542,21 @@ def login_and_go_to_home(request: HttpRequest, user_profile: UserProfile) -> Htt
 
 def prepare_activation_url(
     email: str,
-    session: Session,
+    session: SessionBase,
     *,
     realm: Optional[Realm],
     realm_creation: bool = False,
-    streams: Optional[List[Stream]] = None,
+    streams: Optional[Iterable[Stream]] = None,
     invited_as: Optional[int] = None,
+    multiuse_invite: Optional[MultiuseInvite] = None,
 ) -> str:
     """
     Send an email with a confirmation link to the provided e-mail so the user
     can complete their registration.
     """
-    prereg_user = create_preregistration_user(email, realm, realm_creation)
+    prereg_user = create_preregistration_user(
+        email, realm, realm_creation, multiuse_invite=multiuse_invite
+    )
 
     if streams is not None:
         prereg_user.streams.set(streams)
@@ -579,7 +586,7 @@ def send_confirm_registration_email(
         "zerver/emails/confirm_registration",
         to_emails=[email],
         from_address=FromAddress.tokenized_no_reply_address(),
-        language=request.LANGUAGE_CODE if request is not None else None,
+        language=get_language() if request is not None else None,
         context={
             "create_realm": (realm is None),
             "activate_url": activation_url,
@@ -715,6 +722,7 @@ def accounts_home(
                 realm=realm,
                 streams=streams_to_subscribe,
                 invited_as=invited_as,
+                multiuse_invite=multiuse_object,
             )
             try:
                 send_confirm_registration_email(email, activation_url, request=request, realm=realm)
@@ -738,9 +746,13 @@ def accounts_home(
 
 def accounts_home_from_multiuse_invite(request: HttpRequest, confirmation_key: str) -> HttpResponse:
     realm = get_realm_from_request(request)
-    multiuse_object = None
+    multiuse_object: Optional[MultiuseInvite] = None
     try:
-        multiuse_object = get_object_from_key(confirmation_key, [Confirmation.MULTIUSE_INVITE])
+        confirmation_obj = get_object_from_key(
+            confirmation_key, [Confirmation.MULTIUSE_INVITE], mark_object_used=False
+        )
+        assert isinstance(confirmation_obj, MultiuseInvite)
+        multiuse_object = confirmation_obj
         if realm != multiuse_object.realm:
             return render(request, "confirmation/link_does_not_exist.html", status=404)
         # Required for OAuth 2

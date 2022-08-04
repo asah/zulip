@@ -197,8 +197,13 @@ yourself will help your PRs be merged faster, and folks will appreciate the
 quality and professionalism of your work.
 
 Then, submit your changes. Carefully reading our [Git guide][git-guide], and in
-particular the section on [making a pull request][git-guide-make-pr],
-will help avoid many common mistakes.
+particular the section on [making a pull request][git-guide-make-pr], will help
+avoid many common mistakes. If any part of your contribution is from someone
+else (code snippets, images, sounds, or any other copyrightable work, modified
+or unmodified), be sure to review the instructions on how to [properly
+attribute][licensing] the work.
+
+[licensing]: https://zulip.readthedocs.io/en/latest/contributing/licensing.html#contributing-someone-else-s-work
 
 Once you are satisfied with the quality of your PR, follow the
 [guidelines on asking for a code
@@ -211,13 +216,14 @@ and follow up with next steps.
 It's OK if your first issue takes you a while; that's normal! You'll be
 able to work a lot faster as you build experience.
 
-If it helps your workflow, you can submit a work-in-progress pull
-request before your work is ready for review. Simply prefix the title
-of work in progress pull requests with `[WIP]`, and then remove the
-prefix when you think it's time for someone else to review your work.
+If it helps your workflow, you can submit your pull request marked as
+a [draft][github-help-draft-pr] while you're still working on it, and
+then mark it ready when you think it's time for someone else to review
+your work.
 
 [git-guide]: https://zulip.readthedocs.io/en/latest/git/
 [git-guide-make-pr]: https://zulip.readthedocs.io/en/latest/git/pull-requests.html
+[github-help-draft-pr]: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests#draft-pull-requests
 
 ### Stages of a pull request
 

@@ -483,8 +483,8 @@ request:
 
 If you would like feedback on your integration as you go, feel free to post a
 message on the [public Zulip instance](https://chat.zulip.org/#narrow/stream/bots).
-You can also create a [`[WIP]` pull request](
-https://zulip.readthedocs.io/en/latest/overview/contributing.html#working-on-an-issue) while you
+You can also create a [draft pull request](
+https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests#draft-pull-requests) while you
 are still working on your integration. See the
 [Git guide](https://zulip.readthedocs.io/en/latest/git/pull-requests.html#create-a-pull-request)
 for more on Zulip's pull request process.
@@ -610,7 +610,7 @@ event = validate_extract_webhook_http_header(request, header, integration_name)
 ```
 
 `request` is the `HttpRequest` object passed to your main webhook function. `header`
-is the name of the custom header you'd like to extract, such as `X_EVENT_KEY`, and
+is the name of the custom header you'd like to extract, such as `X-Event-Key`, and
 `integration_name` is the name of the third-party service in question, such as
 `GitHub`.
 

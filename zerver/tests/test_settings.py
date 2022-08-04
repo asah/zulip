@@ -1,10 +1,10 @@
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import TYPE_CHECKING, Any, Dict
 from unittest import mock
 
 import orjson
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest
 from django.test import override_settings
 
 from zerver.lib.initial_password import initial_password
@@ -19,6 +19,9 @@ from zerver.models import (
     UserProfile,
     get_user_profile_by_api_key,
 )
+
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
 
 
 class ChangeSettingsTest(ZulipTestCase):
@@ -407,11 +410,13 @@ class ChangeSettingsTest(ZulipTestCase):
             expected_error_msg = f"Invalid {setting_name}"
             if setting_name == "notification_sound":
                 expected_error_msg = f"Invalid notification sound '{invalid_value}'"
+            elif setting_name == "timezone":
+                expected_error_msg = "timezone is not a recognized time zone"
             self.assert_json_error(result, expected_error_msg)
             hamlet = self.example_user("hamlet")
             self.assertNotEqual(getattr(hamlet, setting_name), invalid_value)
 
-    def do_change_emojiset(self, emojiset: str) -> HttpResponse:
+    def do_change_emojiset(self, emojiset: str) -> "TestHttpResponse":
         self.login("hamlet")
         data = {"emojiset": emojiset}
         result = self.client_patch("/json/settings", data)
@@ -506,8 +511,7 @@ class UserChangesTest(ZulipTestCase):
         self.assertEqual(result.status_code, 401)
 
         result = self.api_post(user, "/api/v1/users/me/api_key/regenerate")
-        self.assert_json_success(result)
-        new_api_key = result.json()["api_key"]
+        new_api_key = self.assert_json_success(result)["api_key"]
         self.assertNotIn(new_api_key, old_api_keys)
         user = self.example_user("hamlet")
         current_api_keys = get_all_api_keys(user)

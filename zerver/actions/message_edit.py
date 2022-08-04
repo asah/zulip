@@ -3,6 +3,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set, TypedDict
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils.timezone import now as timezone_now
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
@@ -103,25 +104,14 @@ def validate_message_edit_payload(
         raise JsonableError(_("Widgets cannot be edited."))
 
 
-def can_edit_content_or_topic(
+def can_edit_topic(
     message: Message,
     user_profile: UserProfile,
     is_no_topic_msg: bool,
-    content: Optional[str] = None,
-    topic_name: Optional[str] = None,
 ) -> bool:
-    # You have permission to edit the message (both content and topic) if you sent it.
+    # You have permission to edit the message topic if you sent it.
     if message.sender_id == user_profile.id:
         return True
-
-    # You cannot edit the content of message sent by someone else.
-    if content is not None:
-        return False
-
-    assert topic_name is not None
-
-    # The following cases are the various reasons a user might be
-    # allowed to edit topics.
 
     # We allow anyone to edit (no topic) messages to help tend them.
     if is_no_topic_msg:
@@ -133,11 +123,6 @@ def can_edit_content_or_topic(
         return True
 
     return False
-
-
-class MessageUpdateUserInfoResult(TypedDict):
-    message_user_ids: Set[int]
-    mention_user_ids: Set[int]
 
 
 def maybe_send_resolve_topic_notifications(
@@ -255,29 +240,23 @@ def send_message_moved_breadcrumbs(
             )
 
 
-def get_user_info_for_message_updates(message_id: int) -> MessageUpdateUserInfoResult:
-
+def get_mentions_for_message_updates(message_id: int) -> Set[int]:
     # We exclude UserMessage.flags.historical rows since those
     # users did not receive the message originally, and thus
     # probably are not relevant for reprocessed alert_words,
     # mentions and similar rendering features.  This may be a
     # decision we change in the future.
-    query = UserMessage.objects.filter(
-        message=message_id,
-        flags=~UserMessage.flags.historical,
-    ).values("user_profile_id", "flags")
-    rows = list(query)
-
-    message_user_ids = {row["user_profile_id"] for row in rows}
-
-    mask = UserMessage.flags.mentioned | UserMessage.flags.wildcard_mentioned
-
-    mention_user_ids = {row["user_profile_id"] for row in rows if int(row["flags"]) & mask}
-
-    return dict(
-        message_user_ids=message_user_ids,
-        mention_user_ids=mention_user_ids,
+    mentioned_user_ids = (
+        UserMessage.objects.filter(
+            message=message_id,
+            flags=~UserMessage.flags.historical,
+        )
+        .filter(
+            Q(flags__andnz=(UserMessage.flags.mentioned | UserMessage.flags.wildcard_mentioned))
+        )
+        .values_list("user_profile_id", flat=True)
     )
+    return {user_profile_id for user_profile_id in mentioned_user_ids}
 
 
 def update_user_message_flags(
@@ -366,7 +345,7 @@ def do_update_message(
     target_message: Message,
     new_stream: Optional[Stream],
     topic_name: Optional[str],
-    propagate_mode: str,
+    propagate_mode: Optional[str],
     send_notification_to_old_thread: bool,
     send_notification_to_new_thread: bool,
     content: Optional[str],
@@ -505,6 +484,7 @@ def do_update_message(
         )
 
     if topic_name is not None or new_stream is not None:
+        assert propagate_mode is not None
         orig_topic_name = target_message.topic_name()
         event["propagate_mode"] = propagate_mode
 
@@ -516,6 +496,7 @@ def do_update_message(
         edit_history_event["prev_stream"] = stream_being_edited.id
         edit_history_event["stream"] = new_stream.id
         event[ORIG_TOPIC] = orig_topic_name
+        assert new_stream.recipient_id is not None
         target_message.recipient_id = new_stream.recipient_id
 
         event["new_stream_id"] = new_stream.id
@@ -697,7 +678,7 @@ def do_update_message(
     # where possible.
     users_to_be_notified = list(map(user_info, ums))
     if stream_being_edited is not None:
-        if stream_being_edited.is_history_public_to_subscribers:
+        if stream_being_edited.is_history_public_to_subscribers():
             subscriptions = get_active_subscriptions_for_stream_id(
                 stream_id, include_deactivated_users=False
             )
@@ -772,6 +753,7 @@ def do_update_message(
             # query. But it's nice to reuse code, and this bulk
             # operation is likely cheaper than a `GET /messages`
             # unless the topic has thousands of messages of history.
+            assert stream_being_edited.recipient_id is not None
             unmoved_messages = messages_for_topic(
                 stream_being_edited.recipient_id,
                 orig_topic_name,
@@ -925,13 +907,15 @@ def check_update_message(
 
     validate_message_edit_payload(message, stream_id, topic_name, propagate_mode, content)
 
+    if content is not None:
+        # You cannot edit the content of message sent by someone else.
+        if message.sender_id != user_profile.id:
+            raise JsonableError(_("You don't have permission to edit this message"))
+
     is_no_topic_msg = message.topic_name() == "(no topic)"
 
-    if content is not None or topic_name is not None:
-        if not can_edit_content_or_topic(
-            message, user_profile, is_no_topic_msg, content, topic_name
-        ):
-            raise JsonableError(_("You don't have permission to edit this message"))
+    if topic_name is not None and not can_edit_topic(message, user_profile, is_no_topic_msg):
+        raise JsonableError(_("You don't have permission to edit this message"))
 
     # If there is a change to the content, check that it hasn't been too long
     # Allow an extra 20 seconds since we potentially allow editing 15 seconds
@@ -973,8 +957,7 @@ def check_update_message(
             mention_backend=mention_backend,
             content=content,
         )
-        user_info = get_user_info_for_message_updates(message.id)
-        prior_mention_user_ids = user_info["mention_user_ids"]
+        prior_mention_user_ids = get_mentions_for_message_updates(message.id)
 
         # We render the message using the current user's realm; since
         # the cross-realm bots never edit messages, this should be
@@ -983,7 +966,6 @@ def check_update_message(
         rendering_result = render_incoming_message(
             message,
             content,
-            user_info["message_user_ids"],
             user_profile.realm,
             mention_data=mention_data,
         )

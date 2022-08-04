@@ -36,7 +36,7 @@ from typing import (
 import orjson
 import sentry_sdk
 from django.conf import settings
-from django.core.mail.backends.smtp import EmailBackend
+from django.core.mail.backends.base import BaseEmailBackend
 from django.db import connection, transaction
 from django.db.models import F
 from django.db.utils import IntegrityError
@@ -737,7 +737,7 @@ class MissedMessageWorker(QueueProcessingWorker):
 class EmailSendingWorker(LoopQueueProcessingWorker):
     def __init__(self) -> None:
         super().__init__()
-        self.connection: EmailBackend = initialize_connection(None)
+        self.connection: BaseEmailBackend = initialize_connection(None)
 
     @retry_send_email_failures
     def send_email(self, event: Dict[str, Any]) -> None:
@@ -869,16 +869,17 @@ class FetchLinksEmbedData(QueueProcessingWorker):
                 "Time spent on get_link_embed_data for %s: %s", url, time.time() - start_time
             )
 
-        message = Message.objects.get(id=event["message_id"])
-        # If the message changed, we will run this task after updating the message
-        # in zerver.actions.message_edit.check_update_message
-        if message.content != event["message_content"]:
-            return
-        if message.content is not None:
-            query = UserMessage.objects.filter(
-                message=message.id,
-            )
-            message_user_ids = set(query.values_list("user_profile_id", flat=True))
+        with transaction.atomic():
+            try:
+                message = Message.objects.select_for_update().get(id=event["message_id"])
+            except Message.DoesNotExist:
+                # Message may have been deleted
+                return
+
+            # If the message changed, we will run this task after updating the message
+            # in zerver.actions.message_edit.check_update_message
+            if message.content != event["message_content"]:
+                return
 
             # Fetch the realm whose settings we're using for rendering
             realm = Realm.objects.get(id=event["message_realm_id"])
@@ -887,7 +888,6 @@ class FetchLinksEmbedData(QueueProcessingWorker):
             rendering_result = render_incoming_message(
                 message,
                 message.content,
-                message_user_ids,
                 realm,
                 url_embed_data=url_embed_data,
             )

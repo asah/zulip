@@ -1,13 +1,16 @@
 import $ from "jquery";
+import Cookies from "js-cookie"; // eslint-disable-line import/no-unresolved
 
 import render_dialog_default_language from "../templates/default_language_modal.hbs";
 
 import * as channel from "./channel";
 import * as dialog_widget from "./dialog_widget";
 import * as emojisets from "./emojisets";
+import * as hash_util from "./hash_util";
 import {$t_html, get_language_list_columns, get_language_name} from "./i18n";
 import * as loading from "./loading";
 import * as overlays from "./overlays";
+import {page_params} from "./page_params";
 import * as settings_org from "./settings_org";
 import * as settings_ui from "./settings_ui";
 import * as ui_report from "./ui_report";
@@ -40,6 +43,106 @@ function change_display_setting(data, $status_el, success_msg_html, sticky) {
         $status_el.data("sticky_msg_html", success_msg_html);
     }
     settings_ui.do_settings_change(channel.patch, "/json/settings", data, $status_el, opts);
+}
+
+function spectator_default_language_modal_post_render() {
+    $("#language_selection_modal")
+        .find(".language")
+        .on("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dialog_widget.close_modal();
+
+            const $link = $(e.target).closest("a[data-code]");
+            Cookies.set(page_params.language_cookie_name, $link.attr("data-code"));
+            window.location.reload();
+        });
+}
+
+function org_notification_default_language_modal_post_render() {
+    $("#language_selection_modal")
+        .find(".language")
+        .on("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dialog_widget.close_modal();
+
+            const $link = $(e.target).closest("a[data-code]");
+            const setting_value = $link.attr("data-code");
+            const new_language = $link.attr("data-name");
+            const $language_element = $(
+                "#org-notifications .language_selection_widget .language_selection_button span",
+            );
+            $language_element.text(new_language);
+            $language_element.attr("data-language-code", setting_value);
+            settings_org.save_discard_widget_status_handler($("#org-notifications"));
+        });
+}
+
+function user_default_language_modal_post_render() {
+    $("#language_selection_modal")
+        .find(".language")
+        .on("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dialog_widget.close_modal();
+
+            const $link = $(e.target).closest("a[data-code]");
+            const setting_value = $link.attr("data-code");
+            const data = {default_language: setting_value};
+
+            const new_language = $link.attr("data-name");
+            $(
+                "#user-display-settings .language_selection_widget .language_selection_button span",
+            ).text(new_language);
+
+            change_display_setting(
+                data,
+                $("#settings_content").find(".lang-time-settings-status"),
+                $t_html(
+                    {
+                        defaultMessage:
+                            "Saved. Please <z-link>reload</z-link> for the change to take effect.",
+                    },
+                    {"z-link": (content_html) => `<a class='reload_link'>${content_html}</a>`},
+                ),
+                true,
+            );
+        });
+}
+
+function default_language_modal_post_render() {
+    if (page_params.is_spectator) {
+        spectator_default_language_modal_post_render();
+    } else if (hash_util.get_current_hash_category() === "organization") {
+        org_notification_default_language_modal_post_render();
+    } else {
+        user_default_language_modal_post_render();
+    }
+}
+
+export function launch_default_language_setting_modal() {
+    let selected_language = user_settings.default_language;
+
+    if (hash_util.get_current_hash_category() === "organization") {
+        selected_language = page_params.realm_default_language;
+    }
+
+    const html_body = render_dialog_default_language({
+        language_list: get_language_list_columns(selected_language),
+    });
+
+    dialog_widget.launch({
+        html_heading: $t_html({defaultMessage: "Select language"}),
+        html_body,
+        html_submit_button: $t_html({defaultMessage: "Close"}),
+        id: "language_selection_modal",
+        close_on_submit: true,
+        focus_submit_on_open: true,
+        single_footer_button: true,
+        post_render: default_language_modal_post_render,
+        on_click: () => {},
+    });
 }
 
 export function set_up(settings_panel) {
@@ -97,61 +200,6 @@ export function set_up(settings_panel) {
         } else {
             change_display_setting(data, $status_element);
         }
-    });
-
-    function default_language_modal_post_render() {
-        $("#user_default_language_modal")
-            .find(".language")
-            .on("click", (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                dialog_widget.close_modal();
-
-                const $link = $(e.target).closest("a[data-code]");
-                const setting_value = $link.attr("data-code");
-                const data = {default_language: setting_value};
-
-                const new_language = $link.attr("data-name");
-                $container.find(".default_language_name").text(new_language);
-
-                change_display_setting(
-                    data,
-                    $container.find(".lang-time-settings-status"),
-                    $t_html(
-                        {
-                            defaultMessage:
-                                "Saved. Please <z-link>reload</z-link> for the change to take effect.",
-                        },
-                        {"z-link": (content_html) => `<a class='reload_link'>${content_html}</a>`},
-                    ),
-                    true,
-                );
-            });
-    }
-
-    $container.find(".setting_default_language").on("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const html_body = render_dialog_default_language({
-            language_list: get_language_list_columns(user_settings.default_language),
-        });
-
-        dialog_widget.launch({
-            html_heading: $t_html({defaultMessage: "Select default language"}),
-            html_body,
-            html_submit_button: $t_html({defaultMessage: "Close"}),
-            id: "user_default_language_modal",
-            close_on_submit: true,
-            focus_submit_on_open: true,
-            single_footer_button: true,
-            post_render: default_language_modal_post_render,
-            on_click: () => {},
-        });
-    });
-
-    $("body").on("click", ".reload_link", () => {
-        window.location.reload();
     });
 
     $container.find(".setting_emojiset_choice").on("click", function () {

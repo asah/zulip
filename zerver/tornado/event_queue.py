@@ -182,6 +182,7 @@ class ClientDescriptor:
     def add_event(self, event: Mapping[str, Any]) -> None:
         if self.current_handler_id is not None:
             handler = get_handler_by_id(self.current_handler_id)
+            assert handler._request is not None
             async_request_timer_restart(handler._request)
 
         self.event_queue.push(event)
@@ -189,16 +190,16 @@ class ClientDescriptor:
 
     def finish_current_handler(self) -> bool:
         if self.current_handler_id is not None:
-            err_msg = f"Got error finishing handler for queue {self.event_queue.id}"
             try:
                 finish_handler(
                     self.current_handler_id,
                     self.event_queue.id,
                     self.event_queue.contents(),
-                    self.apply_markdown,
                 )
             except Exception:
-                logging.exception(err_msg, stack_info=True)
+                logging.exception(
+                    "Got error finishing handler for queue %s", self.event_queue.id, stack_info=True
+                )
             finally:
                 self.disconnect_handler()
                 return True
@@ -617,15 +618,15 @@ async def setup_event_queue(server: tornado.httpserver.HTTPServer, port: int) ->
     send_restart_events(immediate=settings.DEVELOPMENT)
 
 
-def fetch_events(query: Mapping[str, Any]) -> Dict[str, Any]:
-    queue_id: Optional[str] = query["queue_id"]
-    dont_block: bool = query["dont_block"]
-    last_event_id: Optional[int] = query["last_event_id"]
-    user_profile_id: int = query["user_profile_id"]
-    new_queue_data: Optional[MutableMapping[str, Any]] = query.get("new_queue_data")
-    client_type_name: str = query["client_type_name"]
-    handler_id: int = query["handler_id"]
-
+def fetch_events(
+    queue_id: Optional[str],
+    dont_block: bool,
+    last_event_id: Optional[int],
+    user_profile_id: int,
+    new_queue_data: Optional[MutableMapping[str, Any]],
+    client_type_name: str,
+    handler_id: int,
+) -> Dict[str, Any]:
     try:
         was_connected = False
         orig_queue_id = queue_id

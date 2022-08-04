@@ -1,11 +1,12 @@
 import datetime
 import logging
-import multiprocessing
 import os
 import shutil
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from mimetypes import guess_type
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+import bmemcached
 import orjson
 from bs4 import BeautifulSoup
 from django.conf import settings
@@ -876,10 +877,14 @@ def import_uploads(
                 process_avatars(record)
         else:
             connection.close()
-            cache._cache.disconnect_all()
-            with multiprocessing.Pool(processes) as p:
-                for out in p.imap_unordered(process_avatars, records):
-                    pass
+            _cache = getattr(cache, "_cache")
+            assert isinstance(_cache, bmemcached.Client)
+            _cache.disconnect_all()
+            with ProcessPoolExecutor(max_workers=processes) as executor:
+                for future in as_completed(
+                    executor.submit(process_avatars, record) for record in records
+                ):
+                    future.result()
 
 
 # Importing data suffers from a difficult ordering problem because of
@@ -1029,6 +1034,7 @@ def do_import_realm(import_dir: Path, subdomain: str, processes: int = 1) -> Rea
     )
     for realm_emoji in RealmEmoji.objects.filter(realm=realm):
         if realm_emoji.author_id is None:
+            assert first_user_profile is not None
             realm_emoji.author_id = first_user_profile.id
             realm_emoji.save(update_fields=["author_id"])
 
@@ -1184,7 +1190,8 @@ def do_import_realm(import_dir: Path, subdomain: str, processes: int = 1) -> Rea
     # We expect Zulip server exports to contain these system groups,
     # this logic here is needed to handle the imports from other services.
     if not UserGroup.objects.filter(realm=realm, is_system_group=True).exists():
-        create_and_add_users_to_system_user_groups(realm, user_profiles)
+        role_system_groups_dict = create_system_user_groups_for_realm(realm)
+        add_users_to_system_user_groups(realm, user_profiles, role_system_groups_dict)
 
     if "zerver_botstoragedata" in data:
         re_map_foreign_keys(
@@ -1587,11 +1594,9 @@ def import_analytics_data(realm: Realm, import_dir: Path) -> None:
     bulk_import_model(data, StreamCount)
 
 
-def create_and_add_users_to_system_user_groups(
-    realm: Realm, user_profiles: List[UserProfile]
+def add_users_to_system_user_groups(
+    realm: Realm, user_profiles: List[UserProfile], role_system_groups_dict: Dict[int, UserGroup]
 ) -> None:
-    role_system_groups_dict = create_system_user_groups_for_realm(realm)
-
     full_members_system_group = UserGroup.objects.get(
         name="@role:fullmembers",
         realm=realm,

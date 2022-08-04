@@ -3,7 +3,7 @@ import $ from "jquery";
 import render_admin_tab from "../templates/settings/admin_tab.hbs";
 import render_settings_organization_settings_tip from "../templates/settings/organization_settings_tip.hbs";
 
-import {$t, language_list} from "./i18n";
+import {$t, get_language_name, language_list} from "./i18n";
 import * as overlays from "./overlays";
 import {page_params} from "./page_params";
 import {realm_user_settings_defaults} from "./realm_user_settings_defaults";
@@ -24,8 +24,8 @@ const admin_settings_label = {
     // Organization settings
     realm_allow_edit_history: $t({defaultMessage: "Enable message edit history"}),
     realm_mandatory_topics: $t({defaultMessage: "Require topics in stream messages"}),
-    realm_notifications_stream: $t({defaultMessage: "New stream notifications"}),
-    realm_signup_notifications_stream: $t({defaultMessage: "New user notifications"}),
+    realm_notifications_stream: $t({defaultMessage: "New stream announcements"}),
+    realm_signup_notifications_stream: $t({defaultMessage: "New user announcements"}),
     realm_inline_image_preview: $t({defaultMessage: "Show previews of uploaded and linked images"}),
     realm_inline_url_embed_preview: $t({defaultMessage: "Show previews of linked websites"}),
     realm_send_welcome_emails: $t({defaultMessage: "Send emails introducing Zulip to new users"}),
@@ -49,6 +49,9 @@ const admin_settings_label = {
     realm_invite_required: $t({
         defaultMessage: "Invitations are required for joining this organization",
     }),
+    realm_default_language: $t({
+        defaultMessage: "Language for automated messages and invitation emails",
+    }),
 };
 
 function insert_tip_box() {
@@ -61,6 +64,8 @@ function insert_tip_box() {
         .not("#emoji-settings")
         .not("#user-groups-admin")
         .not("#organization-auth-settings")
+        .not("#admin-bot-list")
+        .not("#admin-invites-list")
         .prepend(tip_box);
 }
 
@@ -109,7 +114,8 @@ export function build_page() {
         realm_message_retention_days: page_params.realm_message_retention_days,
         realm_allow_edit_history: page_params.realm_allow_edit_history,
         language_list,
-        realm_default_language: page_params.realm_default_language,
+        realm_default_language_name: get_language_name(page_params.realm_default_language),
+        realm_default_language_code: page_params.realm_default_language,
         realm_waiting_period_threshold: page_params.realm_waiting_period_threshold,
         realm_notifications_stream_id: page_params.realm_notifications_stream_id,
         realm_signup_notifications_stream_id: page_params.realm_signup_notifications_stream_id,
@@ -164,14 +170,18 @@ export function build_page() {
         twenty_four_hour_time_values: settings_config.twenty_four_hour_time_values,
         create_web_public_stream_policy_values:
             settings_config.create_web_public_stream_policy_values,
-        disable_enable_spectator_access_setting: !page_params.server_web_public_streams_enabled,
+        disable_enable_spectator_access_setting:
+            !page_params.server_web_public_streams_enabled ||
+            !page_params.zulip_plan_is_not_limited,
         can_sort_by_email: settings_data.show_email(),
         realm_push_notifications_enabled: page_params.realm_push_notifications_enabled,
         realm_org_type_values: settings_org.get_org_type_dropdown_options(),
         realm_want_advertise_in_communities_directory:
             page_params.realm_want_advertise_in_communities_directory,
         disable_want_advertise_in_communities_directory:
-            !page_params.server_web_public_streams_enabled,
+            !page_params.realm_push_notifications_enabled,
+        is_business_type_org:
+            page_params.realm_org_type === settings_config.all_org_type_values.business.code,
     };
 
     if (options.realm_logo_source !== "D" && options.realm_night_logo_source === "D") {
@@ -198,7 +208,6 @@ export function build_page() {
     $("#id_realm_bot_creation_policy").val(page_params.realm_bot_creation_policy);
     $("#id_realm_email_address_visibility").val(page_params.realm_email_address_visibility);
 
-    $("#id_realm_default_language").val(page_params.realm_default_language);
     $("#id_realm_digest_weekday").val(options.realm_digest_weekday);
 }
 

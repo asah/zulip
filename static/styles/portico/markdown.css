@@ -36,7 +36,6 @@
             }
         }
 
-        &#using-zulip,
         &#zulip-administration {
             font-size: 1.75em;
             padding: 10px 0;
@@ -134,12 +133,6 @@
                 font-size: 0.9em;
                 line-height: 1.1;
                 text-align: center;
-            }
-
-            & > .codehilite,
-            & > p:not(:first-child) {
-                padding-left: 24px;
-                margin-left: 5px;
             }
 
             .codehilite {

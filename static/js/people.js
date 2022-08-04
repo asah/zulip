@@ -1,5 +1,6 @@
 import md5 from "blueimp-md5";
 import {format, utcToZonedTime} from "date-fns-tz";
+import {parseOneAddress} from "email-addresses";
 
 import * as typeahead from "../shared/js/typeahead";
 
@@ -274,9 +275,6 @@ export function get_user_time(user_id) {
 
 export function get_user_type(user_id) {
     const user_profile = get_by_user_id(user_id);
-    if (user_profile.is_bot) {
-        return $t({defaultMessage: "Bot"});
-    }
 
     return settings_config.user_role_map.get(user_profile.role);
 }
@@ -511,7 +509,7 @@ export function pm_with_url(message) {
     } else {
         const person = get_by_user_id(user_ids[0]);
         if (person && person.email) {
-            suffix = person.email.split("@")[0].toLowerCase();
+            suffix = parseOneAddress(person.email).local.toLowerCase();
         } else {
             blueslip.error("Unknown people in message");
             suffix = "unk";
@@ -585,7 +583,7 @@ export function emails_to_slug(emails_string) {
     const emails = emails_string.split(",");
 
     if (emails.length === 1) {
-        slug += emails[0].split("@")[0].toLowerCase();
+        slug += parseOneAddress(emails[0]).local.toLowerCase();
     } else {
         slug += "group";
     }

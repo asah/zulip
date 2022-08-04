@@ -2,7 +2,7 @@
 
 const {strict: assert} = require("assert");
 
-const {with_function_call_disallowed_rewire, zrequire, mock_esm} = require("../zjsunit/namespace");
+const {mock_esm, zrequire} = require("../zjsunit/namespace");
 const {run_test} = require("../zjsunit/test");
 const $ = require("../zjsunit/zjquery");
 const {page_params} = require("../zjsunit/zpage_params");
@@ -16,6 +16,7 @@ const stream_data = zrequire("stream_data");
 const {Filter} = zrequire("../js/filter");
 const narrow = zrequire("narrow");
 
+const compose_pm_pill = mock_esm("../../static/js/compose_pm_pill");
 mock_esm("../../static/js/spectators", {
     login_to_access: () => {},
 });
@@ -592,21 +593,17 @@ run_test("show_invalid_narrow_message", ({mock_template}) => {
     );
 });
 
-run_test("narrow_to_compose_target errors", () => {
-    function test() {
-        with_function_call_disallowed_rewire(narrow, "activate", () => {
-            narrow.to_compose_target();
-        });
-    }
+run_test("narrow_to_compose_target errors", ({disallow_rewire}) => {
+    disallow_rewire(narrow, "activate");
 
     // No-op when not composing.
     compose_state.set_message_type(false);
-    test();
+    narrow.to_compose_target();
 
     // No-op when empty stream.
     compose_state.set_message_type("stream");
     compose_state.stream_name("");
-    test();
+    narrow.to_compose_target();
 });
 
 run_test("narrow_to_compose_target streams", ({override_rewire}) => {
@@ -657,7 +654,7 @@ run_test("narrow_to_compose_target streams", ({override_rewire}) => {
     assert.deepEqual(args.operators, [{operator: "stream", operand: "ROME"}]);
 });
 
-run_test("narrow_to_compose_target PMs", ({override_rewire}) => {
+run_test("narrow_to_compose_target PMs", ({override, override_rewire}) => {
     const args = {called: false};
     override_rewire(narrow, "activate", (operators, opts) => {
         args.operators = operators;
@@ -666,7 +663,7 @@ run_test("narrow_to_compose_target PMs", ({override_rewire}) => {
     });
 
     let emails;
-    override_rewire(compose_state, "private_message_recipient", () => emails);
+    override(compose_pm_pill, "get_emails", () => emails);
 
     compose_state.set_message_type("private");
     people.add_active_user(ray);

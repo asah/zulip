@@ -8,7 +8,7 @@ from django.http import HttpRequest, HttpResponse
 from zerver.actions.streams import do_change_subscription_property
 from zerver.actions.user_topics import do_mute_topic
 from zerver.lib.test_classes import ZulipTestCase
-from zerver.lib.test_helpers import HostRequestMock, mock_queue_publish
+from zerver.lib.test_helpers import HostRequestMock, dummy_handler, mock_queue_publish
 from zerver.lib.user_groups import create_user_group, remove_user_from_user_group
 from zerver.models import Recipient, Stream, Subscription, UserProfile, get_stream
 from zerver.tornado.event_queue import (
@@ -84,7 +84,7 @@ class MissedMessageNotificationsTest(ZulipTestCase):
         user_profile: UserProfile,
         post_data: Dict[str, Any],
     ) -> HttpResponse:
-        request = HostRequestMock(post_data, user_profile)
+        request = HostRequestMock(post_data, user_profile, tornado_handler=dummy_handler)
         return view_func(request, user_profile)
 
     def test_stream_watchers(self) -> None:
@@ -583,8 +583,8 @@ class MissedMessageNotificationsTest(ZulipTestCase):
             "bot_type": "1",
         }
         result = self.client_post("/json/bots", bot_info)
-        self.assert_json_success(result)
-        hambot = UserProfile.objects.get(id=result.json()["user_id"])
+        response_dict = self.assert_json_success(result)
+        hambot = UserProfile.objects.get(id=response_dict["user_id"])
         client_descriptor = allocate_event_queue(hambot)
         self.assertTrue(client_descriptor.event_queue.empty())
         msg_id = self.send_personal_message(iago, hambot)

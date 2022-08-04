@@ -4,7 +4,7 @@ __revision__ = "$Id: models.py 28 2009-10-22 15:03:02Z jarek.zgoda $"
 import datetime
 import secrets
 from base64 import b32encode
-from typing import List, Mapping, Optional, Protocol, Union
+from typing import List, Mapping, Optional, Union
 from urllib.parse import urljoin
 
 from django.conf import settings
@@ -17,16 +17,16 @@ from django.shortcuts import render
 from django.urls import reverse
 from django.utils.timezone import now as timezone_now
 
+from confirmation import settings as confirmation_settings
 from zerver.lib.types import UnspecifiedValue
-from zerver.models import EmailChangeStatus, MultiuseInvite, PreregistrationUser, Realm, UserProfile
-
-
-class HasRealmObject(Protocol):
-    realm: Realm
-
-
-class OptionalHasRealmObject(Protocol):
-    realm: Optional[Realm]
+from zerver.models import (
+    EmailChangeStatus,
+    MultiuseInvite,
+    PreregistrationUser,
+    Realm,
+    RealmReactivationStatus,
+    UserProfile,
+)
 
 
 class ConfirmationKeyException(Exception):
@@ -54,12 +54,27 @@ def generate_key() -> str:
     return b32encode(secrets.token_bytes(15)).decode().lower()
 
 
-ConfirmationObjT = Union[MultiuseInvite, PreregistrationUser, EmailChangeStatus]
+ConfirmationObjT = Union[
+    MultiuseInvite,
+    PreregistrationUser,
+    EmailChangeStatus,
+    UserProfile,
+    RealmReactivationStatus,
+]
 
 
 def get_object_from_key(
-    confirmation_key: str, confirmation_types: List[int], activate_object: bool = True
+    confirmation_key: str, confirmation_types: List[int], *, mark_object_used: bool
 ) -> ConfirmationObjT:
+    """Access a confirmation object from one of the provided confirmation
+    types with the provided key.
+
+    The mark_object_used parameter determines whether to mark the
+    confirmation object as used (which generally prevents it from
+    being used again). It should always be False for MultiuseInvite
+    objects, since they are intended to be used multiple times.
+    """
+
     # Confirmation keys used to be 40 characters
     if len(confirmation_key) not in (24, 40):
         raise ConfirmationKeyException(ConfirmationKeyException.WRONG_LENGTH)
@@ -75,14 +90,26 @@ def get_object_from_key(
 
     obj = confirmation.content_object
     assert obj is not None
-    if activate_object and hasattr(obj, "status"):
-        obj.status = getattr(settings, "STATUS_ACTIVE", 1)
+
+    used_value = confirmation_settings.STATUS_USED
+    revoked_value = confirmation_settings.STATUS_REVOKED
+    if hasattr(obj, "status") and obj.status in [used_value, revoked_value]:
+        # Confirmations where the object has the status attribute are one-time use
+        # and are marked after being used (or revoked).
+        raise ConfirmationKeyException(ConfirmationKeyException.EXPIRED)
+
+    if mark_object_used:
+        # MultiuseInvite objects have no status field, since they are
+        # intended to be used more than once.
+        assert confirmation.type != Confirmation.MULTIUSE_INVITE
+        assert hasattr(obj, "status")
+        obj.status = getattr(settings, "STATUS_USED", 1)
         obj.save(update_fields=["status"])
     return obj
 
 
 def create_confirmation_link(
-    obj: Union[Realm, HasRealmObject, OptionalHasRealmObject],
+    obj: ConfirmationObjT,
     confirmation_type: int,
     *,
     validity_in_minutes: Union[Optional[int], UnspecifiedValue] = UnspecifiedValue(),
@@ -92,11 +119,7 @@ def create_confirmation_link(
     # determined by the confirmation_type - its main purpose is for use
     # in tests which may want to have control over the exact expiration time.
     key = generate_key()
-    realm = None
-    if isinstance(obj, Realm):
-        realm = obj
-    elif hasattr(obj, "realm"):
-        realm = obj.realm
+    realm = obj.realm
 
     current_time = timezone_now()
     expiry_date = None

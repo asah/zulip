@@ -2,13 +2,11 @@ import calendar
 import datetime
 import urllib
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import patch
 
 import orjson
-import pytz
 from django.conf import settings
-from django.http import HttpResponse
 from django.test import override_settings
 from django.utils.timezone import now as timezone_now
 
@@ -38,6 +36,9 @@ from zerver.models import (
     get_user,
 )
 from zerver.worker.queue_processors import UserActivityWorker
+
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
 
 logger_string = "zulip.soft_deactivation"
 
@@ -318,7 +319,7 @@ class HomeTest(ZulipTestCase):
         # Redirect to login if spectator access is disabled.
         result = self.client_get("/")
         self.assertEqual(result.status_code, 302)
-        self.assertEqual(result.url, "/login/")
+        self.assertEqual(result["Location"], "/login/")
 
         # Load webapp directly if spectator access is enabled.
         do_set_realm_property(realm, "enable_spectator_access", True, acting_user=None)
@@ -329,36 +330,37 @@ class HomeTest(ZulipTestCase):
         page_params = self._get_page_params(result)
         self.assertEqual(page_params["is_spectator"], True)
         actual_keys = sorted(str(k) for k in page_params.keys())
-        removed_keys = [
-            "custom_profile_field_types",
-            "custom_profile_fields",
-            "last_event_id",
-            "narrow",
-            "narrow_stream",
+        expected_keys = [
+            "apps_page_url",
+            "bot_types",
+            "corporate_enabled",
+            "development_environment",
+            "first_in_realm",
+            "furthest_read_time",
+            "insecure_desktop_app",
+            "is_spectator",
+            "language_cookie_name",
+            "language_list",
+            "login_page",
+            "needs_tutorial",
+            "no_event_queue",
+            "promote_sponsoring_zulip",
+            "prompt_for_invites",
+            "queue_id",
+            "realm_rendered_description",
+            "request_language",
+            "search_pills_enabled",
+            "show_billing",
+            "show_plans",
+            "show_webathena",
+            "test_suite",
+            "translation_data",
+            "two_fa_enabled",
+            "two_fa_enabled_user",
+            "warn_no_email",
+            "webpack_public_path",
         ]
-        expected_keys = [i for i in self.expected_page_params_keys if i not in removed_keys]
         self.assertEqual(actual_keys, expected_keys)
-
-        # Test information passed to client about users.
-        page_params = self._get_page_params(result)
-        self.assertEqual(
-            sorted(page_params["realm_users"][0].keys()),
-            [
-                "avatar_url",
-                "avatar_version",
-                "date_joined",
-                "email",
-                "full_name",
-                "is_admin",
-                "is_bot",
-                "is_guest",
-                "is_owner",
-                "role",
-                "user_id",
-            ],
-        )
-        date_length = len("YYYY-MM-DD")
-        self.assert_length(page_params["realm_users"][0]["date_joined"], date_length)
 
     def test_home_under_2fa_without_otp_device(self) -> None:
         with self.settings(TWO_FACTOR_AUTHENTICATION_ENABLED=True):
@@ -429,14 +431,14 @@ class HomeTest(ZulipTestCase):
         html = result.content.decode()
         self.assertIn("test_stream_7", html)
 
-    def _get_home_page(self, **kwargs: Any) -> HttpResponse:
+    def _get_home_page(self, **kwargs: Any) -> "TestHttpResponse":
         with patch("zerver.lib.events.request_event_queue", return_value=42), patch(
             "zerver.lib.events.get_user_events", return_value=[]
         ):
             result = self.client_get("/", dict(**kwargs))
         return result
 
-    def _sanity_check(self, result: HttpResponse) -> None:
+    def _sanity_check(self, result: "TestHttpResponse") -> None:
         """
         Use this for tests that are geared toward specific edge cases, but
         which still want the home page to load properly.
@@ -875,7 +877,7 @@ class HomeTest(ZulipTestCase):
         # Check when server_upgrade_nag_deadline > last_server_upgrade_time
         hamlet = self.example_user("hamlet")
         iago = self.example_user("iago")
-        now = LAST_SERVER_UPGRADE_TIME.replace(tzinfo=pytz.utc)
+        now = LAST_SERVER_UPGRADE_TIME.replace(tzinfo=datetime.timezone.utc)
         with patch("zerver.lib.compatibility.timezone_now", return_value=now + timedelta(days=10)):
             self.assertEqual(is_outdated_server(iago), False)
             self.assertEqual(is_outdated_server(hamlet), False)

@@ -4,7 +4,7 @@ const {strict: assert} = require("assert");
 
 const markdown_test_cases = require("../../zerver/tests/fixtures/markdown_test_cases");
 const markdown_assert = require("../zjsunit/markdown_assert");
-const {set_global, with_field_rewire, zrequire} = require("../zjsunit/namespace");
+const {set_global, zrequire} = require("../zjsunit/namespace");
 const {run_test} = require("../zjsunit/test");
 const {page_params, user_settings} = require("../zjsunit/zpage_params");
 
@@ -181,10 +181,10 @@ markdown.initialize(markdown_config.get_helpers());
 linkifiers.initialize(example_realm_linkifiers);
 
 function test(label, f) {
-    run_test(label, ({override, override_rewire}) => {
+    run_test(label, (helpers) => {
         page_params.realm_users = [];
         linkifiers.update_linkifier_rules(example_realm_linkifiers);
-        f({override, override_rewire});
+        f(helpers);
     });
 }
 
@@ -824,7 +824,7 @@ test("parse_non_message", () => {
     assert.equal(markdown.parse_non_message("type `/day`"), "<p>type <code>/day</code></p>");
 });
 
-test("missing unicode emojis", ({override_rewire}) => {
+test("missing unicode emojis", ({override}) => {
     const message = {raw_content: "\u{1F6B2}"};
 
     markdown.apply_markdown(message);
@@ -833,33 +833,23 @@ test("missing unicode emojis", ({override_rewire}) => {
         '<p><span aria-label="bike" class="emoji emoji-1f6b2" role="img" title="bike">:bike:</span></p>',
     );
 
-    override_rewire(emoji, "get_emoji_name", (codepoint) => {
-        // Now simulate that we don't know any emoji names.
-        assert.equal(codepoint, "1f6b2");
-        // return undefined
-    });
+    // Now simulate that we don't know this emoji name.
+    override(emoji_codes.codepoint_to_name, "1f6b2", undefined);
 
     markdown.initialize(markdown_config.get_helpers());
     markdown.apply_markdown(message);
     assert.equal(message.content, "<p>\u{1F6B2}</p>");
 });
 
-test("katex_throws_unexpected_exceptions", () => {
+test("katex_throws_unexpected_exceptions", ({override_rewire}) => {
     const message = {raw_content: "$$a$$"};
-    with_field_rewire(
-        markdown,
-        "katex",
-        {
-            renderToString: () => {
-                throw new Error("some-exception");
-            },
+    override_rewire(markdown, "katex", {
+        renderToString: () => {
+            throw new Error("some-exception");
         },
-        () => {
-            assert.throws(() => markdown.apply_markdown(message), {
-                name: "Error",
-                message:
-                    "some-exception\nPlease report this to https://zulip.com/development-community/",
-            });
-        },
-    );
+    });
+    assert.throws(() => markdown.apply_markdown(message), {
+        name: "Error",
+        message: "some-exception\nPlease report this to https://zulip.com/development-community/",
+    });
 });

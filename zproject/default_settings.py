@@ -1,4 +1,5 @@
 import os
+from email.headerregistry import Address
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypedDict
 
 from scripts.lib.zulip_tools import deport
@@ -8,7 +9,7 @@ from .config import DEVELOPMENT, PRODUCTION, get_secret
 if TYPE_CHECKING:
     from django_auth_ldap.config import LDAPSearch
 
-    from zerver.lib.types import SAMLIdPConfigDict
+    from zerver.lib.types import OIDCIdPConfigDict, SAMLIdPConfigDict
 
 if PRODUCTION:
     from .prod_settings import EXTERNAL_HOST, ZULIP_ADMINISTRATOR
@@ -27,9 +28,11 @@ EXTERNAL_HOST_WITHOUT_PORT = deport(EXTERNAL_HOST)
 ALLOWED_HOSTS: List[str] = []
 
 # Basic email settings
-NOREPLY_EMAIL_ADDRESS = "noreply@" + EXTERNAL_HOST_WITHOUT_PORT
+NOREPLY_EMAIL_ADDRESS = Address(username="noreply", domain=EXTERNAL_HOST_WITHOUT_PORT).addr_spec
 ADD_TOKENS_TO_NOREPLY_ADDRESS = True
-TOKENIZED_NOREPLY_EMAIL_ADDRESS = "noreply-{token}@" + EXTERNAL_HOST_WITHOUT_PORT
+TOKENIZED_NOREPLY_EMAIL_ADDRESS = Address(
+    username="noreply-{token}", domain=EXTERNAL_HOST_WITHOUT_PORT
+).addr_spec
 PHYSICAL_ADDRESS = ""
 FAKE_EMAIL_DOMAIN = EXTERNAL_HOST_WITHOUT_PORT
 
@@ -99,13 +102,14 @@ SOCIAL_AUTH_APPLE_SCOPE = ["name", "email"]
 SOCIAL_AUTH_APPLE_EMAIL_AS_USERNAME = True
 
 # Generic OpenID Connect:
-SOCIAL_AUTH_OIDC_ENABLED_IDPS: Dict[str, Dict[str, Optional[str]]] = {}
+SOCIAL_AUTH_OIDC_ENABLED_IDPS: Dict[str, "OIDCIdPConfigDict"] = {}
 SOCIAL_AUTH_OIDC_FULL_NAME_VALIDATED = False
 
 SOCIAL_AUTH_SYNC_CUSTOM_ATTRS_DICT: Dict[str, Dict[str, Dict[str, str]]] = {}
 
 # Other auth
 SSO_APPEND_DOMAIN: Optional[str] = None
+CUSTOM_HOME_NOT_LOGGED_IN: Optional[str] = None
 
 VIDEO_ZOOM_CLIENT_ID = get_secret("video_zoom_client_id", development_only=True)
 VIDEO_ZOOM_CLIENT_SECRET = get_secret("video_zoom_client_secret")
@@ -141,7 +145,7 @@ LOCAL_UPLOADS_DIR: Optional[str] = None
 MAX_FILE_UPLOAD_SIZE = 25
 
 # Jitsi Meet video call integration; set to None to disable integration.
-JITSI_SERVER_URL = "https://meet.jit.si"
+JITSI_SERVER_URL: Optional[str] = "https://meet.jit.si"
 
 # GIPHY API key.
 GIPHY_API_KEY = get_secret("giphy_api_key")
@@ -261,8 +265,6 @@ OPEN_REALM_CREATION = False
 
 # Whether it's possible to create web-public streams on this server.
 WEB_PUBLIC_STREAMS_ENABLED = False
-# Temporary setting during web-public streams beta.
-WEB_PUBLIC_STREAMS_BETA_SUBDOMAINS: List[str] = []
 
 # Setting for where the system bot users are.  Likely has no
 # purpose now that the REALMS_HAVE_SUBDOMAINS migration is finished.

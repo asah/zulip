@@ -1,12 +1,13 @@
 import datetime
 import os
 import shutil
-from typing import Any, Callable, Dict, FrozenSet, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
 from unittest.mock import patch
 
 import orjson
 from django.conf import settings
 from django.db.models import Q
+from django.db.models.query import QuerySet
 from django.utils.timezone import now as timezone_now
 
 from analytics.models import UserCount
@@ -44,6 +45,7 @@ from zerver.lib.test_helpers import (
 )
 from zerver.lib.upload import claim_attachment, upload_avatar_image, upload_message_file
 from zerver.lib.user_topics import add_topic_mute
+from zerver.lib.utils import assert_is_not_none
 from zerver.models import (
     AlertWord,
     Attachment,
@@ -130,6 +132,7 @@ class ExportFile(ZulipTestCase):
 
     def setUp(self) -> None:
         super().setUp()
+        assert settings.LOCAL_UPLOADS_DIR is not None
         self.rm_tree(settings.LOCAL_UPLOADS_DIR)
 
         # Deleting LOCAL_UPLOADS_DIR results in the test database
@@ -223,6 +226,7 @@ class ExportFile(ZulipTestCase):
 
         realm_emoji = RealmEmoji.objects.get(author=user)
         file_name = realm_emoji.file_name
+        assert file_name is not None
         assert file_name.endswith(".png")
 
         emoji_path = f"{realm.id}/emoji/images/{file_name}"
@@ -301,6 +305,7 @@ class RealmImportExportTest(ExportFile):
         realm: Realm,
         exportable_user_ids: Optional[Set[int]] = None,
         consent_message_id: Optional[int] = None,
+        public_only: bool = False,
     ) -> None:
         output_dir = make_export_output_dir()
         with patch("zerver.lib.export.create_soft_link"), self.assertLogs(level="INFO"):
@@ -310,6 +315,7 @@ class RealmImportExportTest(ExportFile):
                 threads=0,
                 exportable_user_ids=exportable_user_ids,
                 consent_message_id=consent_message_id,
+                public_only=public_only,
             )
             export_usermessages_batch(
                 input_path=os.path.join(output_dir, "messages-000001.json.partial"),
@@ -329,6 +335,39 @@ class RealmImportExportTest(ExportFile):
         self.verify_avatars(user)
         self.verify_emojis(user, is_s3=False)
         self.verify_realm_logo_and_icon()
+
+    def test_public_only_export_files_private_uploads_not_included(self) -> None:
+        """
+        This test verifies that when doing a public_only export, private uploads
+        don't get included in the exported data.
+        """
+
+        user_profile = self.example_user("hamlet")
+        realm = user_profile.realm
+
+        # We create an attachment tied to a personal message. That means it shouldn't be
+        # included in a public export, as it's private data.
+        personal_message_id = self.send_personal_message(user_profile, self.example_user("othello"))
+        url = upload_message_file(
+            "dummy.txt", len(b"zulip!"), "text/plain", b"zulip!", user_profile
+        )
+        attachment_path_id = url.replace("/user_uploads/", "")
+        attachment = claim_attachment(
+            user_profile=user_profile,
+            path_id=attachment_path_id,
+            message=Message.objects.get(id=personal_message_id),
+            is_message_realm_public=True,
+        )
+
+        self.export_realm(realm, public_only=True)
+
+        # The attachment row shouldn't have been exported:
+        self.assertEqual((read_json("attachment.json")["zerver_attachment"]), [])
+
+        # Aside of the attachment row, we also need to verify that the file itself
+        # isn't included.
+        fn = export_fn(f"uploads/{attachment.path_id}")
+        self.assertFalse(os.path.exists(fn))
 
     @use_s3_backend
     def test_export_files_from_s3(self) -> None:
@@ -510,6 +549,7 @@ class RealmImportExportTest(ExportFile):
             content="Thumbs up for export",
         )
         message = Message.objects.last()
+        assert message is not None
         consented_user_ids = [self.example_user(user).id for user in ["iago", "hamlet"]]
         do_add_reaction(
             self.example_user("iago"), message, "outbox", "1f4e4", Reaction.UNICODE_EMOJI
@@ -642,7 +682,6 @@ class RealmImportExportTest(ExportFile):
             realm_emoji = check_add_realm_emoji(
                 realm=hamlet.realm, name="hawaii", author=hamlet, image_file=img_file
             )
-            assert realm_emoji
             self.assertEqual(realm_emoji.name, "hawaii")
 
         # Deactivate a user to ensure such a case is covered.
@@ -799,7 +838,7 @@ class RealmImportExportTest(ExportFile):
             imported_realm_result = f(imported_realm)
             # orig_realm_result should be truthy and have some values, otherwise
             # the test is kind of meaningless
-            assert orig_realm_result
+            assert orig_realm_result  # type: ignore[truthy-bool] # see above
 
             # It may be helpful to do print(f.__name__) if you are having
             # trouble debugging this.
@@ -905,10 +944,12 @@ class RealmImportExportTest(ExportFile):
 
         # test recipients
         def get_recipient_stream(r: Realm) -> Recipient:
-            return Stream.objects.get(name="Verona", realm=r).recipient
+            recipient = Stream.objects.get(name="Verona", realm=r).recipient
+            assert recipient is not None
+            return recipient
 
         def get_recipient_user(r: Realm) -> Recipient:
-            return UserProfile.objects.get(full_name="Iago", realm=r).recipient
+            return assert_is_not_none(UserProfile.objects.get(full_name="Iago", realm=r).recipient)
 
         @getter
         def get_stream_recipient_type(r: Realm) -> int:
@@ -942,7 +983,7 @@ class RealmImportExportTest(ExportFile):
         @getter
         def get_custom_profile_with_field_type_user(
             r: Realm,
-        ) -> Tuple[Set[object], Set[object], Set[FrozenSet[str]]]:
+        ) -> Tuple[Set[str], Set[str], Set[FrozenSet[str]]]:
             fields = CustomProfileField.objects.filter(field_type=CustomProfileField.USER, realm=r)
 
             def get_email(user_id: int) -> str:
@@ -953,7 +994,7 @@ class RealmImportExportTest(ExportFile):
                 return {get_email(user_id) for user_id in user_id_list}
 
             def custom_profile_field_values_for(
-                fields: List[CustomProfileField],
+                fields: Iterable[CustomProfileField],
             ) -> Set[FrozenSet[str]]:
                 user_emails: Set[FrozenSet[str]] = set()
                 for field in fields:
@@ -971,7 +1012,7 @@ class RealmImportExportTest(ExportFile):
 
         # test realmauditlog
         @getter
-        def get_realm_audit_log_event_type(r: Realm) -> Set[str]:
+        def get_realm_audit_log_event_type(r: Realm) -> Set[int]:
             realmauditlogs = RealmAuditLog.objects.filter(realm=r).exclude(
                 event_type__in=[RealmAuditLog.REALM_PLAN_TYPE_CHANGED, RealmAuditLog.STREAM_CREATED]
             )
@@ -1075,7 +1116,7 @@ class RealmImportExportTest(ExportFile):
             return {"key": bot_config_data.key, "data": bot_config_data.value}
 
         # test messages
-        def get_stream_messages(r: Realm) -> Message:
+        def get_stream_messages(r: Realm) -> QuerySet[Message]:
             recipient = get_recipient_stream(r)
             messages = Message.objects.filter(recipient=recipient)
             return messages
@@ -1088,7 +1129,7 @@ class RealmImportExportTest(ExportFile):
 
         # test usermessages
         @getter
-        def get_usermessages_user(r: Realm) -> Set[object]:
+        def get_usermessages_user(r: Realm) -> Set[str]:
             messages = get_stream_messages(r).order_by("content")
             usermessage = UserMessage.objects.filter(message=messages[0])
             usermessage_user = {um.user_profile.email for um in usermessage}
@@ -1175,6 +1216,7 @@ class RealmImportExportTest(ExportFile):
         uploaded_file = Attachment.objects.get(realm=imported_realm)
         self.assert_length(b"zulip!", uploaded_file.size)
 
+        assert settings.LOCAL_UPLOADS_DIR is not None
         attachment_file_path = os.path.join(
             settings.LOCAL_UPLOADS_DIR, "files", uploaded_file.path_id
         )
@@ -1514,10 +1556,10 @@ class SingleUserExportTest(ExportFile):
             reaction_type=None,
         )
         reaction = Reaction.objects.order_by("id").last()
-        assert reaction
 
         @checker
         def zerver_reaction(records: List[Record]) -> None:
+            assert reaction
             (exported_reaction,) = records
             self.assertEqual(
                 exported_reaction,

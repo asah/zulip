@@ -25,7 +25,7 @@ Note that organization administrators cannot deactivate organization owners.
 
 1. Click the **Deactivate user** button at the bottom.
 
-1. Approve by clicking **Confirm**.
+1. Approve by clicking **Deactivate**.
 
 {tab|via-organization-settings}
 
@@ -34,7 +34,7 @@ Note that organization administrators cannot deactivate organization owners.
 1. Click the **Deactivate** button to the right of the user account that you
    want to deactivate.
 
-1. Approve by clicking **Confirm**.
+1. Approve by clicking **Deactivate**.
 
 {end_tabs}
 
@@ -45,10 +45,11 @@ email address.
 
 ## Reactivate a user
 
-Organization administrators can reactivate a deactivated user. They will
-have the same API key and bot API keys, but the bots will be deactivated
-until the user manually [reactivates](deactivate-or-reactivate-a-bot) them
-again.
+Organization administrators can reactivate a deactivated user. The reactivated
+user will have the same role, stream subscriptions, user group memberships, and
+other settings and permissions as they did prior to deactivation. They will also
+have the same API key and bot API keys, but the bots will be deactivated until
+the user manually [reactivates](deactivate-or-reactivate-a-bot) them again.
 
 {start_tabs}
 
@@ -58,3 +59,7 @@ again.
 want to reactivate.
 
 {end_tabs}
+
+!!! tip ""
+    You may want to [review and adjust](/help/manage-user-stream-subscriptions)
+    the reactivated user's stream subscriptions.

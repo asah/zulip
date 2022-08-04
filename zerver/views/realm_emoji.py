@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.files.uploadedfile import UploadedFile
 from django.http import HttpRequest, HttpResponse
 from django.utils.translation import gettext as _
 
@@ -40,6 +41,8 @@ def upload_emoji(
         if not user_profile.is_realm_admin:
             raise JsonableError(_("Only administrators can override built-in emoji."))
     emoji_file = list(request.FILES.values())[0]
+    assert isinstance(emoji_file, UploadedFile)
+    assert emoji_file.size is not None
     if (settings.MAX_EMOJI_FILE_SIZE_MIB * 1024 * 1024) < emoji_file.size:
         raise JsonableError(
             _("Uploaded file is larger than the allowed limit of {} MiB").format(
@@ -57,5 +60,5 @@ def delete_emoji(request: HttpRequest, user_profile: UserProfile, emoji_name: st
     ).exists():
         raise JsonableError(_("Emoji '{}' does not exist").format(emoji_name))
     check_remove_custom_emoji(user_profile, emoji_name)
-    do_remove_realm_emoji(user_profile.realm, emoji_name)
+    do_remove_realm_emoji(user_profile.realm, emoji_name, acting_user=user_profile)
     return json_success(request)

@@ -60,39 +60,39 @@ class zulip::common {
 
     # https://go.dev/dl/
     'golang' => {
-      'version' => '1.18.1',
+      'version' => '1.18.4',
       'sha256' => {
-        'amd64'   => 'b3b815f47ababac13810fc6021eb73d65478e0b2db4b09d348eefad9581a2334',
-        'aarch64' => '56a91851c97fb4697077abbca38860f735c32b38993ff79b088dac46e4735633',
+        'amd64'   => 'c9b099b68d93f5c5c8a8844a89f8db07eaa58270e3a1e01804f17f4cf8df02f5',
+        'aarch64' => '35014d92b50d97da41dade965df7ebeb9a715da600206aa59ce1b2d05527421f',
       },
     },
 
     # https://github.com/stripe/smokescreen/tags
     'smokescreen-src' => {
-      'version' => 'dbb816b62b790432414db7cafbb4583d5092c601',
+      'version' => '40870920671b64102c45b164152aef83a08d4735',
       # Source code, so arch-invariant sha256
-      'sha256' => '3c02676af074bf7c18a29343e0824cb87da4837bf7bbe2837ac81c254f813c32',
+      'sha256' => '48ec3c4eac69d2cd837e6a67fadf7215a237b3dd90cdd6cce339ce729e3ef1eb',
     },
 
     # https://github.com/wal-g/wal-g/releases
     'wal-g' => {
-      'version'       => '1.1.3-rc-with-build',
+      'version'       => '2.0.0',
       'sha256'        => {
-        'amd64' => '109a80f4c019e0f1d52602e90d2a181eb844494ece2d099a149cf9204b71113e',
+        'amd64' => 'df50c0c588fe9ff1638e42763c26e885ea32ad6dc39dee35d547186d3b94a19a',
         # aarch64 builds from source, below
       },
       # This is a Git commit hash, not a sha256sum, for when building from source.
-      'git_commit_id' => '52f990fe87679ee4651fe3fb7629a2ac799f50c6',
+      'git_commit_id' => '1eb88a577d5f938ffc1af9ae8f6ecdf82b7fda6b',
     },
 
     ### zulip_ops packages
 
     # https://grafana.com/grafana/download?edition=oss
     'grafana' => {
-      'version' => '8.5.0',
+      'version' => '9.0.3',
       'sha256' => {
-        'amd64'   => 'ad5e858e2255d69da45f83f9571cf741c6867ed8ccede5ad42e90079119b98aa',
-        'aarch64' => '6e906e0902b88314cd8f5a49c11140398981a7643b268dc04632fc30667581ae',
+        'amd64'   => '9765d30b43b121e503e2c8cce30f56b13f6ce5a9068d6a459a7667988fef4840',
+        'aarch64' => 'd9dbe7727b2e6a8f0fbac9fbb2bcd8c84dc2f221663e1d819b2e7ed796f28418',
       },
     },
 
@@ -116,19 +116,19 @@ class zulip::common {
 
     # https://prometheus.io/download/#prometheus
     'prometheus' => {
-      'version' => '2.35.0',
+      'version' => '2.37.0',
       'sha256' => {
-        'amd64'   => 'e4546960688d1c85530ec3a93e109d15b540f3251e1f4736d0d9735e1e857faf',
-        'aarch64' => '3ebe0c533583a9ab03363a80aa629edd8e0cc42da3583e33958eb7abe74d4cd2',
+        'amd64'   => 'ca70f5a261fd545da0b9893c42a73547a94ebd5111ef2b6b9f8742c5dbb73522',
+        'aarch64' => '024cc048131098d408c8c3588237c42de4a13d9030b352f0a0d7f4a734fda102',
       },
     },
 
     # https://github.com/oliver006/redis_exporter/releases
     'redis_exporter' => {
-      'version' => '1.37.0',
+      'version' => '1.43.0',
       'sha256' => {
-        'amd64'   => 'c4d0554a378151eab3372235c40d3a9c8c40fd6f40d91d768830985df8a44744',
-        'aarch64' => '742047d938192894979c8370830891bb0fea3262b762e6c51c849a8e47ddfb7e',
+        'amd64'   => '4d0d49b00ca414f667b0f347f2c231db743a952b6e596fab50fd863201d7c815',
+        'aarch64' => '11c3b545a4f934799c5ed24f98fa486f490aa23ecd9735edf95ebf58ceb56273',
       },
     },
 

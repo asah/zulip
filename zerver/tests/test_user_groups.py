@@ -41,8 +41,9 @@ class UserGroupTestCase(ZulipTestCase):
         realm = get_realm("zulip")
         user_group = UserGroup.objects.first()
         assert user_group is not None
-        membership = UserGroupMembership.objects.filter(user_group=user_group)
-        membership = membership.values_list("user_profile_id", flat=True)
+        membership = UserGroupMembership.objects.filter(user_group=user_group).values_list(
+            "user_profile_id", flat=True
+        )
         empty_user_group = create_user_group("newgroup", [], realm)
 
         user_groups = user_groups_in_realm_serialized(realm)
@@ -51,12 +52,12 @@ class UserGroupTestCase(ZulipTestCase):
         self.assertEqual(user_groups[0]["name"], "@role:owners")
         self.assertEqual(user_groups[0]["description"], "Owners of this organization")
         self.assertEqual(set(user_groups[0]["members"]), set(membership))
-        self.assertEqual(user_groups[0]["subgroups"], [])
+        self.assertEqual(user_groups[0]["direct_subgroup_ids"], [])
 
         admins_system_group = UserGroup.objects.get(name="@role:administrators", realm=realm)
         self.assertEqual(user_groups[1]["id"], admins_system_group.id)
-        # Check that owners system group is present in "subgroups"
-        self.assertEqual(user_groups[1]["subgroups"], [user_group.id])
+        # Check that owners system group is present in "direct_subgroup_ids"
+        self.assertEqual(user_groups[1]["direct_subgroup_ids"], [user_group.id])
 
         self.assertEqual(user_groups[8]["id"], empty_user_group.id)
         self.assertEqual(user_groups[8]["name"], "newgroup")
@@ -239,9 +240,9 @@ class UserGroupAPITestCase(UserGroupTestCase):
         user_profile = self.example_user("hamlet")
         self.login_user(user_profile)
         result = self.client_get("/json/user_groups")
-        self.assert_json_success(result)
+        response_dict = self.assert_json_success(result)
         self.assert_length(
-            result.json()["user_groups"], UserGroup.objects.filter(realm=user_profile.realm).count()
+            response_dict["user_groups"], UserGroup.objects.filter(realm=user_profile.realm).count()
         )
 
     def test_can_edit_user_groups(self) -> None:

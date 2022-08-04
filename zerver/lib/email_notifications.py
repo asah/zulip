@@ -1,15 +1,16 @@
 # See https://zulip.readthedocs.io/en/latest/subsystems/notifications.html
 
 import logging
+import os
 import re
+import subprocess
+import sys
 from collections import defaultdict
 from datetime import timedelta
 from email.headerregistry import Address
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
-import html2text
 import lxml.html
-import pytz
 from bs4 import BeautifulSoup
 from django.conf import settings
 from django.contrib.auth import get_backends
@@ -43,6 +44,11 @@ from zerver.models import (
     get_display_recipient,
     get_user_profile_by_id,
 )
+
+if sys.version_info < (3, 9):  # nocoverage
+    from backports import zoneinfo
+else:  # nocoverage
+    import zoneinfo
 
 logger = logging.getLogger(__name__)
 
@@ -562,10 +568,8 @@ def handle_missedmessage_emails(
         usermessage__user_profile_id=user_profile,
         id__in=message_ids,
         usermessage__flags=~UserMessage.flags.read,
-    )
-
-    # Cancel missed-message emails for deleted messages
-    messages = [um for um in messages if um.content != "(deleted)"]
+        # Cancel missed-message emails for deleted messages
+    ).exclude(content="(deleted)")
 
     if not messages:
         return
@@ -573,7 +577,7 @@ def handle_missedmessage_emails(
     # We bucket messages by tuples that identify similar messages.
     # For streams it's recipient_id and topic.
     # For PMs it's recipient id and sender.
-    messages_by_bucket: Dict[Tuple[int, str], List[Message]] = defaultdict(list)
+    messages_by_bucket: Dict[Tuple[int, Union[int, str]], List[Message]] = defaultdict(list)
     for msg in messages:
         if msg.recipient.type == Recipient.PERSONAL:
             # For PM's group using (recipient, sender).
@@ -593,7 +597,7 @@ def handle_missedmessage_emails(
             msg_list.extend(filtered_context_messages)
 
     # Sort emails by least recently-active discussion.
-    bucket_tups: List[Tuple[Tuple[int, str], int]] = []
+    bucket_tups: List[Tuple[Tuple[int, Union[int, str]], int]] = []
     for bucket_tup, msg_list in messages_by_bucket.items():
         max_message_id = max(msg_list, key=lambda msg: msg.id).id
         bucket_tups.append((bucket_tup, max_message_id))
@@ -624,7 +628,7 @@ def followup_day2_email_delay(user: UserProfile) -> timedelta:
     user_tz = user.timezone
     if user_tz == "":
         user_tz = "UTC"
-    signup_day = user.date_joined.astimezone(pytz.timezone(user_tz)).isoweekday()
+    signup_day = user.date_joined.astimezone(zoneinfo.ZoneInfo(user_tz)).isoweekday()
     if signup_day == 5:
         # If the day is Friday then delay should be till Monday
         days_to_delay = 3
@@ -708,8 +712,10 @@ def enqueue_welcome_emails(user: UserProfile, realm_creation: bool = False) -> N
 
 
 def convert_html_to_markdown(html: str) -> str:
-    parser = html2text.HTML2Text()
-    markdown = parser.handle(html).strip()
+    # html2text is GPL licensed, so run it as a subprocess.
+    markdown = subprocess.check_output(
+        [os.path.join(sys.prefix, "bin", "html2text")], input=html, text=True
+    ).strip()
 
     # We want images to get linked and inline previewed, but html2text will turn
     # them into links of the form `![](http://foo.com/image.png)`, which is

@@ -43,7 +43,7 @@ if pwd.getpwuid(os.getuid()).pw_name != "zulip":
 
 if args.fill_cache:
     logging.info("Filling memcached caches")
-    subprocess.check_call(["./manage.py", "fill_memcached_caches"])
+    subprocess.check_call(["./manage.py", "fill_memcached_caches", "--skip-checks"])
 
 current_symlink = os.path.join(DEPLOYMENTS_DIR, "current")
 last_symlink = os.path.join(DEPLOYMENTS_DIR, "last")
@@ -97,6 +97,19 @@ if has_process_fts_updates():
 aux_services = list_supervisor_processes(["go-camo", "smokescreen"], only_running=False)
 if aux_services:
     subprocess.check_call(["supervisorctl", "start", *aux_services])
+
+# If none of the workers nor the application servers are running, this
+# is actually a "start," not a restart, which means we will defer
+# workers to later.
+if (
+    action == "restart"
+    and len(
+        list_supervisor_processes(workers + ["zulip-django", "zulip-tornado:*"], only_running=True)
+    )
+    == 0
+):
+    action = "start"
+    verbing = "Starting"
 
 
 def restart_or_start(service: str) -> None:

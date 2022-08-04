@@ -20,7 +20,7 @@ from zerver.actions.realm_settings import (
     do_set_realm_property,
     do_set_realm_user_default_setting,
 )
-from zerver.actions.streams import do_deactivate_stream
+from zerver.actions.streams import do_deactivate_stream, merge_streams
 from zerver.lib.realm_description import get_realm_rendered_description, get_realm_text_description
 from zerver.lib.send_email import send_future_email
 from zerver.lib.streams import create_stream_if_needed
@@ -31,6 +31,7 @@ from zerver.models import (
     Message,
     Realm,
     RealmAuditLog,
+    RealmReactivationStatus,
     RealmUserDefault,
     ScheduledEmail,
     Stream,
@@ -96,11 +97,27 @@ class RealmTest(ZulipTestCase):
         self.assertEqual(realm.invite_to_stream_policy, Realm.POLICY_MODERATORS_ONLY)
 
     def test_realm_enable_spectator_access(self) -> None:
-        realm = do_create_realm("test_web_public_true", "Foo", enable_spectator_access=True)
+        realm = do_create_realm(
+            "test_web_public_true",
+            "Foo",
+            plan_type=Realm.PLAN_TYPE_STANDARD,
+            enable_spectator_access=True,
+        )
         self.assertEqual(realm.enable_spectator_access, True)
 
         realm = do_create_realm("test_web_public_false", "Boo", enable_spectator_access=False)
         self.assertEqual(realm.enable_spectator_access, False)
+
+        with self.assertRaises(AssertionError):
+            realm = do_create_realm("test_web_public_false_1", "Foo", enable_spectator_access=True)
+
+        with self.assertRaises(AssertionError):
+            realm = do_create_realm(
+                "test_web_public_false_2",
+                "Foo",
+                plan_type=Realm.PLAN_TYPE_LIMITED,
+                enable_spectator_access=True,
+            )
 
     def test_do_set_realm_name_caching(self) -> None:
         """The main complicated thing about setting realm names is fighting the
@@ -354,7 +371,9 @@ class RealmTest(ZulipTestCase):
         realm = get_realm("zulip")
         do_deactivate_realm(realm, acting_user=None)
         self.assertTrue(realm.deactivated)
-        confirmation_url = create_confirmation_link(realm, Confirmation.REALM_REACTIVATION)
+
+        obj = RealmReactivationStatus.objects.create(realm=realm)
+        confirmation_url = create_confirmation_link(obj, Confirmation.REALM_REACTIVATION)
         response = self.client_get(confirmation_url)
         self.assert_in_success_response(
             ["Your organization has been successfully reactivated"], response
@@ -362,14 +381,20 @@ class RealmTest(ZulipTestCase):
         realm = get_realm("zulip")
         self.assertFalse(realm.deactivated)
 
+        # Make sure the link can't be reused.
+        do_deactivate_realm(realm, acting_user=None)
+        response = self.client_get(confirmation_url)
+        self.assertEqual(response.status_code, 404)
+
     def test_realm_reactivation_confirmation_object(self) -> None:
         realm = get_realm("zulip")
         do_deactivate_realm(realm, acting_user=None)
         self.assertTrue(realm.deactivated)
-        create_confirmation_link(realm, Confirmation.REALM_REACTIVATION)
+        obj = RealmReactivationStatus.objects.create(realm=realm)
+        create_confirmation_link(obj, Confirmation.REALM_REACTIVATION)
         confirmation = Confirmation.objects.last()
         assert confirmation is not None
-        self.assertEqual(confirmation.content_object, realm)
+        self.assertEqual(confirmation.content_object, obj)
         self.assertEqual(confirmation.realm, realm)
 
     def test_do_send_realm_reactivation_email(self) -> None:
@@ -404,8 +429,9 @@ class RealmTest(ZulipTestCase):
     def test_realm_reactivation_with_random_link(self) -> None:
         random_link = "/reactivate/5e89081eb13984e0f3b130bf7a4121d153f1614b"
         response = self.client_get(random_link)
-        self.assert_in_success_response(
-            ["The organization reactivation link has expired or is not valid."], response
+        self.assertEqual(response.status_code, 404)
+        self.assert_in_response(
+            "The organization reactivation link has expired or is not valid.", response
         )
 
     def test_change_notifications_stream(self) -> None:
@@ -430,7 +456,7 @@ class RealmTest(ZulipTestCase):
         invalid_notif_stream_id = 1234
         req = dict(notifications_stream_id=orjson.dumps(invalid_notif_stream_id).decode())
         result = self.client_patch("/json/realm", req)
-        self.assert_json_error(result, "Invalid stream id")
+        self.assert_json_error(result, "Invalid stream ID")
         realm = get_realm("zulip")
         assert realm.notifications_stream is not None
         self.assertNotEqual(realm.notifications_stream.id, invalid_notif_stream_id)
@@ -443,6 +469,31 @@ class RealmTest(ZulipTestCase):
         assert notifications_stream is not None
         self.assertEqual(notifications_stream.id, verona.id)
         do_deactivate_stream(notifications_stream, acting_user=None)
+        self.assertIsNone(realm.get_notifications_stream())
+
+    def test_merge_streams(self) -> None:
+        realm = get_realm("zulip")
+        denmark = get_stream("Denmark", realm)
+        cordelia = self.example_user("cordelia")
+        notifications_stream = realm.get_notifications_stream()
+        assert notifications_stream is not None
+
+        create_stream_if_needed(realm, "Atlantis")
+        self.subscribe(cordelia, "Atlantis")
+        self.send_stream_message(cordelia, "Atlantis")
+        atlantis = get_stream("Atlantis", realm)
+
+        stats = merge_streams(realm, denmark, denmark)
+        self.assertEqual(stats, (0, 0, 0))
+
+        stats = merge_streams(realm, denmark, atlantis)
+        self.assertEqual(stats, (1, 1, 1))
+
+        with self.assertRaises(Stream.DoesNotExist):
+            get_stream("Atlantis", realm)
+
+        stats = merge_streams(realm, denmark, notifications_stream)
+        self.assertEqual(stats, (2, 1, 10))
         self.assertIsNone(realm.get_notifications_stream())
 
     def test_change_signup_notifications_stream(self) -> None:
@@ -478,7 +529,7 @@ class RealmTest(ZulipTestCase):
             ).decode()
         )
         result = self.client_patch("/json/realm", req)
-        self.assert_json_error(result, "Invalid stream id")
+        self.assert_json_error(result, "Invalid stream ID")
         realm = get_realm("zulip")
         assert realm.signup_notifications_stream is not None
         self.assertNotEqual(
@@ -698,12 +749,14 @@ class RealmTest(ZulipTestCase):
         self.assertEqual(realm.message_visibility_limit, None)
         self.assertEqual(realm.upload_quota_gb, Realm.UPLOAD_QUOTA_STANDARD)
 
+        do_set_realm_property(realm, "enable_spectator_access", True, acting_user=None)
         do_change_realm_plan_type(realm, Realm.PLAN_TYPE_LIMITED, acting_user=iago)
         realm = get_realm("zulip")
         self.assertEqual(realm.plan_type, Realm.PLAN_TYPE_LIMITED)
         self.assertEqual(realm.max_invites, settings.INVITES_DEFAULT_REALM_DAILY_MAX)
         self.assertEqual(realm.message_visibility_limit, Realm.MESSAGE_VISIBILITY_LIMITED)
         self.assertEqual(realm.upload_quota_gb, Realm.UPLOAD_QUOTA_LIMITED)
+        self.assertFalse(realm.enable_spectator_access)
 
         do_change_realm_plan_type(realm, Realm.PLAN_TYPE_STANDARD_FREE, acting_user=iago)
         realm = get_realm("zulip")
@@ -848,10 +901,6 @@ class RealmTest(ZulipTestCase):
         with self.settings(WEB_PUBLIC_STREAMS_ENABLED=False):
             self.assertEqual(realm.has_web_public_streams(), False)
             self.assertEqual(realm.web_public_streams_enabled(), False)
-
-            with self.settings(WEB_PUBLIC_STREAMS_BETA_SUBDOMAINS=["zulip"]):
-                self.assertEqual(realm.has_web_public_streams(), True)
-                self.assertEqual(realm.web_public_streams_enabled(), True)
 
         realm.enable_spectator_access = False
         realm.save()
@@ -1129,10 +1178,10 @@ class RealmAPITest(ZulipTestCase):
 
         for val in vals[1:]:
             realm = self.update_with_api("org_type", val)
-            self.assertEqual(getattr(realm, "org_type"), val)
+            self.assertEqual(realm.org_type, val)
 
         realm = self.update_with_api("org_type", vals[0])
-        self.assertEqual(getattr(realm, "org_type"), vals[0])
+        self.assertEqual(realm.org_type, vals[0])
 
         # Now we test an invalid org_type id.
         invalid_org_type = 1
@@ -1383,12 +1432,16 @@ class ScrubRealmTest(ZulipTestCase):
 
         zulip_users = UserProfile.objects.filter(realm=zulip)
         for user in zulip_users:
-            self.assertTrue(re.search("Scrubbed [a-z0-9]{15}", user.full_name))
-            self.assertTrue(re.search("scrubbed-[a-z0-9]{15}@" + zulip.host, user.email))
-            self.assertTrue(re.search("scrubbed-[a-z0-9]{15}@" + zulip.host, user.delivery_email))
+            self.assertRegex(user.full_name, r"^Scrubbed [a-z0-9]{15}$")
+            self.assertRegex(user.email, rf"^scrubbed-[a-z0-9]{{15}}@{re.escape(zulip.host)}$")
+            self.assertRegex(
+                user.delivery_email, rf"^scrubbed-[a-z0-9]{{15}}@{re.escape(zulip.host)}$"
+            )
 
         lear_users = UserProfile.objects.filter(realm=lear)
         for user in lear_users:
-            self.assertIsNone(re.search("Scrubbed [a-z0-9]{15}", user.full_name))
-            self.assertIsNone(re.search("scrubbed-[a-z0-9]{15}@" + zulip.host, user.email))
-            self.assertIsNone(re.search("scrubbed-[a-z0-9]{15}@" + zulip.host, user.delivery_email))
+            self.assertNotRegex(user.full_name, r"^Scrubbed [a-z0-9]{15}$")
+            self.assertNotRegex(user.email, rf"^scrubbed-[a-z0-9]{{15}}@{re.escape(zulip.host)}$")
+            self.assertNotRegex(
+                user.delivery_email, rf"^scrubbed-[a-z0-9]{{15}}@{re.escape(zulip.host)}$"
+            )

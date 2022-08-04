@@ -19,7 +19,7 @@ streams.
 {start_tabs}
 
 1. [Open the compose box](/help/open-the-compose-box) by typing `x` or clicking
-   **New private message** at the bottom of the screen.
+   **New private message** at the bottom of the app.
 
 2. Start typing a user's name, and select the user from the list of
    suggestions. Repeat as necessary.
@@ -34,12 +34,12 @@ There are several ways to access an existing PM or group PM.
 
 * For recent conversations, click on **Private messages** near
   the top of the left sidebar.
-* Click on any user or group in the right sidebar.
-* Start typing a user's name in [search](/help/search-for-messages). You'll be
-  able to select PMs or group PMs with that user.
-* Open the compose box, and enter in a (list of) users. Type `Ctrl + .` (or
-  `Cmd + .` on a mac) to open that conversation.
+* Click on any user in the right sidebar.
+* Start typing a user's name in [search](/help/search-for-messages).
+  You'll be able to select PMs or group PMs with that user.
+* Open the compose box, and enter in a list of users  on the **To:**
+  line. Type `Ctrl` + `.` to open that conversation.
 
 ## Related articles
 
-* [Typing notifications](/help/status-and-availability#typing-notifications)
+* [Typing notifications](/help/typing-notifications)

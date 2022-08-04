@@ -1,12 +1,11 @@
 import os
 import re
-from typing import Any, Dict, Sequence
+from typing import TYPE_CHECKING, Any, Dict, Sequence
 from unittest import mock, skipUnless
 from urllib.parse import urlsplit
 
 import orjson
 from django.conf import settings
-from django.http import HttpResponse
 from django.test import override_settings
 from django.utils.timezone import now as timezone_now
 
@@ -18,14 +17,17 @@ from zerver.lib.test_helpers import HostRequestMock
 from zerver.models import Realm, get_realm
 from zerver.views.documentation import add_api_uri_context
 
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
+
 
 class DocPageTest(ZulipTestCase):
-    def get_doc(self, url: str, subdomain: str) -> HttpResponse:
+    def get_doc(self, url: str, subdomain: str) -> "TestHttpResponse":
         if url[0:23] == "/integrations/doc-html/":
             return self.client_get(url, subdomain=subdomain, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
         return self.client_get(url, subdomain=subdomain)
 
-    def print_msg_if_error(self, url: str, response: HttpResponse) -> None:  # nocoverage
+    def print_msg_if_error(self, url: str, response: "TestHttpResponse") -> None:  # nocoverage
         if response.status_code == 200:
             return
         print("Error processing URL:", url)
@@ -163,6 +165,7 @@ class DocPageTest(ZulipTestCase):
         self._test("/case-studies/tum/", "Technical University of Munich")
         self._test("/case-studies/ucsd/", "UCSD")
         self._test("/case-studies/rust/", "Rust programming language")
+        self._test("/case-studies/recurse-center/", "Recurse Center")
         self._test("/case-studies/lean/", "Lean theorem prover")
         self._test("/case-studies/idrift/", "Case study: iDrift AS")
         self._test("/case-studies/asciidoctor/", "Case study: Asciidoctor")
@@ -317,6 +320,7 @@ class HelpTest(ZulipTestCase):
 class IntegrationTest(ZulipTestCase):
     def test_check_if_every_integration_has_logo_that_exists(self) -> None:
         for integration in INTEGRATIONS.values():
+            assert integration.logo_url is not None
             path = urlsplit(integration.logo_url).path
             self.assertTrue(os.path.isfile(settings.DEPLOY_ROOT + path), integration.name)
 
@@ -400,7 +404,7 @@ class PlansPageTest(ZulipTestCase):
         result = self.client_get("/plans/", subdomain=root_domain)
         self.assert_in_success_response(["Self-host Zulip"], result)
         self.assert_not_in_success_response(["/upgrade#sponsorship"], result)
-        self.assert_in_success_response(["/accounts/go/?next=/upgrade%23sponsorship"], result)
+        self.assert_in_success_response(["/accounts/go/?next=%2Fupgrade%23sponsorship"], result)
 
         non_existent_domain = "moo"
         result = self.client_get("/plans/", subdomain=non_existent_domain)
@@ -424,7 +428,7 @@ class PlansPageTest(ZulipTestCase):
         result = self.client_get("/plans/", subdomain="zulip")
         self.assert_in_success_response(["Current plan"], result)
         self.assert_in_success_response(["/upgrade#sponsorship"], result)
-        self.assert_not_in_success_response(["/accounts/go/?next=/upgrade%23sponsorship"], result)
+        self.assert_not_in_success_response(["/accounts/go/?next=%2Fupgrade%23sponsorship"], result)
 
         # Test root domain, with login on different domain
         result = self.client_get("/plans/", subdomain="")

@@ -74,20 +74,8 @@ h3,
         text-align: center;
     }
 
-    .w-70 {
-        width: 70%;
-    }
-
     .w-200 {
         width: 200px;
-    }
-
-    .m-t-20 {
-        margin-top: 20px;
-    }
-
-    .m-t-10 {
-        margin-top: 10px;
     }
 
     .grid {
@@ -132,12 +120,6 @@ h3,
             text-align: left;
         }
     }
-    /* this is because the input[type=text] is also 200px wide but has
-    12px of padding and 2px worth of borders. These don't apply to
-    buttons however. */
-    .input-size {
-        width: 214px;
-    }
 }
 
 .profile-settings-form {
@@ -162,11 +144,6 @@ h3,
 }
 
 .user-avatar-section {
-    .avatar-controls {
-        margin-top: 20px;
-        box-shadow: none;
-    }
-
     .inline-block {
         box-shadow: 0 0 10px hsla(0, 0%, 0%, 0.1);
     }
@@ -190,10 +167,6 @@ h3,
     box-sizing: border-box;
 }
 
-.padded-container {
-    padding: 20px;
-}
-
 .side-padded-container {
     padding: 0 20px;
 }
@@ -211,10 +184,6 @@ h3,
 
 .setting_notification_sound {
     text-transform: capitalize;
-}
-
-.attributions_title {
-    margin-top: 24px;
 }
 
 .table {
@@ -270,6 +239,18 @@ td .button {
     box-shadow: none;
 }
 
+#language_selection_modal {
+    table {
+        width: 90%;
+        margin-top: 20px;
+        border-collapse: separate;
+    }
+
+    td {
+        padding-top: 1px;
+    }
+}
+
 .settings-section {
     display: none;
     width: calc(100% - 40px);
@@ -296,78 +277,12 @@ td .button {
             background-color: transparent;
             color: inherit;
         }
-
-        .table-title {
-            display: inline-block;
-            padding: 6px 0;
-            margin-left: 5px;
-
-            i {
-                margin-right: 5px;
-            }
-        }
     }
 
     .table-sticky-headers th {
         position: sticky;
         top: 0;
         z-index: 1;
-    }
-
-    #id_realm_authentication_methods {
-        width: 20%;
-
-        td {
-            border: none;
-        }
-    }
-
-    .table-striped {
-        table-layout: auto;
-        border-collapse: separate;
-
-        thead th {
-            color: inherit;
-            background-color: hsl(0, 0%, 100%);
-            border-top: 1px solid hsla(0, 0%, 0%, 0.2) !important;
-            border-bottom: 1px solid hsla(0, 0%, 0%, 0.2) !important;
-
-            &.active::after,
-            &[data-sort]:hover::after {
-                content: " \f0d8";
-                white-space: pre;
-                display: inline-block;
-                position: absolute;
-                padding-top: 3px;
-                font: normal normal normal 12px/1 FontAwesome;
-                font-size: inherit;
-            }
-
-            &.active {
-                opacity: 1;
-                transition: opacity 100ms ease-out;
-
-                &.descend::after {
-                    content: " \f0d7";
-                }
-            }
-
-            &[data-sort]:hover {
-                cursor: pointer;
-                background-color: hsla(0, 0%, 95%);
-                transition: background-color 100ms ease-in-out;
-
-                &:not(.active)::after {
-                    opacity: 0.3;
-                }
-            }
-        }
-
-        /* Force the actions column to use the minimum space necessary */
-        .actions {
-            width: 1%;
-            white-space: nowrap;
-        }
     }
 
     #admin_page_users_loading_indicator,
@@ -393,21 +308,6 @@ td .button {
         margin-top: 7px;
         vertical-align: middle;
         display: inline-block;
-    }
-
-    #user-display-settings .setting_default_language {
-        text-decoration: none;
-    }
-
-    #user_default_language_modal {
-        table {
-            width: 90%;
-            margin-top: 20px;
-        }
-
-        td {
-            padding-left: 80px;
-        }
     }
 
     .inline {
@@ -439,45 +339,6 @@ td .button {
 #admin-bot-list {
     .table tr:first-of-type td {
         border-top: none;
-    }
-}
-
-.dynamic-input {
-    display: inline-block;
-    padding: 5px;
-    background-color: hsl(0, 0%, 100%);
-    border: 1px solid hsl(0, 0%, 80%);
-    border-radius: 3px;
-    transition: box-shadow 0.3s ease;
-    min-width: 208px;
-
-    &:hover {
-        outline: none;
-        box-shadow: 0 0 4px hsla(199, 79%, 56%, 1);
-    }
-
-    div,
-    label {
-        display: inline-block;
-        margin: 0;
-    }
-
-    div {
-        margin-right: -2px;
-
-        &:empty::after {
-            content: "username";
-            color: hsl(0, 0%, 67%);
-        }
-    }
-
-    &.bot_user_name div:empty::after {
-        content: "bot_user_name";
-        color: hsl(0, 0%, 67%);
-    }
-
-    [contenteditable="true"] {
-        outline: none;
     }
 }
 
@@ -573,8 +434,19 @@ input[type="checkbox"] {
     margin-top: 10px;
 }
 
-#user-display-settings .setting_default_language {
-    margin-left: 20px;
+.language_selection_widget {
+    .title {
+        margin-bottom: 3px;
+    }
+
+    .language_selection_button {
+        text-decoration: none;
+        color: hsl(0, 0%, 20%);
+
+        .fa.fa-pencil {
+            margin-left: 5px;
+        }
+    }
 }
 
 .remove-attachment {
@@ -586,10 +458,6 @@ input[type="checkbox"] {
 #download_attachment {
     padding-left: 0;
     border-left: 0;
-}
-
-.green-bg {
-    background-color: hsl(120, 29%, 84%);
 }
 
 .remove-alert-word {
@@ -651,10 +519,6 @@ input[type="checkbox"] {
 }
 
 #user-notification-settings {
-    .notification-reminder {
-        text-align: left;
-    }
-
     .notification-table {
         th,
         td {
@@ -689,8 +553,7 @@ input[type="checkbox"] {
 
     .alert-notification.custom-field-status,
     .alert-notification.full-name-status,
-    .alert-notification.timezone-setting-status,
-    .alert-notification.presence-setting-status {
+    .alert-notification.timezone-setting-status {
         padding-top: 0;
         padding-bottom: 0;
         margin-top: 0;
@@ -708,32 +571,37 @@ input[type="checkbox"] {
     }
 }
 
-.admin-realm-message-content-delete-limit-minutes {
-    width: 5ch;
-    text-align: right;
-}
-
 .admin-realm-message-retention-days {
     width: 5ch;
     text-align: right;
 }
 
+#show-add-user-group-modal {
+    margin-bottom: 10px;
+}
+
+#add-user-group-form {
+    margin: 0;
+
+    /* This 14px is the border and padding of the input element */
+    #user_group_description {
+        width: calc(100% - 14px);
+    }
+}
+
 .add-new-emoji-box,
-.add-new-user-group-box,
 .add-new-alert-word-box,
 .add-new-export-box {
     margin-bottom: 20px;
 }
 
 .add-new-emoji-box .new-emoji-form,
-.add-new-user-group-box .new-user-group-form,
 .add-new-alert-word-box .new-alert-word-form,
 .add-new-export-box {
     margin: 10px 0;
 }
 
 .add-new-emoji-box,
-.add-new-user-group-box,
 .add-new-default-stream-box {
     input[type="text"] {
         padding: 6px;
@@ -926,15 +794,6 @@ input[type="checkbox"] {
     margin-bottom: 0 !important;
 }
 
-.edit_bot h3 {
-    margin: 0;
-    font-weight: 400;
-}
-
-.bot_edit_errors {
-    margin: 0;
-}
-
 #bots_lists_navbar .active a {
     background-color: hsl(0, 0%, 98%);
 }
@@ -955,29 +814,13 @@ input[type="checkbox"] {
     margin: 0;
     padding: 0;
 
-    label {
-        text-transform: uppercase;
-        font-weight: 600;
-        color: hsl(0, 0%, 67%);
-        margin-top: 5px;
-    }
-
     .buttons {
         margin: 10px 0 5px;
     }
-}
 
-.edit_bot_email {
-    font-weight: 400;
-    font-size: 18px;
-    text-align: left;
-    margin-top: 0;
-    margin-bottom: 10px;
-
-    overflow: hidden;
-    max-height: 1.1em;
-    text-overflow: ellipsis;
-    white-space: pre;
+    #bot-role-select:disabled {
+        opacity: 1;
+    }
 }
 
 #create_bot_form,
@@ -998,20 +841,6 @@ input[type="checkbox"] {
     width: 70%;
 }
 
-.bot_name_header {
-    width: 8em;
-}
-
-#attachments_list {
-    list-style-type: none;
-    margin: auto;
-    background-color: hsl(0, 0%, 100%);
-
-    &:empty {
-        padding: 10px;
-    }
-}
-
 #alert-words-table {
     margin: 0;
 
@@ -1029,10 +858,7 @@ input[type="checkbox"] {
         word-break: break-all;
         white-space: normal;
     }
-}
 
-#alert-words-table,
-#attachments_list {
     .edit-attachment-buttons {
         position: absolute;
         right: 20px;
@@ -1041,7 +867,6 @@ input[type="checkbox"] {
 }
 
 #change_password_modal {
-    .change_password_info,
     #change_password_container {
         margin: 0;
     }
@@ -1054,6 +879,10 @@ input[type="checkbox"] {
 #download_zuliprc {
     color: hsl(0, 0%, 100%);
     text-decoration: none;
+}
+
+#realm_domains_table {
+    margin: 0;
 }
 
 #api_key_form,
@@ -1337,67 +1166,6 @@ input[type="checkbox"] {
         line-height: 1.2;
     }
 
-    .form-sidebar {
-        position: absolute;
-        top: 45px;
-        right: 0;
-        transform: translateX(303px);
-        width: 300px;
-        height: calc(100% - 45px);
-
-        background-color: hsl(0, 0%, 100%);
-        border-left: 1px solid hsl(0, 0%, 87%);
-
-        pointer-events: none;
-        transition: all 0.3s ease;
-        visibility: hidden;
-
-        &.show {
-            pointer-events: auto;
-            transform: translateX(0);
-            visibility: visible;
-        }
-
-        input[type="text"] {
-            width: calc(100% - 10px - 4px);
-        }
-
-        input[type="submit"],
-        button {
-            border-radius: 4px;
-            outline: none;
-        }
-
-        select {
-            width: 100%;
-        }
-
-        .title,
-        .content {
-            padding: 20px;
-        }
-
-        .title {
-            padding: 10px 20px;
-            background-color: hsl(0, 0%, 98%);
-            border-bottom: 1px solid hsl(0, 0%, 87%);
-
-            h1 {
-                display: inline-block;
-                font-size: 1.3rem;
-                margin: 0;
-            }
-
-            .exit {
-                float: right;
-                font-size: 2rem;
-                font-weight: 300;
-                margin-top: 11px;
-                cursor: pointer;
-            }
-        }
-    }
-
     .sidebar-wrapper {
         float: left;
         position: relative;
@@ -1443,11 +1211,6 @@ input[type="checkbox"] {
             border-bottom: 1px solid hsl(0, 0%, 93%);
 
             &:last-of-type .text {
-                border-bottom: none;
-            }
-
-            &.border-top {
-                border-top: 1px solid hsl(0, 0%, 93%);
                 border-bottom: none;
             }
 
@@ -1595,10 +1358,6 @@ input[type="checkbox"] {
 
 #profile-settings,
 #edit-user-form {
-    .user-role button {
-        cursor: default;
-    }
-
     .custom_user_field {
         padding-bottom: 20px;
 
@@ -1673,10 +1432,6 @@ input[type="checkbox"] {
 #id_realm_giphy_rating,
 #id_realm_org_join_restrictions {
     width: 100%;
-}
-
-.m-t-10 {
-    margin-top: 10px;
 }
 
 .dropdown-list-widget {
@@ -1822,11 +1577,6 @@ input[type="checkbox"] {
     margin-bottom: 3px;
 }
 
-.invited-as-admin {
-    opacity: 0.5;
-    margin-left: 2px;
-}
-
 @supports (-moz-appearance: none) {
     #settings_page select {
         appearance: none;
@@ -1914,11 +1664,6 @@ input[type="checkbox"] {
     .user-avatar-section,
     .realm-icon-section {
         display: block;
-    }
-
-    .user-avatar-section .avatar-controls {
-        display: inline-block;
-        margin-top: 10px;
     }
 
     #settings_content .warning {

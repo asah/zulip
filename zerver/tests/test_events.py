@@ -199,6 +199,7 @@ from zerver.lib.test_helpers import (
     stdout_suppressed,
 )
 from zerver.lib.topic import TOPIC_NAME
+from zerver.lib.types import ProfileDataElementUpdateDict
 from zerver.lib.user_groups import create_user_group
 from zerver.lib.user_mutes import get_mute_object
 from zerver.models import (
@@ -998,7 +999,7 @@ class NormalActionsTest(BaseAction):
         field_id = self.user_profile.realm.customprofilefield_set.get(
             realm=self.user_profile.realm, name="Biography"
         ).id
-        field = {
+        field: ProfileDataElementUpdateDict = {
             "id": field_id,
             "value": "New value",
         }
@@ -1340,10 +1341,9 @@ class NormalActionsTest(BaseAction):
     def test_muted_users_events(self) -> None:
         muted_user = self.example_user("othello")
         events = self.verify_action(
-            lambda: do_mute_user(self.user_profile, muted_user), num_events=2
+            lambda: do_mute_user(self.user_profile, muted_user), num_events=1
         )
-        check_update_message_flags_add("events[0]", events[0])
-        check_muted_users("events[1]", events[1])
+        check_muted_users("events[0]", events[0])
 
         mute_object = get_mute_object(self.user_profile, muted_user)
         assert mute_object is not None
@@ -1766,9 +1766,11 @@ class NormalActionsTest(BaseAction):
         events = self.verify_action(
             lambda: do_change_realm_plan_type(
                 realm, Realm.PLAN_TYPE_LIMITED, acting_user=self.user_profile
-            )
+            ),
+            num_events=2,
         )
-        check_realm_update("events[0]", events[0], "plan_type")
+        check_realm_update("events[0]", events[0], "enable_spectator_access")
+        check_realm_update("events[1]", events[1], "plan_type")
 
         state_data = fetch_initial_state_data(self.user_profile)
         self.assertEqual(state_data["realm_plan_type"], Realm.PLAN_TYPE_LIMITED)
@@ -1784,7 +1786,9 @@ class NormalActionsTest(BaseAction):
         check_realm_emoji_update("events[0]", events[0])
 
         events = self.verify_action(
-            lambda: do_remove_realm_emoji(self.user_profile.realm, "my_emoji")
+            lambda: do_remove_realm_emoji(
+                self.user_profile.realm, "my_emoji", acting_user=self.user_profile
+            )
         )
         check_realm_emoji_update("events[0]", events[0])
 
@@ -1793,7 +1797,8 @@ class NormalActionsTest(BaseAction):
         url = "https://realm.com/my_realm_filter/%(id)s"
 
         events = self.verify_action(
-            lambda: do_add_linkifier(self.user_profile.realm, regex, url), num_events=2
+            lambda: do_add_linkifier(self.user_profile.realm, regex, url, acting_user=None),
+            num_events=2,
         )
         check_realm_linkifiers("events[0]", events[0])
         check_realm_filters("events[1]", events[1])
@@ -1801,14 +1806,17 @@ class NormalActionsTest(BaseAction):
         regex = "#(?P<id>[0-9]+)"
         linkifier_id = events[0]["realm_linkifiers"][0]["id"]
         events = self.verify_action(
-            lambda: do_update_linkifier(self.user_profile.realm, linkifier_id, regex, url),
+            lambda: do_update_linkifier(
+                self.user_profile.realm, linkifier_id, regex, url, acting_user=None
+            ),
             num_events=2,
         )
         check_realm_linkifiers("events[0]", events[0])
         check_realm_filters("events[1]", events[1])
 
         events = self.verify_action(
-            lambda: do_remove_linkifier(self.user_profile.realm, regex), num_events=2
+            lambda: do_remove_linkifier(self.user_profile.realm, regex, acting_user=None),
+            num_events=2,
         )
         check_realm_linkifiers("events[0]", events[0])
         check_realm_filters("events[1]", events[1])
@@ -2214,9 +2222,9 @@ class NormalActionsTest(BaseAction):
             nonlocal uri
             result = self.client_post("/json/user_uploads", {"file": fp})
 
-            self.assert_json_success(result)
-            self.assertIn("uri", result.json())
-            uri = result.json()["uri"]
+            response_dict = self.assert_json_success(result)
+            self.assertIn("uri", response_dict)
+            uri = response_dict["uri"]
             base = "/user_uploads/"
             self.assertEqual(base, uri[: len(base)])
 
@@ -2678,7 +2686,7 @@ class SubscribeActionTest(BaseAction):
         # Now remove the user himself, to test the 'remove' event flow
         action = lambda: bulk_remove_subscriptions(realm, [hamlet], [stream], acting_user=None)
         events = self.verify_action(
-            action, include_subscribers=include_subscribers, include_streams=False, num_events=2
+            action, include_subscribers=include_subscribers, include_streams=False, num_events=1
         )
         check_subscription_remove("events[0]", events[0])
         self.assert_length(events[0]["subscriptions"], 1)
@@ -2744,6 +2752,40 @@ class SubscribeActionTest(BaseAction):
         check_stream_update("events[0]", events[0])
         check_message("events[1]", events[1])
 
+        # Update stream privacy - make stream public
+        self.user_profile = self.example_user("cordelia")
+        action = lambda: do_change_stream_permission(
+            stream,
+            invite_only=False,
+            history_public_to_subscribers=True,
+            is_web_public=False,
+            acting_user=self.example_user("hamlet"),
+        )
+        events = self.verify_action(action, include_subscribers=include_subscribers, num_events=2)
+        check_stream_create("events[0]", events[0])
+        check_subscription_peer_add("events[1]", events[1])
+
+        do_change_stream_permission(
+            stream,
+            invite_only=True,
+            history_public_to_subscribers=True,
+            is_web_public=False,
+            acting_user=self.example_user("hamlet"),
+        )
+        self.subscribe(self.example_user("cordelia"), stream.name)
+        self.unsubscribe(self.example_user("cordelia"), stream.name)
+        action = lambda: do_change_stream_permission(
+            stream,
+            invite_only=False,
+            history_public_to_subscribers=True,
+            is_web_public=False,
+            acting_user=self.example_user("hamlet"),
+        )
+        events = self.verify_action(
+            action, include_subscribers=include_subscribers, num_events=2, include_streams=False
+        )
+
+        self.user_profile = self.example_user("hamlet")
         # Update stream stream_post_policy property
         action = lambda: do_change_stream_post_policy(
             stream, Stream.STREAM_POST_POLICY_ADMINS, acting_user=self.example_user("hamlet")

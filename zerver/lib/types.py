@@ -33,6 +33,11 @@ class ProfileDataElement(ProfileDataElementBase):
     rendered_value: Optional[str]
 
 
+class ProfileDataElementUpdateDict(TypedDict):
+    id: int
+    value: ProfileDataElementValue
+
+
 ProfileData = List[ProfileDataElement]
 
 FieldElement = Tuple[int, Promise, Validator[ProfileDataElementValue], Callable[[Any], Any], str]
@@ -68,12 +73,22 @@ class SAMLIdPConfigDict(TypedDict, total=False):
     attr_username: str
     attr_email: str
     attr_org_membership: str
+    auto_signup: bool
     display_name: str
     display_icon: str
     limit_to_subdomains: List[str]
     extra_attrs: List[str]
     x509cert: str
     x509cert_path: str
+
+
+class OIDCIdPConfigDict(TypedDict, total=False):
+    oidc_url: str
+    display_name: str
+    display_icon: Optional[str]
+    client_id: str
+    secret: Optional[str]
+    auto_signup: bool
 
 
 class UnspecifiedValue:
@@ -166,7 +181,6 @@ class RawSubscriptionDict(TypedDict):
     pin_to_top: bool
     push_notifications: Optional[bool]
     recipient_id: int
-    role: int
     wildcard_mentions_notify: Optional[bool]
 
 
@@ -196,7 +210,6 @@ class SubscriptionStreamDict(TypedDict):
     pin_to_top: bool
     push_notifications: Optional[bool]
     rendered_description: str
-    role: int
     stream_id: int
     stream_post_policy: int
     stream_weekly_traffic: Optional[int]
@@ -221,6 +234,48 @@ class NeverSubscribedStreamDict(TypedDict):
     subscribers: NotRequired[List[int]]
 
 
+class APIStreamDict(TypedDict):
+    """Stream information provided to Zulip clients as a dictionary via API.
+    It should contain all the fields specified in `zerver.models.Stream.API_FIELDS`
+    with few exceptions and possible additional fields.
+    """
+
+    date_created: int
+    description: str
+    first_message_id: Optional[int]
+    history_public_to_subscribers: bool
+    invite_only: bool
+    is_web_public: bool
+    message_retention_days: Optional[int]
+    name: str
+    rendered_description: str
+    stream_id: int  # `stream_id`` represents `id` of the `Stream` object in `API_FIELDS`
+    stream_post_policy: int
+    # Computed fields not specified in `Stream.API_FIELDS`
+    is_announcement_only: bool
+    is_default: NotRequired[bool]
+
+
+class APISubscriptionDict(APIStreamDict):
+    """Similar to StreamClientDict, it should contain all the fields specified in
+    `zerver.models.Subscription.API_FIELDS` and several additional fields.
+    """
+
+    audible_notifications: Optional[bool]
+    color: str
+    desktop_notifications: Optional[bool]
+    email_notifications: Optional[bool]
+    is_muted: bool
+    pin_to_top: bool
+    push_notifications: Optional[bool]
+    wildcard_mentions_notify: Optional[bool]
+    # Computed fields not specified in `Subscription.API_FIELDS`
+    email_address: str
+    in_home_view: bool
+    stream_weekly_traffic: Optional[int]
+    subscribers: List[int]
+
+
 @dataclass
 class SubscriptionInfo:
     subscriptions: List[SubscriptionStreamDict]
@@ -233,3 +288,9 @@ class RealmPlaygroundDict(TypedDict):
     name: str
     pygments_language: str
     url_prefix: str
+
+
+class SCIMConfigDict(TypedDict):
+    bearer_token: str
+    scim_client_name: str
+    name_formatted_included: bool

@@ -1,5 +1,5 @@
 import datetime
-from typing import Dict, List, Sequence, Union
+from typing import Dict, List, Sequence, TypedDict
 
 import django.db.utils
 from django.db import transaction
@@ -19,6 +19,12 @@ from zerver.models import (
 from zerver.tornado.django_api import send_event
 
 
+class MemberGroupUserDict(TypedDict):
+    id: int
+    role: int
+    date_joined: datetime.datetime
+
+
 @transaction.atomic(savepoint=False)
 def update_users_in_full_members_system_group(
     realm: Realm, affected_user_ids: Sequence[int] = []
@@ -30,8 +36,8 @@ def update_users_in_full_members_system_group(
         realm=realm, name="@role:members", is_system_group=True
     )
 
-    full_member_group_users: List[Dict[str, Union[int, datetime.datetime]]] = list()
-    member_group_users: List[Dict[str, Union[int, datetime.datetime]]] = list()
+    full_member_group_users: List[MemberGroupUserDict] = list()
+    member_group_users: List[MemberGroupUserDict] = list()
 
     if affected_user_ids:
         full_member_group_users = list(
@@ -52,7 +58,7 @@ def update_users_in_full_members_system_group(
             members_system_group.direct_members.all().values("id", "role", "date_joined")
         )
 
-    def is_provisional_member(user: Dict[str, Union[int, datetime.datetime]]) -> bool:
+    def is_provisional_member(user: MemberGroupUserDict) -> bool:
         diff = (timezone_now() - user["date_joined"]).days
         if diff < realm.waiting_period_threshold:
             return True
@@ -89,7 +95,7 @@ def promote_new_full_members() -> None:
 
 
 def do_send_create_user_group_event(
-    user_group: UserGroup, members: List[UserProfile], subgroups: Sequence[UserGroup] = []
+    user_group: UserGroup, members: List[UserProfile], direct_subgroups: Sequence[UserGroup] = []
 ) -> None:
     event = dict(
         type="user_group",
@@ -100,7 +106,7 @@ def do_send_create_user_group_event(
             description=user_group.description,
             id=user_group.id,
             is_system_group=user_group.is_system_group,
-            subgroups=[subgroup.id for subgroup in subgroups],
+            direct_subgroup_ids=[direct_subgroup.id for direct_subgroup in direct_subgroups],
         ),
     )
     send_event(user_group.realm, event, active_user_ids(user_group.realm_id))
@@ -169,7 +175,7 @@ def do_send_subgroups_update_event(
     event_name: str, user_group: UserGroup, subgroup_ids: List[int]
 ) -> None:
     event = dict(
-        type="user_group", op=event_name, group_id=user_group.id, subgroup_ids=subgroup_ids
+        type="user_group", op=event_name, group_id=user_group.id, direct_subgroup_ids=subgroup_ids
     )
     transaction.on_commit(
         lambda: send_event(user_group.realm, event, active_user_ids(user_group.realm_id))

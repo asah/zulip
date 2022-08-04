@@ -1,10 +1,5 @@
 # Public access option
 
-!!! warn ""
-
-    This feature is in beta. Contact [support@zulip.com](mailto:support@zulip.com) to
-    enable it for your Zulip Cloud organization.
-
 {!web-public-streams-intro.md!}
 
 Web-public streams are indicated with a globe (<i class="zulip-icon zulip-icon-globe"></i>) icon.
@@ -37,17 +32,16 @@ communities such as open-source projects and research communities.
 ### Enable or disable web-public streams
 
 !!! warn ""
-    Self-hosted Zulip servers must enable support for web-public streams by setting
-    `WEB_PUBLIC_STREAMS_ENABLED = True` in their [server
-    settings](https://zulip.readthedocs.io/en/latest/production/settings.html)
-    prior to proceeding.
+    Self-hosted Zulip servers must enable support for web-public streams in their
+    [server settings](https://zulip.readthedocs.io/en/latest/production/settings.html)
+    by setting `WEB_PUBLIC_STREAMS_ENABLED = True` prior to proceeding.
 
 {start_tabs}
 
 {settings_tab|organization-permissions}
 
-2. Under **Stream permissions**, toggle the checkbox labeled "Allow
-   creating web-public streams (visible to anyone on the Internet)".
+1. Under **Stream permissions**, toggle the checkbox labeled **Allow
+   creating web-public streams (visible to anyone on the Internet)**.
 
 {end_tabs}
 
@@ -57,17 +51,17 @@ communities such as open-source projects and research communities.
 
 {settings_tab|organization-permissions}
 
-2. Under **Stream permissions**, make sure the checkbox labeled "Allow
-   creating web-public streams (visible to anyone on the Internet)" is
+1. Under **Stream permissions**, make sure the checkbox labeled **Allow
+   creating web-public streams (visible to anyone on the Internet)** is
    checked.
 
-3. Under **Who can create web-public streams?**, select the option you prefer.
+1. Under **Who can create web-public streams?**, select the option you prefer.
 
 {end_tabs}
 
 !!! tip ""
     See [Managing abuse](#managing-abuse) to learn why only
-    trusted roles like Moderators and Administrators can create web-public streams.
+    trusted roles like moderators and administrators can create web-public streams.
 
 ## Creating a web-public stream
 

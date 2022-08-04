@@ -36,6 +36,7 @@ class ErrorCode(Enum):
     PASSWORD_AUTH_DISABLED = auto()
     PASSWORD_RESET_REQUIRED = auto()
     AUTHENTICATION_FAILED = auto()
+    UNAUTHORIZED = auto()
 
 
 class JsonableError(Exception):
@@ -122,6 +123,28 @@ class JsonableError(Exception):
 
     def __str__(self) -> str:
         return self.msg
+
+
+class UnauthorizedError(JsonableError):
+    code: ErrorCode = ErrorCode.UNAUTHORIZED
+    http_status_code: int = 401
+
+    def __init__(self, msg: Optional[str] = None, www_authenticate: Optional[str] = None) -> None:
+        if msg is None:
+            msg = _("Not logged in: API authentication or user session required")
+        super().__init__(msg)
+        if www_authenticate is None:
+            self.www_authenticate = 'Basic realm="zulip"'
+        elif www_authenticate == "session":
+            self.www_authenticate = 'Session realm="zulip"'
+        else:
+            raise AssertionError("Invalid www_authenticate value!")
+
+    @property
+    def extra_headers(self) -> Dict[str, Any]:
+        extra_headers_dict = super().extra_headers
+        extra_headers_dict["WWW-Authenticate"] = self.www_authenticate
+        return extra_headers_dict
 
 
 class StreamDoesNotExistError(JsonableError):
@@ -239,17 +262,6 @@ class OrganizationOwnerRequired(JsonableError):
     @staticmethod
     def msg_format() -> str:
         return _("Must be an organization owner")
-
-
-class StreamAdministratorRequired(JsonableError):
-    code: ErrorCode = ErrorCode.UNAUTHORIZED_PRINCIPAL
-
-    def __init__(self) -> None:
-        pass
-
-    @staticmethod
-    def msg_format() -> str:
-        return _("Must be an organization or stream administrator")
 
 
 class AuthenticationFailedError(JsonableError):
@@ -459,4 +471,4 @@ class ValidationFailureError(JsonableError):
 
     def __init__(self, error: ValidationError) -> None:
         super().__init__(error.messages[0])
-        self.errors = dict(error)
+        self.errors = error.message_dict

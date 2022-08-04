@@ -216,7 +216,9 @@ def get_events() -> Dict[str, object]:
     profile = helpers.example_user("iago")
     helpers.subscribe(profile, "Verona")
     client = Client.objects.create(name="curl-test-client-1")
-    response = do_events_register(profile, client, event_types=["message", "realm_emoji"])
+    response = do_events_register(
+        profile, profile.realm, client, event_types=["message", "realm_emoji"]
+    )
     helpers.send_stream_message(helpers.example_user("hamlet"), "Verona")
     return {
         "queue_id": response["queue_id"],
@@ -228,7 +230,7 @@ def get_events() -> Dict[str, object]:
 def delete_event_queue() -> Dict[str, object]:
     profile = helpers.example_user("iago")
     client = Client.objects.create(name="curl-test-client-2")
-    response = do_events_register(profile, client, event_types=["message"])
+    response = do_events_register(profile, profile.realm, client, event_types=["message"])
     return {
         "queue_id": response["queue_id"],
         "last_event_id": response["last_event_id"],
@@ -270,7 +272,10 @@ def get_temp_user_group_id() -> Dict[str, object]:
 @openapi_param_value_generator(["/realm/filters/{filter_id}:delete"])
 def remove_realm_filters() -> Dict[str, object]:
     filter_id = do_add_linkifier(
-        get_realm("zulip"), "#(?P<id>[0-9]{2,8})", "https://github.com/zulip/zulip/pull/%(id)s"
+        get_realm("zulip"),
+        "#(?P<id>[0-9]{2,8})",
+        "https://github.com/zulip/zulip/pull/%(id)s",
+        acting_user=None,
     )
     return {
         "filter_id": filter_id,

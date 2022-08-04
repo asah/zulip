@@ -1,7 +1,7 @@
 # Create a stream
 
 By default, all users other than guests can create streams. Administrators can
-[restrict the ability to create a stream](/help/stream-permissions) to specific
+[restrict the ability to create a stream](/help/configure-who-can-create-streams) to specific
 [roles](/help/roles-and-permissions).
 
 If you are an administrator setting up streams for the first time, check out our
@@ -39,8 +39,8 @@ There are several parameters you can set while creating a stream. All but
 * **Who can access the stream?**: See [Stream permissions](/help/stream-permissions).
 
 * **Announce stream**: Posts a message to `#general` advertising the new
-  stream. Organization administrators can change the stream used for stream
-  creation announcements.
+  stream. Organization administrators can change the stream used for [stream
+  creation announcements](/help/configure-notification-bot#new-stream-announcements).
 
 * **Who can post to the stream?**: See [Stream permissions](/help/stream-permissions).
 

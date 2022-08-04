@@ -1,5 +1,6 @@
 import logging
 import re
+from email.headerregistry import Address
 from typing import Any, Dict, List, Optional, Tuple
 
 import DNS
@@ -13,6 +14,7 @@ from django.core.validators import validate_email
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils.http import urlsafe_base64_encode
+from django.utils.translation import get_language
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 from markupsafe import Markup as mark_safe
@@ -29,6 +31,7 @@ from zerver.lib.exceptions import JsonableError, RateLimited
 from zerver.lib.name_restrictions import is_disposable_domain, is_reserved_subdomain
 from zerver.lib.rate_limiter import RateLimitedObject
 from zerver.lib.send_email import FromAddress, send_email
+from zerver.lib.soft_deactivation import queue_soft_reactivation
 from zerver.lib.subdomains import get_subdomain, is_root_domain_available
 from zerver.lib.users import check_full_name
 from zerver.models import (
@@ -37,7 +40,6 @@ from zerver.models import (
     EmailContainsPlusError,
     Realm,
     UserProfile,
-    email_to_domain,
     get_realm,
     get_user_by_delivery_email,
     is_cross_realm_bot_email,
@@ -66,11 +68,11 @@ PASSWORD_TOO_WEAK_ERROR = gettext_lazy("The password is too weak.")
 
 def email_is_not_mit_mailing_list(email: str) -> None:
     """Prevent MIT mailing lists from signing up for Zulip"""
-    if "@mit.edu" in email:
-        username = email.rsplit("@", 1)[0]
+    address = Address(addr_spec=email)
+    if address.domain == "mit.edu":
         # Check whether the user exists and can get mail.
         try:
-            DNS.dnslookup(f"{username}.pobox.ns.athena.mit.edu", DNS.Type.TXT)
+            DNS.dnslookup(f"{address.username}.pobox.ns.athena.mit.edu", DNS.Type.TXT)
         except DNS.Base.ServerError as e:
             if e.rcode == DNS.Status.NXDOMAIN:
                 # This error is mark_safe only because 1. it needs to render HTML
@@ -238,7 +240,7 @@ def email_not_system_bot(email: str) -> None:
 
 
 def email_is_not_disposable(email: str) -> None:
-    if is_disposable_domain(email_to_domain(email)):
+    if is_disposable_domain(Address(addr_spec=email).domain):
         raise ValidationError(_("Please use your real email address."))
 
 
@@ -272,6 +274,7 @@ class LoggingSetPasswordForm(SetPasswordForm):
         return new_password
 
     def save(self, commit: bool = True) -> UserProfile:
+        assert isinstance(self.user, UserProfile)
         do_change_password(self.user, self.cleaned_data["new_password1"], commit=commit)
         return self.user
 
@@ -294,7 +297,7 @@ class ZulipPasswordResetForm(PasswordResetForm):
         use_https: bool = False,
         token_generator: PasswordResetTokenGenerator = default_token_generator,
         from_email: Optional[str] = None,
-        request: HttpRequest = None,
+        request: Optional[HttpRequest] = None,
         html_email_template_name: Optional[str] = None,
         extra_email_context: Optional[Dict[str, Any]] = None,
     ) -> None:
@@ -310,6 +313,9 @@ class ZulipPasswordResetForm(PasswordResetForm):
         are an artifact of using Django's password reset framework).
         """
         email = self.cleaned_data["email"]
+        # The form is only used in zerver.views.auth.password_rest, we know that
+        # the request must not be None
+        assert request is not None
 
         realm = get_realm(get_subdomain(request))
 
@@ -360,6 +366,7 @@ class ZulipPasswordResetForm(PasswordResetForm):
         if user is not None:
             context["active_account_in_realm"] = True
             context["reset_url"] = generate_password_reset_url(user, token_generator)
+            queue_soft_reactivation(user.id)
             send_email(
                 "zerver/emails/password_reset",
                 to_user_ids=[user.id],
@@ -376,7 +383,8 @@ class ZulipPasswordResetForm(PasswordResetForm):
             )
             if active_accounts_in_other_realms:
                 context["active_accounts_in_other_realms"] = active_accounts_in_other_realms
-            language = request.LANGUAGE_CODE
+            language = get_language()
+
             send_email(
                 "zerver/emails/password_reset",
                 to_emails=[email],
@@ -420,6 +428,7 @@ class OurAuthenticationForm(AuthenticationForm):
         password = self.cleaned_data.get("password")
 
         if username is not None and password:
+            assert self.request is not None
             subdomain = get_subdomain(self.request)
             realm = get_realm(subdomain)
 
@@ -502,7 +511,7 @@ class AuthenticationTokenForm(TwoFactorAuthenticationTokenForm):
 
 
 class MultiEmailField(forms.Field):
-    def to_python(self, emails: str) -> List[str]:
+    def to_python(self, emails: Optional[str]) -> List[str]:
         """Normalize data to a list of strings."""
         if not emails:
             return []

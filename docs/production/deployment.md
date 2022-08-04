@@ -327,14 +327,20 @@ HTTP as follows:
 
 #### Configuring Zulip to trust proxies
 
-Before placing Zulip behind a reverse proxy, it needs to be configured to trust
-the client IP addresses that the proxy reports. This is important to have
-accurate IP addresses in server logs, as well as in notification emails which
-are sent to end users.
+Before placing Zulip behind a reverse proxy, it needs to be configured
+to trust the client IP addresses that the proxy reports via the
+`X-Forwarded-For` header. This is important to have accurate IP
+addresses in server logs, as well as in notification emails which are
+sent to end users. Zulip doesn't default to trusting all
+`X-Forwarded-For` headers, because doing so would allow clients to
+spoof any IP address; we specify which IP addresses are the Zulip
+server's incoming proxies, so we know how much of the
+`X-Forwarded-For` header to trust.
 
 1. Determine the IP addresses of all reverse proxies you are setting up, as seen
    from the Zulip host. Depending on your network setup, these may not be the
-   same as the public IP addresses of the reverse proxies.
+   same as the public IP addresses of the reverse proxies. These can also be IP
+   address ranges, as expressed in CIDR notation.
 
 1. Add the following block to `/etc/zulip/zulip.conf`.
 
@@ -354,43 +360,53 @@ are sent to end users.
 
 ### nginx configuration
 
-For `nginx` configuration, there's two things you need to set up:
+Below is a working example of a full nginx configuration. It assumes
+that your Zulip server sits at `https://10.10.10.10:443`; see
+[above](#configuring-zulip-to-allow-http) to switch to HTTP.
 
-- The root `nginx.conf` file. We recommend using
-  `/etc/nginx/nginx.conf` from your Zulip server for our recommended
-  settings. E.g. if you don't set `client_max_body_size`, it won't be
-  possible to upload large files to your Zulip server.
-- The `nginx` site-specific configuration (in
-  `/etc/nginx/sites-available`) for the Zulip app. The following
-  example is a good starting point:
+1. Follow the instructions to [configure Zulip to trust
+   proxies](#configuring-zulip-to-trust-proxies).
 
-```nginx
-server {
-        listen                  443 ssl http2;
-        listen                  [::]:443 ssl http2;
-        server_name             zulip.example.net;
+1. Configure the root `nginx.conf` file. We recommend using
+   `/etc/nginx/nginx.conf` from your Zulip server for our recommended
+   settings. E.g. if you don't set `client_max_body_size`, it won't be
+   possible to upload large files to your Zulip server.
 
-        ssl_certificate         /path/to/fullchain-cert.pem;
-        ssl_certificate_key     /path/to/private-key.pem;
+1. Configure the `nginx` site-specific configuration (in
+   `/etc/nginx/sites-available`) for the Zulip app. The following
+   example is a good starting point:
 
-        location / {
-                proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header        Host $http_host;
-                proxy_http_version      1.1;
-                proxy_buffering         off;
-                proxy_read_timeout      20m;
-                proxy_pass              https://zulip-upstream-host;
-        }
-}
-```
+   ```nginx
+   server {
+           listen 80;
+           listen [::]:80;
+           location / {
+                   return 301 https://$host$request_uri;
+           }
+   }
 
-Don't forget to update `server_name`, `ssl_certificate`,
-`ssl_certificate_key` and `proxy_pass` with the appropriate values for
-your installation.
+   server {
+           listen                  443 ssl http2;
+           listen                  [::]:443 ssl http2;
+           server_name             zulip.example.com;
 
-On the Zulip side, you will need to add the `nginx` server IP as a trusted
-reverse proxy. Follow the instructions to [configure Zulip to trust
-proxies](#configuring-zulip-to-trust-proxies).
+           ssl_certificate         /etc/letsencrypt/live/zulip.example.com/fullchain.pem;
+           ssl_certificate_key     /etc/letsencrypt/live/zulip.example.com/privkey.pem;
+
+           location / {
+                   proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+                   proxy_set_header        Host $http_host;
+                   proxy_http_version      1.1;
+                   proxy_buffering         off;
+                   proxy_read_timeout      20m;
+                   proxy_pass              https://10.10.10.10:443;
+           }
+   }
+   ```
+
+   Don't forget to update `server_name`, `ssl_certificate`,
+   `ssl_certificate_key` and `proxy_pass` with the appropriate values
+   for your deployment.
 
 [nginx-proxy-longpolling-config]: https://github.com/zulip/zulip/blob/main/puppet/zulip/files/nginx/zulip-include-common/proxy_longpolling
 [standalone.pp]: https://github.com/zulip/zulip/blob/main/puppet/zulip/manifests/profile/standalone.pp
@@ -399,26 +415,24 @@ proxies](#configuring-zulip-to-trust-proxies).
 ### Apache2 configuration
 
 Below is a working example of a full Apache2 configuration. It assumes
-that your Zulip sits at `http://localhost:5080`. You first need to
-make the following changes in two configuration files.
+that your Zulip server sits at `https://internal.zulip.hostname:443`.
+Note that if you wish to use SSL to connect to the Zulip server,
+Apache requires you use the hostname, not the IP address; see
+[above](#configuring-zulip-to-allow-http) to switch to HTTP.
 
-1. Follow the instructions for [Configure Zulip to allow HTTP](#configuring-zulip-to-allow-http).
+1. Follow the instructions to [configure Zulip to trust
+   proxies](#configuring-zulip-to-trust-proxies).
 
-2. Add the following to `/etc/zulip/settings.py`:
+1. Set `USE_X_FORWARDED_HOST = True` in `/etc/zulip/settings.py` and
+   restart Zulip.
 
-   ```python
-   EXTERNAL_HOST = 'zulip.example.com'
-   ALLOWED_HOSTS = ['zulip.example.com', '127.0.0.1']
-   USE_X_FORWARDED_HOST = True
+1. Enable some required Apache modules:
+
+   ```
+   a2enmod ssl proxy proxy_http headers rewrite
    ```
 
-3. Restart your Zulip server with `/home/zulip/deployments/current/scripts/restart-server`.
-
-4. Follow the instructions to [configure Zulip to trust
-   proxies](#configuring-zulip-to-trust-proxies). For this example, the reverse
-   proxy IP would be `127.0.0.1`.
-
-5. Create an Apache2 virtual host configuration file, similar to the
+1. Create an Apache2 virtual host configuration file, similar to the
    following. Place it the appropriate path for your Apache2
    installation and enable it (E.g. if you use Debian or Ubuntu, then
    place it in `/etc/apache2/sites-available/zulip.example.com.conf`
@@ -436,22 +450,20 @@ make the following changes in two configuration files.
      ServerName zulip.example.com
 
      RequestHeader set "X-Forwarded-Proto" expr=%{REQUEST_SCHEME}
-     RequestHeader set "X-Forwarded-SSL" expr=%{HTTPS}
 
      RewriteEngine On
-     RewriteRule /(.*)           http://localhost:5080/$1 [P,L]
+     RewriteRule /(.*)           https://internal.zulip.hostname:443/$1 [P,L]
 
      <Location />
        Require all granted
-       ProxyPass  http://localhost:5080/  timeout=300
-       ProxyPassReverse  http://localhost:5080/
-       ProxyPassReverseCookieDomain  127.0.0.1  zulip.example.com
+       ProxyPass https://internal.zulip.hostname:443/ timeout=1200
      </Location>
 
      SSLEngine on
      SSLProxyEngine on
      SSLCertificateFile /etc/letsencrypt/live/zulip.example.com/fullchain.pem
      SSLCertificateKeyFile /etc/letsencrypt/live/zulip.example.com/privkey.pem
+     # This file can be found in ~zulip/deployments/current/puppet/zulip/files/nginx/dhparam.pem
      SSLOpenSSLConfCmd DHParameters "/etc/nginx/dhparam.pem"
      SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
      SSLCipherSuite ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384
@@ -461,24 +473,38 @@ make the following changes in two configuration files.
    </VirtualHost>
    ```
 
+   Don't forget to update `ServerName`, `RewriteRule`, `ProxyPass`,
+   `SSLCertificateFile`, and `SSLCertificateKeyFile` as are
+   appropriate for your deployment.
+
 ### HAProxy configuration
 
-If you want to use HAProxy with Zulip, this `backend` config is a good
-place to start.
+Below is a working example of a HAProxy configuration. It assumes that
+your Zulip server sits at `https://10.10.10.10:443`see
+[above](#configuring-zulip-to-allow-http) to switch to HTTP.
 
-```text
-backend zulip
-    mode http
-    balance leastconn
-    reqadd X-Forwarded-Proto:\ https
-    server zulip 10.10.10.10:80 check
-```
+1. Follow the instructions to [configure Zulip to trust
+   proxies](#configuring-zulip-to-trust-proxies).
 
-Since this configuration uses the `http` mode, you will also need to
-[configure Zulip to allow HTTP](#configuring-zulip-to-allow-http) as
-described above. Additionally, you will need to [add the the HAProxy server IP
-address as a trusted load balancer](#configuring-zulip-to-trust-proxies)
-to have Zulip respect the addresses in `X-Forwarded-For` headers.
+1. Configure HAProxy. The below is a minimal `frontend` and `backend`
+   configuration:
+
+   ```text
+   frontend zulip
+       mode http
+       bind *:80
+       bind *:443 ssl crt /etc/ssl/private/zulip-combined.crt
+       http-request redirect scheme https code 301 unless { ssl_fc }
+       default_backend zulip
+
+   backend zulip
+       mode http
+       timeout server 20m
+       server zulip 10.10.10.10:443 check ssl ca-file /etc/ssl/certs/ca-certificates.crt
+   ```
+
+   Don't forget to update `bind *:443 ssl crt` and `server` as is
+   appropriate for your deployment.
 
 ### Other proxies
 
@@ -494,7 +520,13 @@ things you need to be careful about when configuring it:
    has the actual IP addresses of clients, not the IP address of the
    proxy server.
 
-2. Ensure your proxy doesn't interfere with Zulip's use of
+1. Configure your proxy to pass along the `Host:` header as was sent
+   from the client, not the internal hostname as seen by the proxy.
+   If this is not possible, you can set `USE_X_FORWARDED_HOST = True`
+   in `/etc/zulip/settings.py`, and pass the client's `Host` header to
+   Zulip in an `X-Forwarded-Host` header.
+
+1. Ensure your proxy doesn't interfere with Zulip's use of
    long-polling for real-time push from the server to your users'
    browsers. This [nginx code snippet][nginx-proxy-longpolling-config]
    does this.
@@ -507,7 +539,7 @@ things you need to be careful about when configuring it:
    - `proxy_buffering off`. If you don't do this, your `nginx` proxy may
      return occasional 502 errors to clients using Zulip's events API.
 
-3. The other tricky failure mode we've seen with `nginx` reverse
+1. The other tricky failure mode we've seen with `nginx` reverse
    proxies is that they can load-balance between the IPv4 and IPv6
    addresses for a given hostname. This can result in mysterious errors
    that can be quite difficult to debug. Be sure to declare your
@@ -522,8 +554,8 @@ Zulip's configuration allows for [warm standby database
 replicas][warm-standby] as a disaster recovery solution; see the
 linked PostgreSQL documentation for details on this type of
 deployment. Zulip's configuration builds on top of `wal-g`, our
-[database backup solution][wal-g], and thus requires that it be
-configured for the primary and all secondary warm standby replicas.
+[streaming database backup solution][wal-g], and thus requires that it
+be configured for the primary and all secondary warm standby replicas.
 
 In addition to having `wal-g` backups configured, warm standby
 replicas should configure the hostname of their primary replica, and
@@ -659,10 +691,6 @@ all at once. This decreases the number of 502's served to clients, at
 the cost of slightly increased memory usage, and the possibility that
 different requests will be served by different versions of the code.
 
-#### `uwsgi_buffer_size`
-
-Override the default uwsgi buffer size of 8192.
-
 #### `uwsgi_listen_backlog_limit`
 
 Override the default uwsgi backlog of 128 connections.
@@ -751,8 +779,9 @@ configured to consume; defaults to 1/8th of the total server memory.
 
 #### `ips`
 
-Comma-separated list of IP addresses or netmasks of external
-load balancers whose `X-Forwarded-For` should be respected.
+Comma-separated list of IP addresses or netmasks of external load balancers
+whose `X-Forwarded-For` should be respected. These can be individual IP
+addresses, or CIDR IP address ranges.
 
 ### `[http_proxy]`
 

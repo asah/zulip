@@ -15,8 +15,14 @@ from zerver.actions.users import do_change_user_role
 from zerver.lib.event_schema import check_restart_event
 from zerver.lib.events import fetch_initial_state_data
 from zerver.lib.exceptions import AccessDeniedError
+from zerver.lib.request import RequestVariableMissingError
 from zerver.lib.test_classes import ZulipTestCase
-from zerver.lib.test_helpers import HostRequestMock, queries_captured, stub_event_queue_user_events
+from zerver.lib.test_helpers import (
+    HostRequestMock,
+    dummy_handler,
+    queries_captured,
+    stub_event_queue_user_events,
+)
 from zerver.lib.users import get_api_key, get_raw_user_data
 from zerver.models import (
     Realm,
@@ -79,8 +85,7 @@ class EventsEndpointTest(ZulipTestCase):
                 user, "/json/register", dict(event_types=orjson.dumps([event_type]).decode())
             )
 
-        self.assert_json_success(result)
-        result_dict = result.json()
+        result_dict = self.assert_json_success(result)
         self.assertEqual(result_dict["last_event_id"], -1)
         self.assertEqual(result_dict["queue_id"], "15:11")
 
@@ -93,8 +98,7 @@ class EventsEndpointTest(ZulipTestCase):
                 user, "/json/register", dict(event_types=orjson.dumps([event_type]).decode())
             )
 
-        self.assert_json_success(result)
-        result_dict = result.json()
+        result_dict = self.assert_json_success(result)
         self.assertEqual(result_dict["last_event_id"], 6)
         self.assertEqual(result_dict["queue_id"], "15:12")
 
@@ -112,8 +116,7 @@ class EventsEndpointTest(ZulipTestCase):
                     fetch_event_types=orjson.dumps(["message"]).decode(),
                 ),
             )
-        self.assert_json_success(result)
-        result_dict = result.json()
+        result_dict = self.assert_json_success(result)
         self.assertEqual(result_dict["last_event_id"], 6)
         # Check that the message event types data is in there
         self.assertIn("max_message_id", result_dict)
@@ -132,8 +135,7 @@ class EventsEndpointTest(ZulipTestCase):
                     event_types=orjson.dumps(["message"]).decode(),
                 ),
             )
-        self.assert_json_success(result)
-        result_dict = result.json()
+        result_dict = self.assert_json_success(result)
         self.assertEqual(result_dict["last_event_id"], 6)
         # Check that we didn't fetch the messages data
         self.assertNotIn("max_message_id", result_dict)
@@ -142,6 +144,22 @@ class EventsEndpointTest(ZulipTestCase):
         self.assertIn("realm_emoji", result_dict)
         self.assertEqual(result_dict["realm_emoji"], [])
         self.assertEqual(result_dict["queue_id"], "15:13")
+
+    def test_events_register_spectators(self) -> None:
+        # Verify that POST /register works for spectators, but not for
+        # normal users.
+        with self.settings(WEB_PUBLIC_STREAMS_ENABLED=False):
+            result = self.client_post("/json/register", dict())
+            self.assert_json_error(
+                result,
+                "Not logged in: API authentication or user session required",
+                status_code=401,
+            )
+
+        result = self.client_post("/json/register", dict())
+        result_dict = self.assert_json_success(result)
+        self.assertEqual(result_dict["queue_id"], None)
+        self.assertEqual(result_dict["realm_uri"], "http://zulip.testserver")
 
     def test_events_register_endpoint_all_public_streams_access(self) -> None:
         guest_user = self.example_user("polonius")
@@ -187,18 +205,35 @@ class EventsEndpointTest(ZulipTestCase):
                 ),
             ).decode(),
         )
+        req = HostRequestMock(post_data)
+        req.META["REMOTE_ADDR"] = "127.0.0.1"
+        with self.assertRaises(RequestVariableMissingError) as context:
+            result = self.client_post_request("/notify_tornado", req)
+        self.assertEqual(str(context.exception), "Missing 'secret' argument")
+        self.assertEqual(context.exception.http_status_code, 400)
+
+        post_data["secret"] = "random"
         req = HostRequestMock(post_data, user_profile=None)
         req.META["REMOTE_ADDR"] = "127.0.0.1"
-        with self.assertRaises(AccessDeniedError) as context:
+        with self.assertRaises(AccessDeniedError) as access_denied_error:
             result = self.client_post_request("/notify_tornado", req)
-        self.assertEqual(str(context.exception), "Access denied")
-        self.assertEqual(context.exception.http_status_code, 403)
+        self.assertEqual(str(access_denied_error.exception), "Access denied")
+        self.assertEqual(access_denied_error.exception.http_status_code, 403)
 
+        assert settings.SHARED_SECRET is not None
         post_data["secret"] = settings.SHARED_SECRET
-        req = HostRequestMock(post_data, user_profile=None)
+        req = HostRequestMock(post_data, tornado_handler=dummy_handler)
         req.META["REMOTE_ADDR"] = "127.0.0.1"
         result = self.client_post_request("/notify_tornado", req)
         self.assert_json_success(result)
+
+        post_data = dict(secret=settings.SHARED_SECRET)
+        req = HostRequestMock(post_data, tornado_handler=dummy_handler)
+        req.META["REMOTE_ADDR"] = "127.0.0.1"
+        with self.assertRaises(RequestVariableMissingError) as context:
+            result = self.client_post_request("/notify_tornado", req)
+        self.assertEqual(str(context.exception), "Missing 'data' argument")
+        self.assertEqual(context.exception.http_status_code, 400)
 
 
 class GetEventsTest(ZulipTestCase):
@@ -208,7 +243,7 @@ class GetEventsTest(ZulipTestCase):
         user_profile: UserProfile,
         post_data: Dict[str, Any],
     ) -> HttpResponse:
-        request = HostRequestMock(post_data, user_profile)
+        request = HostRequestMock(post_data, user_profile, tornado_handler=dummy_handler)
         return view_func(request, user_profile)
 
     def test_get_events(self) -> None:
@@ -884,7 +919,9 @@ class RestartEventsTest(ZulipTestCase):
         post_data: Dict[str, Any],
         client_name: Optional[str] = None,
     ) -> HttpResponse:
-        request = HostRequestMock(post_data, user_profile, client_name=client_name)
+        request = HostRequestMock(
+            post_data, user_profile, client_name=client_name, tornado_handler=dummy_handler
+        )
         return view_func(request, user_profile)
 
     def test_restart(self) -> None:

@@ -78,8 +78,7 @@ export function set_focus(msg_type, opts) {
     }
 }
 
-// Show the compose box.
-function show_box(msg_type, opts) {
+function show_compose_box(msg_type, opts) {
     if (msg_type === "stream") {
         $("#private-message").hide();
         $("#stream-message").show();
@@ -111,10 +110,8 @@ function clear_box() {
     // TODO: Better encapsulate at-mention warnings.
     compose_validate.clear_topic_resolved_warning();
     compose_validate.clear_all_everyone_warnings();
-    compose_validate.clear_announce_warnings();
     compose.clear_private_stream_alert();
     compose_validate.set_user_acknowledged_all_everyone_flag(undefined);
-    compose_validate.set_user_acknowledged_announce_flag(undefined);
 
     clear_textarea();
     compose_validate.check_overflow_text();
@@ -340,7 +337,7 @@ export function start(msg_type, opts) {
     compose_state.set_message_type(msg_type);
 
     // Show either stream/topic fields or "You and" field.
-    show_box(msg_type, opts);
+    show_compose_box(msg_type, opts);
 
     // Show a warning if topic is resolved
     compose_validate.warn_if_topic_resolved(true);

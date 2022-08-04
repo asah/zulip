@@ -2,6 +2,7 @@ import os
 import sys
 import time
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 from urllib.parse import urljoin
 
@@ -9,7 +10,7 @@ from django.template.loaders import app_directories
 
 import zerver.lib.logging_util
 from scripts.lib.zulip_tools import get_tornado_ports
-from zerver.lib.db import TimeTrackingConnection
+from zerver.lib.db import TimeTrackingConnection, TimeTrackingCursor
 
 from .config import (
     DEPLOY_ROOT,
@@ -28,6 +29,7 @@ from .configured_settings import (
     AUTH_LDAP_SERVER_URI,
     AUTHENTICATION_BACKENDS,
     CAMO_URI,
+    CUSTOM_HOME_NOT_LOGGED_IN,
     DEBUG,
     DEBUG_ERROR_REPORTING,
     EMAIL_BACKEND,
@@ -38,7 +40,6 @@ from .configured_settings import (
     EXTERNAL_URI_SCHEME,
     EXTRA_INSTALLED_APPS,
     GOOGLE_OAUTH2_CLIENT_ID,
-    INVITATION_LINK_VALIDITY_DAYS,
     IS_DEV_DROPLET,
     LOCAL_UPLOADS_DIR,
     MEMCACHED_LOCATION,
@@ -144,17 +145,11 @@ LANGUAGE_CODE = "en-us"
 # to load the internationalization machinery.
 USE_I18N = True
 
-# If you set this to False, Django will not format dates, numbers and
-# calendars according to the current locale.
-USE_L10N = True
-
 # If you set this to False, Django will not use time-zone-aware datetimes.
 USE_TZ = True
 
 # this directory will be used to store logs for development environment
 DEVELOPMENT_LOG_DIRECTORY = os.path.join(DEPLOY_ROOT, "var", "log")
-# Make redirects work properly behind a reverse proxy
-USE_X_FORWARDED_HOST = True
 
 # Extend ALLOWED_HOSTS with localhost (needed to RPC to Tornado),
 ALLOWED_HOSTS += ["127.0.0.1", "localhost"]
@@ -165,27 +160,36 @@ ALLOWED_HOSTS += REALM_HOSTS.values()
 
 
 class TwoFactorLoader(app_directories.Loader):
-    def get_dirs(self) -> List[Union[bytes, str]]:
+    def get_dirs(self) -> List[Union[str, Path]]:
         dirs = super().get_dirs()
-        return [d for d in dirs if d.match("two_factor/*")]
+        # app_directories.Loader returns only a list of
+        # Path objects by calling get_app_template_dirs
+        two_factor_dirs: List[Union[str, Path]] = []
+        for d in dirs:
+            assert isinstance(d, Path)
+            if d.match("two_factor/*"):
+                two_factor_dirs.append(d)
+        return two_factor_dirs
 
 
 MIDDLEWARE = (
-    # With the exception of it's dependencies,
-    # our logging middleware should be the top middleware item.
     "zerver.middleware.TagRequests",
     "zerver.middleware.SetRemoteAddrFromRealIpHeader",
     "zerver.middleware.RequestContext",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Important: All middleware before LogRequests should be
+    # inexpensive, because any time spent in that middleware will not
+    # be counted in the LogRequests instrumentation of how time was
+    # spent while processing a request.
     "zerver.middleware.LogRequests",
     "zerver.middleware.JsonErrorHandler",
     "zerver.middleware.RateLimitMiddleware",
     "zerver.middleware.FlushDisplayRecipientCache",
     "zerver.middleware.ZulipCommonMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
     "zerver.middleware.LocaleMiddleware",
     "zerver.middleware.HostDomainMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
     "zerver.middleware.ZulipSCIMAuthCheckMiddleware",
     # Make sure 2FA middlewares come after authentication middleware.
     "django_otp.middleware.OTPMiddleware",  # Required by two factor auth.
@@ -219,6 +223,7 @@ INSTALLED_APPS = [
     "django_otp.plugins.otp_static",
     "django_otp.plugins.otp_totp",
     "two_factor",
+    "two_factor.plugins.phonenumber",
 ]
 if USING_PGROONGA:
     INSTALLED_APPS += ["pgroonga"]
@@ -290,6 +295,7 @@ DATABASES: Dict[str, Dict[str, Any]] = {
         "CONN_MAX_AGE": 600,
         "OPTIONS": {
             "connection_factory": TimeTrackingConnection,
+            "cursor_factory": TimeTrackingCursor,
         },
     }
 }
@@ -338,7 +344,7 @@ SESSION_ENGINE = "zerver.lib.safe_session_cached_db"
 
 MEMCACHED_PASSWORD = get_secret("memcached_password")
 
-CACHES = {
+CACHES: Dict[str, Dict[str, object]] = {
     "default": {
         "BACKEND": "zerver.lib.singleton_bmemcached.SingletonBMemcached",
         "LOCATION": MEMCACHED_LOCATION,
@@ -1040,17 +1046,17 @@ ONLY_LDAP = AUTHENTICATION_BACKENDS == ("zproject.backends.ZulipLDAPAuthBackend"
 USING_APACHE_SSO = "zproject.backends.ZulipRemoteUserBackend" in AUTHENTICATION_BACKENDS
 ONLY_SSO = AUTHENTICATION_BACKENDS == ("zproject.backends.ZulipRemoteUserBackend",)
 
-if ONLY_SSO:
+if CUSTOM_HOME_NOT_LOGGED_IN is not None:
+    # We import this with a different name to avoid a mypy bug with
+    # type-narrowed default parameter values.
+    # https://github.com/python/mypy/issues/13087
+    HOME_NOT_LOGGED_IN = CUSTOM_HOME_NOT_LOGGED_IN
+elif ONLY_SSO:
     HOME_NOT_LOGGED_IN = "/accounts/login/sso/"
 else:
     HOME_NOT_LOGGED_IN = "/login/"
 
 AUTHENTICATION_BACKENDS += ("zproject.backends.ZulipDummyBackend",)
-
-# Redirect to /devlogin/ by default in dev mode
-if DEVELOPMENT:
-    HOME_NOT_LOGGED_IN = "/devlogin/"
-    LOGIN_URL = "/devlogin/"
 
 POPULATE_PROFILE_VIA_LDAP = bool(AUTH_LDAP_SERVER_URI)
 
@@ -1197,9 +1203,6 @@ AUTH_LDAP_BIND_PASSWORD = get_secret("auth_ldap_bind_password", "")
 ########################################################################
 # MISC SETTINGS
 ########################################################################
-
-# Convert INVITATION_LINK_VALIDITY_DAYS into minutes.
-INVITATION_LINK_VALIDITY_MINUTES = 24 * 60 * INVITATION_LINK_VALIDITY_DAYS
 
 if PRODUCTION:
     # Filter out user data

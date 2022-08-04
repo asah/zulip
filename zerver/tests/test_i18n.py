@@ -1,11 +1,10 @@
 from http.cookies import SimpleCookie
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest import mock
 
 import orjson
 from django.conf import settings
 from django.core import mail
-from django.http import HttpResponse
 from django.utils import translation
 
 from zerver.lib.email_notifications import enqueue_welcome_emails
@@ -14,6 +13,9 @@ from zerver.lib.test_classes import ZulipTestCase
 from zerver.lib.test_helpers import HostRequestMock
 from zerver.management.commands import makemessages
 from zerver.models import get_realm_stream
+
+if TYPE_CHECKING:
+    from django.test.client import _MonkeyPatchedWSGIResponse as TestHttpResponse
 
 
 class EmailTranslationTestCase(ZulipTestCase):
@@ -81,7 +83,9 @@ class TranslationTestCase(ZulipTestCase):
         super().tearDown()
 
     # e.g. self.client_post(url) if method is "post"
-    def fetch(self, method: str, url: str, expected_status: int, **kwargs: Any) -> HttpResponse:
+    def fetch(
+        self, method: str, url: str, expected_status: int, **kwargs: Any
+    ) -> "TestHttpResponse":
         response = getattr(self.client, method)(url, **kwargs)
         self.assertEqual(
             response.status_code,
@@ -132,23 +136,27 @@ class TranslationTestCase(ZulipTestCase):
 
     def test_get_browser_language_code(self) -> None:
         req = HostRequestMock()
-
         self.assertIsNone(get_browser_language_code(req))
 
+        req = HostRequestMock()
         req.META["HTTP_ACCEPT_LANGUAGE"] = "de"
         self.assertEqual(get_browser_language_code(req), "de")
 
+        req = HostRequestMock()
         req.META["HTTP_ACCEPT_LANGUAGE"] = "en-GB,en;q=0.8"
         self.assertEqual(get_browser_language_code(req), "en-gb")
 
         # Case when unsupported language has higher weight.
+        req = HostRequestMock()
         req.META["HTTP_ACCEPT_LANGUAGE"] = "en-IND;q=0.9,de;q=0.8"
         self.assertEqual(get_browser_language_code(req), "de")
 
         # Browser locale is set to unsupported language.
+        req = HostRequestMock()
         req.META["HTTP_ACCEPT_LANGUAGE"] = "en-IND"
         self.assertIsNone(get_browser_language_code(req))
 
+        req = HostRequestMock()
         req.META["HTTP_ACCEPT_LANGUAGE"] = "*"
         self.assertIsNone(get_browser_language_code(req))
 

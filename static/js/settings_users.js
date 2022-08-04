@@ -2,7 +2,6 @@ import $ from "jquery";
 
 import render_settings_deactivation_user_modal from "../templates/confirm_dialog/confirm_deactivate_user.hbs";
 import render_settings_reactivation_user_modal from "../templates/confirm_dialog/confirm_reactivate_user.hbs";
-import render_admin_bot_form from "../templates/settings/admin_bot_form.hbs";
 import render_admin_human_form from "../templates/settings/admin_human_form.hbs";
 import render_admin_user_list from "../templates/settings/admin_user_list.hbs";
 
@@ -11,7 +10,6 @@ import * as bot_data from "./bot_data";
 import * as channel from "./channel";
 import * as confirm_dialog from "./confirm_dialog";
 import * as dialog_widget from "./dialog_widget";
-import {DropdownListWidget} from "./dropdown_list_widget";
 import {$t, $t_html} from "./i18n";
 import * as ListWidget from "./list_widget";
 import * as loading from "./loading";
@@ -23,10 +21,8 @@ import * as settings_bots from "./settings_bots";
 import * as settings_config from "./settings_config";
 import * as settings_data from "./settings_data";
 import * as settings_panel_menu from "./settings_panel_menu";
-import * as settings_ui from "./settings_ui";
 import * as timerender from "./timerender";
 import * as ui from "./ui";
-import * as ui_report from "./ui_report";
 import * as user_pill from "./user_pill";
 
 const section = {
@@ -191,10 +187,12 @@ function bot_info(bot_user_id) {
     const info = {};
 
     info.is_bot = true;
+    info.role = people.get_by_user_id(bot_user_id).role;
     info.is_active = bot_user.is_active;
     info.user_id = bot_user.user_id;
     info.full_name = bot_user.full_name;
     info.bot_owner_id = owner_id;
+    info.user_role_text = people.get_user_type(bot_user_id);
 
     // Convert bot type id to string for viewing to the users.
     info.bot_type = settings_bots.type_id_to_string(bot_user.bot_type);
@@ -280,7 +278,7 @@ section.bots.create_table = () => {
         sort_fields: {
             email: sort_bot_email,
             bot_owner: sort_bot_owner,
-            id: sort_user_id,
+            role: sort_role,
         },
         $simplebar_container: $("#admin-bot-list .progressive-table-wrapper"),
     });
@@ -427,19 +425,44 @@ function get_human_profile_data(fields_user_pills) {
 }
 
 export function confirm_deactivation(user_id, handle_confirm, loading_spinner) {
-    const user = people.get_by_user_id(user_id);
-    const opts = {
-        username: user.full_name,
-        email: settings_data.email_for_user_settings(user),
-    };
-    const html_body = render_settings_deactivation_user_modal(opts);
+    // Knowing the number of invites requires making this request. If the request fails,
+    // we won't have the accurate number of invites. So, we don't show the modal if the
+    // request fails.
+    channel.get({
+        url: "/json/invites",
+        idempotent: true,
+        timeout: 10 * 1000,
+        success(data) {
+            let number_of_invites_by_user = 0;
+            for (const invite of data.invites) {
+                if (invite.invited_by_user_id === user_id) {
+                    number_of_invites_by_user = number_of_invites_by_user + 1;
+                }
+            }
 
-    confirm_dialog.launch({
-        html_heading: $t_html({defaultMessage: "Deactivate {name}"}, {name: user.full_name}),
-        help_link: "/help/deactivate-or-reactivate-a-user#deactivate-ban-a-user",
-        html_body,
-        on_click: handle_confirm,
-        loading_spinner,
+            const bots_owned_by_user = bot_data.get_all_bots_owned_by_user(user_id);
+            const user = people.get_by_user_id(user_id);
+            const opts = {
+                username: user.full_name,
+                email: settings_data.email_for_user_settings(user),
+                bots_owned_by_user,
+                number_of_invites_by_user,
+            };
+            const html_body = render_settings_deactivation_user_modal(opts);
+
+            dialog_widget.launch({
+                html_heading: $t_html(
+                    {defaultMessage: "Deactivate {name}?"},
+                    {name: user.full_name},
+                ),
+                help_link: "/help/deactivate-or-reactivate-a-user#deactivate-ban-a-user",
+                html_body,
+                html_submit_button: $t_html({defaultMessage: "Deactivate"}),
+                id: "deactivate-user-modal",
+                on_click: handle_confirm,
+                loading_spinner,
+            });
+        },
     });
 }
 
@@ -455,23 +478,14 @@ function handle_deactivation($tbody) {
 
         function handle_confirm() {
             const url = "/json/users/" + encodeURIComponent(user_id);
-            channel.del({
-                url,
-                success() {
-                    dialog_widget.close_modal();
-                },
-                error(xhr) {
-                    ui_report.error($t_html({defaultMessage: "Failed"}), xhr, $("#dialog_error"));
-                    dialog_widget.hide_dialog_spinner();
-                },
-            });
+            dialog_widget.submit_api_request(channel.del, url);
         }
 
         confirm_deactivation(user_id, handle_confirm, true);
     });
 }
 
-function handle_bot_deactivation($tbody, $status_field) {
+function handle_bot_deactivation($tbody) {
     $tbody.on("click", ".deactivate", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -479,14 +493,13 @@ function handle_bot_deactivation($tbody, $status_field) {
         const $button_elem = $(e.target);
         const $row = $button_elem.closest(".user_row");
         const bot_id = Number.parseInt($row.attr("data-user-id"), 10);
-        const url = "/json/bots/" + encodeURIComponent(bot_id);
 
-        const opts = {
-            error_continuation(xhr) {
-                ui_report.generic_row_button_error(xhr, $button_elem);
-            },
-        };
-        settings_ui.do_settings_change(channel.del, url, {}, $status_field, opts);
+        function handle_confirm() {
+            const url = "/json/bots/" + encodeURIComponent(bot_id);
+            dialog_widget.submit_api_request(channel.del, url);
+        }
+
+        settings_bots.confirm_bot_deactivation(bot_id, handle_confirm, true);
     });
 }
 
@@ -518,24 +531,19 @@ function handle_reactivation($tbody) {
         function handle_confirm() {
             const $row = get_user_info_row(user_id);
             const url = "/json/users/" + encodeURIComponent(user_id) + "/reactivate";
-            channel.post({
-                url,
-                success() {
-                    dialog_widget.close_modal();
+            const opts = {
+                success_continuation() {
                     update_view_on_reactivate($row);
                 },
-                error(xhr) {
-                    ui_report.error($t_html({defaultMessage: "Failed"}), xhr, $("#dialog_error"));
-                    dialog_widget.hide_dialog_spinner();
-                },
-            });
+            };
+            dialog_widget.submit_api_request(channel.post, url, {}, opts);
         }
 
         confirm_reactivation(user_id, handle_confirm, true);
     });
 }
 
-export function show_edit_user_info_modal(user_id, from_user_info_popover, $status_field) {
+export function show_edit_user_info_modal(user_id, from_user_info_popover) {
     const person = people.get_by_user_id(user_id);
 
     if (!person) {
@@ -579,20 +587,7 @@ export function show_edit_user_info_modal(user_id, from_user_info_popover, $stat
             const user_id = $("#edit-user-form").data("user-id");
             function handle_confirm() {
                 const url = "/json/users/" + encodeURIComponent(user_id);
-                channel.del({
-                    url,
-                    success() {
-                        dialog_widget.close_modal();
-                    },
-                    error(xhr) {
-                        ui_report.error(
-                            $t_html({defaultMessage: "Failed"}),
-                            xhr,
-                            $("#dialog_error"),
-                        );
-                        dialog_widget.hide_dialog_spinner();
-                    },
-                });
+                dialog_widget.submit_api_request(channel.del, url);
             }
             const open_deactivate_modal_callback = () =>
                 confirm_deactivation(user_id, handle_confirm, true);
@@ -611,24 +606,15 @@ export function show_edit_user_info_modal(user_id, from_user_info_popover, $stat
             role: JSON.stringify(role),
             profile_data: JSON.stringify(profile_data),
         };
-
-        if (!from_user_info_popover) {
-            settings_ui.do_settings_change(channel.patch, url, data, $status_field);
-            dialog_widget.close_modal();
-            return;
-        }
-
-        channel.patch({
-            url,
-            data,
-            success() {
-                dialog_widget.close_modal();
+        const opts = {
+            error_continuation() {
+                // Scrolling modal to top, to make error visible to user.
+                $("#edit-user-form")
+                    .closest(".simplebar-content-wrapper")
+                    .animate({scrollTop: 0}, "fast");
             },
-            error(xhr) {
-                ui_report.error($t_html({defaultMessage: "Failed"}), xhr, $("#dialog_error"));
-                dialog_widget.hide_dialog_spinner();
-            },
-        });
+        };
+        dialog_widget.submit_api_request(channel.patch, url, data, opts);
     }
 
     dialog_widget.launch({
@@ -640,110 +626,46 @@ export function show_edit_user_info_modal(user_id, from_user_info_popover, $stat
     });
 }
 
-function handle_human_form($tbody, $status_field) {
+function handle_human_form($tbody) {
     $tbody.on("click", ".open-user-form", (e) => {
         e.stopPropagation();
         e.preventDefault();
         const user_id = Number.parseInt($(e.currentTarget).attr("data-user-id"), 10);
-        show_edit_user_info_modal(user_id, false, $status_field);
+        show_edit_user_info_modal(user_id, false);
     });
 }
 
-function handle_bot_form($tbody, $status_field) {
+function handle_bot_form($tbody) {
     $tbody.on("click", ".open-user-form", (e) => {
         e.stopPropagation();
         e.preventDefault();
         const user_id = Number.parseInt($(e.currentTarget).attr("data-user-id"), 10);
-        const bot = people.get_by_user_id(user_id);
-
-        if (!bot) {
-            return;
-        }
-
-        const html_body = render_admin_bot_form({
-            user_id,
-            email: bot.email,
-            full_name: bot.full_name,
-        });
-
-        let owner_widget;
-
-        function submit_bot_details() {
-            const $full_name = $("#dialog_widget_modal").find("input[name='full_name']");
-
-            const url = "/json/bots/" + encodeURIComponent(user_id);
-            const data = {
-                full_name: $full_name.val(),
-            };
-
-            if (owner_widget === undefined) {
-                blueslip.error("get_bot_owner_widget not called");
-            }
-            const human_user_id = owner_widget.value();
-            if (human_user_id) {
-                data.bot_owner_id = human_user_id;
-            }
-
-            settings_ui.do_settings_change(channel.patch, url, data, $status_field);
-            dialog_widget.close_modal();
-        }
-
-        function get_bot_owner_widget() {
-            const owner_id = bot_data.get(user_id).owner_id;
-
-            const user_ids = people.get_active_human_ids();
-            const users_list = user_ids.map((user_id) => ({
-                name: people.get_full_name(user_id),
-                value: user_id.toString(),
-            }));
-
-            const opts = {
-                widget_name: "edit_bot_owner",
-                data: users_list,
-                default_text: $t({defaultMessage: "No owner"}),
-                value: owner_id,
-            };
-            // Note: Rendering this is quite expensive in
-            // organizations with 10Ks of users.
-            owner_widget = new DropdownListWidget(opts);
-            owner_widget.setup();
-        }
-
-        dialog_widget.launch({
-            html_heading: $t_html({defaultMessage: "Change bot info and owner"}),
-            html_body,
-            id: "edit_bot_modal",
-            on_click: submit_bot_details,
-            post_render: get_bot_owner_widget,
-        });
+        settings_bots.show_edit_bot_info_modal(user_id, false);
     });
 }
 
 section.active.handle_events = () => {
     const $tbody = $("#admin_users_table").expectOne();
-    const $status_field = $("#user-field-status").expectOne();
 
     handle_deactivation($tbody);
     handle_reactivation($tbody);
-    handle_human_form($tbody, $status_field);
+    handle_human_form($tbody);
 };
 
 section.deactivated.handle_events = () => {
     const $tbody = $("#admin_deactivated_users_table").expectOne();
-    const $status_field = $("#deactivated-user-field-status").expectOne();
 
     handle_deactivation($tbody);
     handle_reactivation($tbody);
-    handle_human_form($tbody, $status_field);
+    handle_human_form($tbody);
 };
 
 section.bots.handle_events = () => {
     const $tbody = $("#admin_bots_table").expectOne();
-    const $status_field = $("#bot-field-status").expectOne();
 
-    handle_bot_deactivation($tbody, $status_field);
+    handle_bot_deactivation($tbody);
     handle_reactivation($tbody);
-    handle_bot_form($tbody, $status_field);
+    handle_bot_form($tbody);
 };
 
 export function set_up_humans() {

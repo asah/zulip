@@ -253,7 +253,7 @@ class DraftCreationTests(ZulipTestCase):
                 "timestamp": 1595479019,
             }
         ]
-        self.create_and_check_drafts_for_error(draft_dicts, "Invalid stream id")
+        self.create_and_check_drafts_for_error(draft_dicts, "Invalid stream ID")
 
         # When the stream itself does not exist:
         draft_dicts = [
@@ -265,7 +265,7 @@ class DraftCreationTests(ZulipTestCase):
                 "timestamp": 1595479019,
             }
         ]
-        self.create_and_check_drafts_for_error(draft_dicts, "Invalid stream id")
+        self.create_and_check_drafts_for_error(draft_dicts, "Invalid stream ID")
 
     def test_create_personal_message_draft_for_non_existing_user(self) -> None:
         draft_dicts = [
@@ -564,7 +564,7 @@ class DraftFetchTest(ZulipTestCase):
         self.assertEqual(data["count"], 3)
 
         first_draft_id = Draft.objects.filter(user_profile=hamlet).order_by("id")[0].id
-        expected_draft_contents = [
+        expected_draft_contents: List[Dict[str, object]] = [
             {"id": first_draft_id + i, **draft_dicts[i]} for i in range(0, 3)
         ]
 

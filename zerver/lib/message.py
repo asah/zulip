@@ -2,7 +2,20 @@ import copy
 import datetime
 import zlib
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, TypedDict, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Collection,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    TypedDict,
+    Union,
+)
 
 import ahocorasick
 import orjson
@@ -55,6 +68,9 @@ from zerver.models import (
     get_usermessage_by_message_id,
     query_for_ids,
 )
+
+if TYPE_CHECKING:
+    from django.db.models.query import _QuerySet as ValuesQuerySet
 
 
 class MessageDetailsDict(TypedDict, total=False):
@@ -155,6 +171,7 @@ class SendMessageRequest:
     deliver_at: Optional[datetime.datetime] = None
     delivery_type: Optional[str] = None
     limit_unread_user_ids: Optional[Set[int]] = None
+    service_queue_events: Optional[Dict[str, List[Dict[str, Any]]]] = None
 
 
 # We won't try to fetch more unread message IDs from the database than
@@ -835,7 +852,7 @@ def has_message_access(
 
 
 def bulk_access_messages(
-    user_profile: UserProfile, messages: Sequence[Message], *, stream: Optional[Stream] = None
+    user_profile: UserProfile, messages: Collection[Message], *, stream: Optional[Stream] = None
 ) -> List[Message]:
     """This function does the full has_message_access check for each
     message.  If stream is provided, it is used to avoid unnecessary
@@ -874,7 +891,7 @@ def bulk_access_messages(
 
 def bulk_access_messages_expect_usermessage(
     user_profile_id: int, message_ids: Sequence[int]
-) -> List[int]:
+) -> "ValuesQuerySet[UserMessage, int]":
     """
     Like bulk_access_messages, but faster and potentially stricter.
 
@@ -1588,10 +1605,6 @@ def wildcard_mention_allowed(sender: UserProfile, stream: Stream) -> bool:
 
     if realm.wildcard_mention_policy == Realm.WILDCARD_MENTION_POLICY_MODERATORS:
         return sender.is_realm_admin or sender.is_moderator
-
-    if realm.wildcard_mention_policy == Realm.WILDCARD_MENTION_POLICY_STREAM_ADMINS:
-        # TODO: Change this when we implement stream administrators
-        return sender.is_realm_admin
 
     if realm.wildcard_mention_policy == Realm.WILDCARD_MENTION_POLICY_FULL_MEMBERS:
         return sender.is_realm_admin or (not sender.is_provisional_member and not sender.is_guest)

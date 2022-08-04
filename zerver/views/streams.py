@@ -424,7 +424,7 @@ def remove_subscriptions_backend(
         streams_as_dict.append({"name": stream_name.strip()})
 
     streams, __ = list_to_streams(
-        streams_as_dict, user_profile, admin_access_required=removing_someone_else
+        streams_as_dict, user_profile, unsubscribing_others=removing_someone_else
     )
 
     if principals:
@@ -755,6 +755,16 @@ def get_streams_backend(
 
 
 @has_request_variables
+def get_stream_backend(
+    request: HttpRequest,
+    user_profile: UserProfile,
+    stream_id: int,
+) -> HttpResponse:
+    (stream, sub) = access_stream_by_id(user_profile, stream_id, allow_realm_admin=True)
+    return json_success(request, data={"stream": stream.to_dict()})
+
+
+@has_request_variables
 def get_topics_backend(
     request: HttpRequest,
     maybe_user_profile: Union[UserProfile, AnonymousUser],
@@ -782,6 +792,7 @@ def get_topics_backend(
 
         (stream, sub) = access_stream_by_id(user_profile, stream_id)
 
+        assert stream.recipient_id is not None
         result = get_topic_history_for_stream(
             user_profile=user_profile,
             recipient_id=stream.recipient_id,

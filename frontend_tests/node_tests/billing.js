@@ -5,7 +5,7 @@ const fs = require("fs");
 
 const {JSDOM} = require("jsdom");
 
-const {mock_esm, set_global, with_field, zrequire} = require("../zjsunit/namespace");
+const {mock_esm, set_global, zrequire} = require("../zjsunit/namespace");
 const {run_test} = require("../zjsunit/test");
 const $ = require("../zjsunit/zjquery");
 
@@ -18,7 +18,7 @@ const helpers = mock_esm("../../static/js/billing/helpers", {
     set_tab: () => {},
 });
 
-const billing = zrequire("billing/billing");
+zrequire("billing/billing");
 
 run_test("initialize", ({override}) => {
     let set_tab_called = false;
@@ -48,10 +48,9 @@ run_test("card_update", ({override}) => {
     $.get_initialize_function()();
 
     const update_card_click_handler = $("#update-card-button").get_on_handler("click");
-    with_field(helpers, "create_ajax_request", card_change_ajax, () => {
-        update_card_click_handler({preventDefault: () => {}});
-        assert.ok(create_ajax_request_called);
-    });
+    override(helpers, "create_ajax_request", card_change_ajax);
+    update_card_click_handler({preventDefault: () => {}});
+    assert.ok(create_ajax_request_called);
 });
 
 run_test("planchange", ({override}) => {
@@ -72,16 +71,14 @@ run_test("planchange", ({override}) => {
     $.get_initialize_function()();
     const change_plan_status_click_handler = $("#change-plan-status").get_on_handler("click");
 
-    with_field(helpers, "create_ajax_request", plan_change_ajax, () => {
-        change_plan_status_click_handler({preventDefault: () => {}});
-        assert.ok(create_ajax_request_called);
-    });
+    override(helpers, "create_ajax_request", plan_change_ajax);
+    change_plan_status_click_handler({preventDefault: () => {}});
+    assert.ok(create_ajax_request_called);
 });
 
-run_test("licensechange", ({override, override_rewire}) => {
+run_test("licensechange", ({override}) => {
     override(helpers, "set_tab", () => {});
     let create_ajax_request_called = false;
-    create_ajax_request_called = false;
     function license_change_ajax(url, form_name, ignored_inputs, method, success_callback) {
         assert.equal(url, "/json/billing/plan");
         assert.equal(form_name, "licensechange");
@@ -93,15 +90,7 @@ run_test("licensechange", ({override, override_rewire}) => {
         success_callback();
         create_ajax_request_called = true;
     }
-    with_field(helpers, "create_ajax_request", license_change_ajax, () => {
-        billing.create_update_license_request();
-        assert.ok(create_ajax_request_called);
-    });
-
-    let create_update_license_request_called = false;
-    override_rewire(billing, "create_update_license_request", () => {
-        create_update_license_request_called = true;
-    });
+    override(helpers, "create_ajax_request", license_change_ajax);
 
     $.get_initialize_function()();
 
@@ -109,7 +98,7 @@ run_test("licensechange", ({override, override_rewire}) => {
         "click",
     );
     confirm_license_update_click_handler({preventDefault: () => {}});
-    assert.ok(create_update_license_request_called);
+    assert.ok(create_ajax_request_called);
 
     let confirm_license_modal_shown = false;
     override(helpers, "is_valid_input", () => true);
@@ -122,17 +111,17 @@ run_test("licensechange", ({override, override_rewire}) => {
         return 20;
     };
     $("#new_licenses_input").val = () => 15;
-    create_update_license_request_called = false;
+    create_ajax_request_called = false;
     const update_licenses_button_click_handler =
         $("#update-licenses-button").get_on_handler("click");
     update_licenses_button_click_handler({preventDefault: () => {}});
-    assert.ok(create_update_license_request_called);
+    assert.ok(create_ajax_request_called);
     assert.ok(!confirm_license_modal_shown);
 
     $("#new_licenses_input").val = () => 25;
-    create_update_license_request_called = false;
+    create_ajax_request_called = false;
     update_licenses_button_click_handler({preventDefault: () => {}});
-    assert.ok(!create_update_license_request_called);
+    assert.ok(!create_ajax_request_called);
     assert.ok(confirm_license_modal_shown);
 
     override(helpers, "is_valid_input", () => false);
@@ -164,10 +153,9 @@ run_test("licensechange", ({override, override_rewire}) => {
         success_callback();
         create_ajax_request_called = true;
     }
-    with_field(helpers, "create_ajax_request", licenses_at_next_renewal_change_ajax, () => {
-        update_next_renewal_licenses_button_click_handler({preventDefault: () => {}});
-        assert.ok(create_ajax_request_called);
-    });
+    override(helpers, "create_ajax_request", licenses_at_next_renewal_change_ajax);
+    update_next_renewal_licenses_button_click_handler({preventDefault: () => {}});
+    assert.ok(create_ajax_request_called);
 });
 
 run_test("billing_template", () => {

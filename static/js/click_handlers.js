@@ -39,6 +39,7 @@ import * as reactions from "./reactions";
 import * as recent_topics_ui from "./recent_topics_ui";
 import * as rows from "./rows";
 import * as server_events from "./server_events";
+import * as settings_display from "./settings_display";
 import * as settings_panel_menu from "./settings_panel_menu";
 import * as settings_toggle from "./settings_toggle";
 import * as spectators from "./spectators";
@@ -709,8 +710,8 @@ export function initialize() {
         settings_toggle.toggle_org_setting_collapse();
     });
 
-    $(".organization-box").on("show.bs.modal", () => {
-        popovers.hide_all();
+    $("body").on("click", ".reload_link", () => {
+        window.location.reload();
     });
 
     // COMPOSE
@@ -894,16 +895,13 @@ export function initialize() {
         e.stopPropagation();
     });
 
-    $("body").on("hidden.bs.modal", () => {
-        // Enable mouse events for the background as the modal closes.
-        overlays.enable_background_mouse_events();
-
-        // TODO: Remove this once Bootstrap is upgraded.
-        // See: https://github.com/zulip/zulip/pull/18720
-        $(".modal.in").removeClass("in");
-    });
-
     // GEAR MENU
+
+    $("body").on("click", ".change-language-spectator, .language_selection_widget button", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        settings_display.launch_default_language_setting_modal();
+    });
 
     $("body").on("click", "#gear-menu .dark-theme", (e) => {
         // Allow propagation to close gear menu.
@@ -988,10 +986,8 @@ export function initialize() {
                 // state.
                 !$(e.target).closest(".overlay").length &&
                 !$(e.target).closest(".popover").length &&
-                !$(e.target).closest(".modal").length &&
                 !$(e.target).closest(".micromodal").length &&
                 !$(e.target).closest("[data-tippy-root]").length &&
-                !$(e.target).closest(".modal-backdrop").length &&
                 !$(e.target).closest(".enter_sends").length &&
                 $(e.target).closest("body").length
             ) {

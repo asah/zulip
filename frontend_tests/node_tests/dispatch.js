@@ -2,7 +2,7 @@
 
 const {strict: assert} = require("assert");
 
-const {mock_esm, set_global, with_field, zrequire} = require("../zjsunit/namespace");
+const {mock_esm, set_global, with_overrides, zrequire} = require("../zjsunit/namespace");
 const {make_stub} = require("../zjsunit/stub");
 const {run_test} = require("../zjsunit/test");
 const blueslip = require("../zjsunit/zblueslip");
@@ -28,6 +28,7 @@ const activity = mock_esm("../../static/js/activity");
 const alert_words_ui = mock_esm("../../static/js/alert_words_ui");
 const attachments_ui = mock_esm("../../static/js/attachments_ui");
 const bot_data = mock_esm("../../static/js/bot_data");
+const compose_pm_pill = mock_esm("../../static/js/compose_pm_pill");
 const composebox_typeahead = mock_esm("../../static/js/composebox_typeahead");
 const dark_theme = mock_esm("../../static/js/dark_theme");
 const emoji_picker = mock_esm("../../static/js/emoji_picker");
@@ -60,13 +61,19 @@ const settings_profile_fields = mock_esm("../../static/js/settings_profile_field
 const settings_realm_user_settings_defaults = mock_esm(
     "../../static/js/settings_realm_user_settings_defaults",
 );
+const settings_realm_domains = mock_esm("../../static/js/settings_realm_domains");
 const settings_streams = mock_esm("../../static/js/settings_streams");
 const settings_user_groups = mock_esm("../../static/js/settings_user_groups");
 const settings_users = mock_esm("../../static/js/settings_users");
 const stream_data = mock_esm("../../static/js/stream_data");
 const stream_events = mock_esm("../../static/js/stream_events");
+const stream_list = mock_esm("../../static/js/stream_list");
 const stream_settings_ui = mock_esm("../../static/js/stream_settings_ui");
+const stream_topic_history = mock_esm("../../static/js/stream_topic_history");
 const submessage = mock_esm("../../static/js/submessage");
+mock_esm("../../static/js/top_left_corner", {
+    update_starred_count() {},
+});
 const typing_events = mock_esm("../../static/js/typing_events");
 const ui = mock_esm("../../static/js/ui");
 const unread_ops = mock_esm("../../static/js/unread_ops");
@@ -88,14 +95,10 @@ page_params.realm_description = "already set description";
 // For data-oriented modules, just use them, don't stub them.
 const alert_words = zrequire("alert_words");
 const emoji = zrequire("emoji");
-const stream_topic_history = zrequire("stream_topic_history");
-const stream_list = zrequire("stream_list");
 const message_helper = zrequire("message_helper");
 const message_store = zrequire("message_store");
 const people = zrequire("people");
-const starred_messages = zrequire("starred_messages");
 const user_status = zrequire("user_status");
-const compose_pm_pill = zrequire("compose_pm_pill");
 
 const server_events_dispatch = zrequire("server_events_dispatch");
 
@@ -178,6 +181,17 @@ run_test("user groups", ({override}) => {
         assert_same(args.user_ids, event.user_ids);
     }
 
+    event = event_fixtures.user_group__add_subgroups;
+    {
+        const stub = make_stub();
+        override(user_groups, "add_subgroups", stub.f);
+        dispatch(event);
+        assert.equal(stub.num_calls, 1);
+        const args = stub.get_args("group_id", "direct_subgroup_ids");
+        assert_same(args.group_id, event.group_id);
+        assert_same(args.direct_subgroup_ids, event.direct_subgroup_ids);
+    }
+
     event = event_fixtures.user_group__remove_members;
     {
         const stub = make_stub();
@@ -187,6 +201,17 @@ run_test("user groups", ({override}) => {
         const args = stub.get_args("group_id", "user_ids");
         assert_same(args.group_id, event.group_id);
         assert_same(args.user_ids, event.user_ids);
+    }
+
+    event = event_fixtures.user_group__remove_subgroups;
+    {
+        const stub = make_stub();
+        override(user_groups, "remove_subgroups", stub.f);
+        dispatch(event);
+        assert.equal(stub.num_calls, 1);
+        const args = stub.get_args("group_id", "direct_subgroup_ids");
+        assert_same(args.group_id, event.group_id);
+        assert_same(args.direct_subgroup_ids, event.direct_subgroup_ids);
     }
 
     event = event_fixtures.user_group__update;
@@ -305,14 +330,10 @@ run_test("realm settings", ({override}) => {
     override(notifications, "redraw_title", noop);
 
     function test_electron_dispatch(event, fake_send_event) {
-        let called = false;
-
-        with_field(electron_bridge, "send_event", fake_send_event, () => {
+        with_overrides(({override}) => {
+            override(electron_bridge, "send_event", fake_send_event);
             dispatch(event);
-            called = true;
         });
-
-        assert.ok(called);
     }
 
     // realm
@@ -594,16 +615,19 @@ run_test("realm_playgrounds", ({override}) => {
 run_test("realm_domains", ({override}) => {
     let event = event_fixtures.realm_domains__add;
     page_params.realm_domains = [];
-    override(settings_org, "populate_realm_domains", noop);
+    override(settings_org, "populate_realm_domains_label", noop);
+    override(settings_realm_domains, "populate_realm_domains_table", noop);
     dispatch(event);
     assert_same(page_params.realm_domains, [event.realm_domain]);
 
-    override(settings_org, "populate_realm_domains", noop);
+    override(settings_org, "populate_realm_domains_label", noop);
+    override(settings_realm_domains, "populate_realm_domains_table", noop);
     event = event_fixtures.realm_domains__change;
     dispatch(event);
     assert_same(page_params.realm_domains, [event.realm_domain]);
 
-    override(settings_org, "populate_realm_domains", noop);
+    override(settings_org, "populate_realm_domains_label", noop);
+    override(settings_realm_domains, "populate_realm_domains_table", noop);
     event = event_fixtures.realm_domains__remove;
     dispatch(event);
     assert_same(page_params.realm_domains, []);
@@ -701,7 +725,7 @@ run_test("typing", ({override}) => {
     dispatch(event);
 });
 
-run_test("user_settings", ({override, override_rewire}) => {
+run_test("user_settings", ({override}) => {
     settings_display.set_default_language_name = () => {};
     let event = event_fixtures.user_settings__default_language;
     user_settings.default_language = "en";
@@ -837,7 +861,6 @@ run_test("user_settings", ({override, override_rewire}) => {
         assert_same(user_settings.emojiset, "google");
     }
 
-    override_rewire(starred_messages, "rerender_ui", noop);
     event = event_fixtures.user_settings__starred_message_counts;
     user_settings.starred_message_counts = false;
     dispatch(event);
@@ -853,7 +876,7 @@ run_test("user_settings", ({override, override_rewire}) => {
         const stub = make_stub();
         event = event_fixtures.user_settings__demote_inactive_streams;
         override(stream_data, "set_filter_out_inactives", noop);
-        override_rewire(stream_list, "update_streams_sidebar", stub.f);
+        override(stream_list, "update_streams_sidebar", stub.f);
         user_settings.demote_inactive_streams = 1;
         dispatch(event);
         assert.equal(stub.num_calls, 1);
@@ -909,9 +932,7 @@ run_test("update_message (unread)", ({override}) => {
     });
 });
 
-run_test("update_message (add star)", ({override, override_rewire}) => {
-    override_rewire(starred_messages, "rerender_ui", noop);
-
+run_test("update_message (add star)", ({override}) => {
     const event = event_fixtures.update_message_flags__starred_add;
     const stub = make_stub();
     override(ui, "update_starred_view", stub.f);
@@ -924,8 +945,7 @@ run_test("update_message (add star)", ({override, override_rewire}) => {
     assert.equal(msg.starred, true);
 });
 
-run_test("update_message (remove star)", ({override, override_rewire}) => {
-    override_rewire(starred_messages, "rerender_ui", noop);
+run_test("update_message (remove star)", ({override}) => {
     const event = event_fixtures.update_message_flags__starred_remove;
     const stub = make_stub();
     override(ui, "update_starred_view", stub.f);
@@ -938,8 +958,7 @@ run_test("update_message (remove star)", ({override, override_rewire}) => {
     assert.equal(msg.starred, false);
 });
 
-run_test("update_message (wrong data)", ({override_rewire}) => {
-    override_rewire(starred_messages, "rerender_ui", noop);
+run_test("update_message (wrong data)", () => {
     const event = {
         ...event_fixtures.update_message_flags__starred_add,
         messages: [0], // message does not exist
@@ -948,10 +967,10 @@ run_test("update_message (wrong data)", ({override_rewire}) => {
     // update_starred_view never gets invoked, early return is successful
 });
 
-run_test("delete_message", ({override, override_rewire}) => {
+run_test("delete_message", ({override}) => {
     const event = event_fixtures.delete_message;
 
-    override_rewire(stream_list, "update_streams_sidebar", noop);
+    override(stream_list, "update_streams_sidebar", noop);
 
     const message_events_stub = make_stub();
     override(message_events, "remove_messages", message_events_stub.f);
@@ -960,7 +979,7 @@ run_test("delete_message", ({override, override_rewire}) => {
     override(unread_ops, "process_read_messages_event", unread_ops_stub.f);
 
     const stream_topic_history_stub = make_stub();
-    override_rewire(stream_topic_history, "remove_messages", stream_topic_history_stub.f);
+    override(stream_topic_history, "remove_messages", stream_topic_history_stub.f);
 
     dispatch(event);
 
@@ -979,7 +998,7 @@ run_test("delete_message", ({override, override_rewire}) => {
     assert_same(args.opts.max_removed_msg_id, 1337);
 });
 
-run_test("user_status", ({override, override_rewire}) => {
+run_test("user_status", ({override}) => {
     let event = event_fixtures.user_status__set_away;
     {
         const stub = make_stub();
@@ -1022,7 +1041,7 @@ run_test("user_status", ({override, override_rewire}) => {
     {
         const stub = make_stub();
         override(activity, "redraw_user", stub.f);
-        override_rewire(compose_pm_pill, "get_user_ids", () => [event.user_id]);
+        override(compose_pm_pill, "get_user_ids", () => [event.user_id]);
         dispatch(event);
         assert.equal(stub.num_calls, 1);
         const args = stub.get_args("user_id");

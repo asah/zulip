@@ -6,6 +6,7 @@ import * as blueslip from "./blueslip";
 import {$t_html} from "./i18n";
 import * as loading from "./loading";
 import * as overlays from "./overlays";
+import * as ui_report from "./ui_report";
 
 /*
  *  Look for confirm_dialog in settings_user_groups
@@ -60,7 +61,7 @@ export function show_dialog_spinner() {
 
 // Supports a callback to be called once the modal finishes closing.
 export function close_modal(on_hidden_callback) {
-    overlays.close_modal("dialog_widget_modal", {micromodal: true, on_hidden: on_hidden_callback});
+    overlays.close_modal("dialog_widget_modal", {on_hidden: on_hidden_callback});
 }
 
 export function launch(conf) {
@@ -141,7 +142,6 @@ export function launch(conf) {
 
     overlays.open_modal("dialog_widget_modal", {
         autoremove: true,
-        micromodal: true,
         on_show: () => {
             if (conf.focus_submit_on_open) {
                 $submit_button.trigger("focus");
@@ -153,5 +153,35 @@ export function launch(conf) {
         on_hide: conf?.on_hide,
         on_shown: conf?.on_shown,
         on_hidden: conf?.on_hidden,
+    });
+}
+
+export function submit_api_request(
+    request_method,
+    url,
+    data = {},
+    {
+        failure_msg_html = $t_html({defaultMessage: "Failed"}),
+        success_continuation,
+        error_continuation,
+    } = {},
+) {
+    show_dialog_spinner();
+    request_method({
+        url,
+        data,
+        success(reponse_data) {
+            close_modal();
+            if (success_continuation !== undefined) {
+                success_continuation(reponse_data);
+            }
+        },
+        error(xhr) {
+            ui_report.error(failure_msg_html, xhr, $("#dialog_error"));
+            hide_dialog_spinner();
+            if (error_continuation !== undefined) {
+                error_continuation(xhr);
+            }
+        },
     });
 }

@@ -624,7 +624,7 @@ class InlineImageProcessor(markdown.treeprocessors.Treeprocessor):
 class BacktickInlineProcessor(markdown.inlinepatterns.BacktickInlineProcessor):
     """Return a `<code>` element containing the matching text."""
 
-    def handleMatch(  # type: ignore[override] # supertype incompatible with supersupertype
+    def handleMatch(  # type: ignore[override] # https://github.com/python/mypy/issues/10197
         self, m: Match[str], data: str
     ) -> Union[Tuple[None, None, None], Tuple[Element, int, int]]:
         # Let upstream's implementation do its job as it is, we'll
@@ -687,8 +687,6 @@ class InlineInterestingLinkProcessor(markdown.treeprocessors.Treeprocessor):
             and (not already_thumbnailed)
             and user_uploads_or_external(image_url)
         ):
-            # See docs/thumbnailing.md for some high-level documentation.
-            #
             # We strip leading '/' from relative URLs here to ensure
             # consistency in what gets passed to /thumbnail
             image_url = image_url.lstrip("/")
@@ -1978,7 +1976,7 @@ class LinkifierPattern(CompiledInlineProcessor):
 
         super().__init__(compiled_re2, md)
 
-    def handleMatch(  # type: ignore[override] # supertype incompatible with supersupertype
+    def handleMatch(  # type: ignore[override] # https://github.com/python/mypy/issues/10197
         self, m: Match[str], data: str
     ) -> Union[Tuple[Element, int, int], Tuple[None, None, None]]:
         db_data: Optional[DbData] = self.md.zulip_db_data
@@ -1998,7 +1996,7 @@ class LinkifierPattern(CompiledInlineProcessor):
 
 
 class UserMentionPattern(CompiledInlineProcessor):
-    def handleMatch(  # type: ignore[override] # supertype incompatible with supersupertype
+    def handleMatch(  # type: ignore[override] # https://github.com/python/mypy/issues/10197
         self, m: Match[str], data: str
     ) -> Union[Tuple[None, None, None], Tuple[Element, int, int]]:
         name = m.group("match")
@@ -2054,7 +2052,7 @@ class UserMentionPattern(CompiledInlineProcessor):
 
 
 class UserGroupMentionPattern(CompiledInlineProcessor):
-    def handleMatch(  # type: ignore[override] # supertype incompatible with supersupertype
+    def handleMatch(  # type: ignore[override] # https://github.com/python/mypy/issues/10197
         self, m: Match[str], data: str
     ) -> Union[Tuple[None, None, None], Tuple[Element, int, int]]:
         name = m.group("match")
@@ -2094,7 +2092,7 @@ class StreamPattern(CompiledInlineProcessor):
         stream_id = db_data.stream_names.get(name)
         return stream_id
 
-    def handleMatch(  # type: ignore[override] # supertype incompatible with supersupertype
+    def handleMatch(  # type: ignore[override] # https://github.com/python/mypy/issues/10197
         self, m: Match[str], data: str
     ) -> Union[Tuple[None, None, None], Tuple[Element, int, int]]:
         name = m.group("stream_name")
@@ -2125,7 +2123,7 @@ class StreamTopicPattern(CompiledInlineProcessor):
         stream_id = db_data.stream_names.get(name)
         return stream_id
 
-    def handleMatch(  # type: ignore[override] # supertype incompatible with supersupertype
+    def handleMatch(  # type: ignore[override] # https://github.com/python/mypy/issues/10197
         self, m: Match[str], data: str
     ) -> Union[Tuple[None, None, None], Tuple[Element, int, int]]:
         stream_name = m.group("stream_name")
@@ -2234,7 +2232,7 @@ class LinkInlineProcessor(markdown.inlinepatterns.LinkInlineProcessor):
 
         return el
 
-    def handleMatch(  # type: ignore[override] # supertype incompatible with supersupertype
+    def handleMatch(  # type: ignore[override] # https://github.com/python/mypy/issues/10197
         self, m: Match[str], data: str
     ) -> Union[Tuple[None, None, None], Tuple[Element, int, int]]:
         ret = super().handleMatch(m, data)
@@ -2349,6 +2347,7 @@ class Markdown(markdown.Markdown):
         parser.blockprocessors.register(OListProcessor(parser), "olist", 65)
         parser.blockprocessors.register(UListProcessor(parser), "ulist", 60)
         parser.blockprocessors.register(BlockQuoteProcessor(parser), "quote", 55)
+        # We get priority 51 from our 'include' extension
         parser.blockprocessors.register(
             markdown.blockprocessors.ParagraphProcessor(parser), "paragraph", 50
         )

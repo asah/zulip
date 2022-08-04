@@ -26,6 +26,7 @@ from zerver.actions.custom_profile_fields import (
 )
 from zerver.actions.message_send import build_message_send_dict, do_send_messages
 from zerver.actions.realm_emoji import check_add_realm_emoji
+from zerver.actions.streams import bulk_add_subscriptions
 from zerver.actions.users import do_change_user_role
 from zerver.lib.bulk_create import bulk_create_streams
 from zerver.lib.generate_test_data import create_test_data, generate_topics
@@ -192,7 +193,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
-            "-n", "--num-messages", type=int, default=500, help="The number of messages to create."
+            "-n", "--num-messages", type=int, default=1000, help="The number of messages to create."
         )
 
         parser.add_argument(
@@ -258,7 +259,7 @@ class Command(BaseCommand):
         )
 
         parser.add_argument(
-            "--stickyness",
+            "--stickiness",
             type=float,
             default=20,
             help="The percent of messages to repeat recent folks.",
@@ -299,10 +300,11 @@ class Command(BaseCommand):
                 # eliminating the possibility of such coincidences.
                 cursor.execute("SELECT setval('zerver_recipient_id_seq', 100)")
 
-        # If max_topics is not set, we set it proportional to the
-        # number of messages.
         if options["max_topics"] is None:
-            options["max_topics"] = 1 + options["num_messages"] // 100
+            # If max_topics is not set, we use a default that's big
+            # enough "more topics" should appear, and scales slowly
+            # with the number of messages.
+            options["max_topics"] = 8 + options["num_messages"] // 1000
 
         if options["delete"]:
             # Start by clearing all the data in our database
@@ -724,8 +726,8 @@ class Command(BaseCommand):
                 hint="Or drink, if you'd prefer",
             )
             field_data: ProfileFieldData = {
-                "vim": {"text": "Vim", "order": "1"},
-                "emacs": {"text": "Emacs", "order": "2"},
+                "0": {"text": "Vim", "order": "1"},
+                "1": {"text": "Emacs", "order": "2"},
             }
             favorite_editor = try_add_realm_custom_profile_field(
                 zulip_realm, "Favorite editor", CustomProfileField.SELECT, field_data=field_data
@@ -752,7 +754,7 @@ class Command(BaseCommand):
                     {"id": phone_number.id, "value": "+1-234-567-8901"},
                     {"id": biography.id, "value": "Betrayer of Othello."},
                     {"id": favorite_food.id, "value": "Apples"},
-                    {"id": favorite_editor.id, "value": "emacs"},
+                    {"id": favorite_editor.id, "value": "1"},
                     {"id": birthday.id, "value": "2000-01-01"},
                     {"id": favorite_website.id, "value": "https://zulip.readthedocs.io/en/latest/"},
                     {"id": mentor.id, "value": [hamlet.id]},
@@ -768,7 +770,7 @@ class Command(BaseCommand):
                         "value": "I am:\n* The prince of Denmark\n* Nephew to the usurping Claudius",
                     },
                     {"id": favorite_food.id, "value": "Dark chocolate"},
-                    {"id": favorite_editor.id, "value": "vim"},
+                    {"id": favorite_editor.id, "value": "0"},
                     {"id": birthday.id, "value": "1900-01-01"},
                     {"id": favorite_website.id, "value": "https://blog.zulig.org"},
                     {"id": mentor.id, "value": [iago.id]},
@@ -825,6 +827,7 @@ class Command(BaseCommand):
             if options["test_suite"]:
                 # Create test users; the MIT ones are needed to test
                 # the Zephyr mirroring codepaths.
+                event_time = timezone_now()
                 testsuite_mit_users = [
                     ("Fred Sipb (MIT)", "sipbtest@mit.edu"),
                     ("Athena Consulting Exchange User (MIT)", "starnine@mit.edu"),
@@ -834,12 +837,26 @@ class Command(BaseCommand):
                     mit_realm, testsuite_mit_users, tos_version=settings.TERMS_OF_SERVICE_VERSION
                 )
 
+                mit_user = get_user_by_delivery_email("sipbtest@mit.edu", mit_realm)
+                mit_signup_stream = Stream.objects.get(
+                    name=Realm.INITIAL_PRIVATE_STREAM_NAME, realm=mit_realm
+                )
+                bulk_add_subscriptions(mit_realm, [mit_signup_stream], [mit_user], acting_user=None)
+
                 testsuite_lear_users = [
                     ("King Lear", "king@lear.org"),
                     ("Cordelia, Lear's daughter", "cordelia@zulip.com"),
                 ]
                 create_users(
                     lear_realm, testsuite_lear_users, tos_version=settings.TERMS_OF_SERVICE_VERSION
+                )
+
+                lear_user = get_user_by_delivery_email("king@lear.org", lear_realm)
+                lear_signup_stream = Stream.objects.get(
+                    name=Realm.INITIAL_PRIVATE_STREAM_NAME, realm=lear_realm
+                )
+                bulk_add_subscriptions(
+                    lear_realm, [lear_signup_stream], [lear_user], acting_user=None
                 )
 
             if not options["test_suite"]:
@@ -1028,7 +1045,16 @@ def generate_and_send_messages(
     # Generate different topics for each stream
     possible_topics = {}
     for stream_id in recipient_streams:
-        possible_topics[stream_id] = generate_topics(options["max_topics"])
+        # We want the test suite to have a predictable database state,
+        # since some tests depend on it; but for actual development,
+        # we want some streams to have more topics than others for
+        # realistic variety.
+        if not options["test_suite"]:
+            num_topics = random.randint(1, options["max_topics"])
+        else:
+            num_topics = options["max_topics"]
+
+        possible_topics[stream_id] = generate_topics(num_topics)
 
     message_batch_size = options["batch_size"]
     num_messages = 0
@@ -1045,7 +1071,7 @@ def generate_and_send_messages(
         randkey = random.randint(1, random_max)
         if (
             num_messages > 0
-            and random.randint(1, random_max) * 100.0 / random_max < options["stickyness"]
+            and random.randint(1, random_max) * 100.0 / random_max < options["stickiness"]
         ):
             # Use an old recipient
             message_type, recipient_id, saved_data = recipients[num_messages - 1]

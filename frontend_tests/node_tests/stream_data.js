@@ -40,7 +40,7 @@ function contains_sub(subs, sub) {
 }
 
 function test(label, f) {
-    run_test(label, ({override, override_rewire}) => {
+    run_test(label, (helpers) => {
         page_params.is_admin = false;
         page_params.realm_users = [];
         page_params.is_guest = false;
@@ -48,7 +48,7 @@ function test(label, f) {
         people.add_active_user(me);
         people.initialize_current_user(me.user_id);
         stream_data.clear_subscriptions();
-        f({override, override_rewire});
+        f(helpers);
     });
 }
 
@@ -764,7 +764,7 @@ test("canonicalized_name", () => {
     assert.deepStrictEqual(stream_data.canonicalized_name("Stream_Bar"), "stream_bar");
 });
 
-test("create_sub", ({override_rewire}) => {
+test("create_sub", () => {
     const india = {
         stream_id: 102,
         name: "India",
@@ -783,11 +783,9 @@ test("create_sub", ({override_rewire}) => {
         color: "#76ce90",
     };
 
-    override_rewire(color_data, "pick_color", () => "#bd86e5");
-
     const india_sub = stream_data.create_sub_from_server_data(india);
     assert.ok(india_sub);
-    assert.equal(india_sub.color, "#bd86e5");
+    assert.equal(india_sub.color, color_data.colors[0]);
     const new_sub = stream_data.create_sub_from_server_data(india);
     // make sure sub doesn't get created twice
     assert.equal(india_sub, new_sub);
@@ -942,4 +940,46 @@ test("get_invite_stream_data", () => {
         default_stream: false,
     });
     assert.deepEqual(stream_data.get_invite_stream_data(), expected_list);
+});
+
+test("can_post_messages_in_stream", () => {
+    const social = {
+        subscribed: true,
+        color: "red",
+        name: "social",
+        stream_id: 2,
+        is_muted: false,
+        invite_only: true,
+        history_public_to_subscribers: false,
+        stream_post_policy: stream_data.stream_post_policy_values.admins.code,
+    };
+    page_params.is_admin = false;
+    assert.equal(stream_data.can_post_messages_in_stream(social), false);
+
+    page_params.is_admin = true;
+    assert.equal(stream_data.can_post_messages_in_stream(social), true);
+
+    social.stream_post_policy = stream_data.stream_post_policy_values.moderators.code;
+    page_params.is_moderator = false;
+    page_params.is_admin = false;
+
+    assert.equal(stream_data.can_post_messages_in_stream(social), false);
+
+    page_params.is_moderator = true;
+    assert.equal(stream_data.can_post_messages_in_stream(social), true);
+
+    social.stream_post_policy = stream_data.stream_post_policy_values.non_new_members.code;
+    page_params.is_moderator = false;
+    me.date_joined = new Date(Date.now());
+    page_params.realm_waiting_period_threshold = 10;
+    assert.equal(stream_data.can_post_messages_in_stream(social), false);
+
+    me.date_joined = new Date(Date.now() - 20 * 86400000);
+    assert.equal(stream_data.can_post_messages_in_stream(social), true);
+
+    page_params.is_guest = true;
+    assert.equal(stream_data.can_post_messages_in_stream(social), false);
+
+    social.stream_post_policy = stream_data.stream_post_policy_values.everyone.code;
+    assert.equal(stream_data.can_post_messages_in_stream(social), true);
 });
