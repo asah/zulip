@@ -464,6 +464,9 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
                 urlseen[grp.group(1)] = True
                 new_lines.append(line)
         body = "\n\n".join(new_lines)
+        if "gCaptain" not in subject:
+            # it's an ad...
+            return
         subject = "gCaptain newsletter"
         #logger.error("\nbody:\n  " + body.replace("\n", "\n  "))
 
@@ -482,7 +485,7 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
     if "earthlings@orbitalindex.com" in body:
         body = re.sub(r'^(.|\n)+?Issue No', "Issue No", body)
 
-    if "eecs-announce@" in body:
+    if "eecs-announce" in subject:
         body = re.sub(r'^From:(.|\n)+\n', "", body)
         subject = "UCB eecs-announce"
 
