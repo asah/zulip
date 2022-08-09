@@ -464,9 +464,9 @@ def process_stream_message(to: str, message: EmailMessage) -> None:
                 urlseen[grp.group(1)] = True
                 new_lines.append(line)
         body = "\n\n".join(new_lines)
+        subject = "gCaptain newsletter"
         #logger.error("\nbody:\n  " + body.replace("\n", "\n  "))
 
-    # gcaptain hacks: shorten URLs, strip header
     if "tldrnewsletter" in body:
         body = re.sub(r'^(.|\n)+?Big Tech . Startups[*]?', "Big Tech & Startups", body, flags=re.IGNORECASE)
         body = re.sub(r'%3Futm_source=[^> ]+', '', body)
