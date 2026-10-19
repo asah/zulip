@@ -1,3 +1,4 @@
+es
 # #development help
 
 > Catch-all place to get help while developing Zulip!
@@ -205889,7 +205890,7 @@ I'm receiving ```Enter a valid email address``` error, I tried with 4 different 
 
 logs : 
 ```
-(zulip-py3-venv) dhruvjain9100@Supercomputer:~/zulip$ ./manage.py convert_slack_data /tmp/slack_data.zip --token xoxb-6727871687702-6719954364183-YHQm4lAa5eZbaIrKprS3W9du --output /tmp/converted_slack_data
+(zulip-py3-venv) dhruvjain9100@Supercomputer:~/zulip$ ./manage.py convert_slack_data /tmp/slack_data.zip --token xxx --output /tmp/converted_slack_data
 Converting data ...
 2024-03-02 09:25:30.586 INFO [] ######### IMPORTING USERS STARTED #########
 
@@ -205967,7 +205968,7 @@ django.core.exceptions.ValidationError: ['Enter a valid email address.']
 
 with different slack account 
 ```
-(zulip-py3-venv) dhruvjain9100@Supercomputer:~/zulip$ ./manage.py convert_slack_data /tmp/slack_data.zip --token xoxb-5884009017575-6734427275987-3mwhDPyZuuX72o2XKBY2wtUS --output /tmp/converted_slack_data
+(zulip-py3-venv) dhruvjain9100@Supercomputer:~/zulip$ ./manage.py convert_slack_data /tmp/slack_data.zip --token xxx --output /tmp/converted_slack_data
 Converting data ...
 2024-03-02 09:38:27.623 INFO [] ######### IMPORTING USERS STARTED #########
 
